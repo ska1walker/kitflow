@@ -1,18 +1,30 @@
 import "server-only";
 
 /**
- * HubSpot-Zugriff über eine Private App. HubSpot ist die einzige Datenbasis
- * (CLAUDE.md); kitflow hat keine eigene Datenbank.
+ * HubSpot-Zugriff über einen Service-Schlüssel. HubSpot ist die einzige
+ * Datenbasis (CLAUDE.md); kitflow hat keine eigene Datenbank.
  *
- * Der Token steht ausschliesslich serverseitig in `HUBSPOT_TOKEN` und darf
- * weder ins Bundle noch in ein Log geraten. Fehlt er, laeuft die Oberflaeche
- * mit Beispieldaten weiter – siehe src/lib/vorgaenge.ts.
+ * Zwei Wege zur Anmeldung, beide rein serverseitig:
+ *
+ *  - `HUBSPOT_TOKEN` gesetzt: wir schicken den Authorization-Header selbst.
+ *    So laeuft es in Produktion.
+ *  - `HUBSPOT_AUTH_VIA_PROXY=1`: der Schluessel haengt in der Cloud-Umgebung
+ *    an den Zugangsdaten fuer api.hubapi.com und der Proxy setzt den Header.
+ *    Dann duerfen wir keinen eigenen setzen, sonst stehen zwei drin.
+ *
+ * Ohne beides laeuft die Oberflaeche mit Beispieldaten weiter, siehe
+ * src/lib/vorgaenge.ts. Der Schluessel darf weder ins Bundle noch in ein Log.
  */
 
 const BASIS = "https://api.hubapi.com";
 
+/** Anmeldung ueber den Proxy statt ueber einen eigenen Header. */
+function ueberProxy(): boolean {
+  return process.env.HUBSPOT_AUTH_VIA_PROXY === "1";
+}
+
 export function hubspotAktiv(): boolean {
-  return Boolean(process.env.HUBSPOT_TOKEN);
+  return Boolean(process.env.HUBSPOT_TOKEN) || ueberProxy();
 }
 
 /** Name der Pipeline aus docs/datenmodell.md. */
@@ -20,8 +32,18 @@ export const PIPELINE_NAME = "Ausstattung";
 
 type Abfrage = {
   pfad: string;
-  suche?: Record<string, unknown>;
+  /** Gesetzt heisst POST; der Wert ist der Rumpf der Anfrage. */
+  koerper?: Record<string, unknown>;
 };
+
+/** Nexts Signal „diese Route muss dynamisch sein“, erkennbar am digest. */
+function istDynamikSignal(fehler: unknown): boolean {
+  return (
+    typeof fehler === "object" &&
+    fehler !== null &&
+    (fehler as { digest?: unknown }).digest === "DYNAMIC_SERVER_USAGE"
+  );
+}
 
 /**
  * Ein Aufruf gegen die HubSpot-API. Wirft nie: Fehler werden gemeldet und mit
@@ -29,18 +51,18 @@ type Abfrage = {
  *
  * Fehlermeldungen enthalten bewusst weder Token noch Personendaten.
  */
-export async function hubspot<T>({ pfad, suche }: Abfrage): Promise<T | null> {
+export async function hubspot<T>({ pfad, koerper }: Abfrage): Promise<T | null> {
+  if (!hubspotAktiv()) return null;
+
   const token = process.env.HUBSPOT_TOKEN;
-  if (!token) return null;
+  const kopf: Record<string, string> = { "Content-Type": "application/json" };
+  if (token) kopf.Authorization = `Bearer ${token}`;
 
   try {
     const antwort = await fetch(`${BASIS}${pfad}`, {
-      method: suche ? "POST" : "GET",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      body: suche ? JSON.stringify(suche) : undefined,
+      method: koerper ? "POST" : "GET",
+      headers: kopf,
+      body: koerper ? JSON.stringify(koerper) : undefined,
       // Der Stand eines Vorgangs aendert sich laufend, deshalb nicht cachen.
       cache: "no-store",
     });
@@ -52,6 +74,11 @@ export async function hubspot<T>({ pfad, suche }: Abfrage): Promise<T | null> {
 
     return (await antwort.json()) as T;
   } catch (fehler) {
+    // Next meldet ueber einen geworfenen Fehler, dass die Route wegen
+    // `no-store` dynamisch werden muss. Der gehoert nicht uns: schlucken wir
+    // ihn, waere die Route faelschlich statisch.
+    if (istDynamikSignal(fehler)) throw fehler;
+
     console.error(
       `HubSpot nicht erreichbar bei ${pfad}:`,
       fehler instanceof Error ? fehler.message : "unbekannter Fehler",
@@ -88,4 +115,48 @@ export async function pipelineStufen(): Promise<Map<string, string> | null> {
   }
 
   return new Map(pipeline.stages.map((s) => [s.id, s.label]));
+}
+
+/**
+ * Die IDs der Objekte, die an einem Objekt haengen – etwa die Positionen und
+ * die Kontakte eines Deals. Leer statt `null`, damit die Aufrufer den Vorgang
+ * auch dann bauen koennen, wenn eine Verknuepfung fehlt.
+ */
+export async function assoziierteIds(
+  vonTyp: string,
+  vonId: string,
+  zuTyp: string,
+): Promise<string[]> {
+  const daten = await hubspot<HsListe<{ toObjectId: number | string }>>({
+    pfad: `/crm/v4/objects/${vonTyp}/${vonId}/associations/${zuTyp}?limit=500`,
+  });
+  if (!daten) return [];
+  return daten.results.map((r) => String(r.toObjectId));
+}
+
+/**
+ * Mehrere Objekte in einem Aufruf lesen. HubSpot nimmt 100 pro Bündel, also
+ * bündeln wir selbst. Eigenschaften, die es im Portal nicht gibt, laesst
+ * HubSpot in der Antwort einfach weg – ein fehlendes Feld ist kein Fehler.
+ */
+export async function batchLesen(
+  typ: string,
+  ids: string[],
+  felder: string[],
+): Promise<HsObjekt[]> {
+  const alle: HsObjekt[] = [];
+
+  for (let i = 0; i < ids.length; i += 100) {
+    const daten = await hubspot<HsListe<HsObjekt>>({
+      pfad: `/crm/v3/objects/${typ}/batch/read`,
+      koerper: {
+        properties: felder,
+        propertiesWithHistory: [],
+        inputs: ids.slice(i, i + 100).map((id) => ({ id })),
+      },
+    });
+    if (daten) alle.push(...daten.results);
+  }
+
+  return alle;
 }
