@@ -60,6 +60,11 @@ zeigen("Liste bestätigen", `/b/${e(vorgang)}`, signiere("bestaetigen", vorgang)
 if (person) {
   zeigen("Spieler-Status", `/v/${e(vorgang)}/${e(person)}`, signiere("status", vorgang, person));
   zeigen("Größen", `/g/${e(vorgang)}/${e(person)}`, signiere("groessen", vorgang, person));
+  zeigen(
+    "Größen (Trainer)",
+    `/b/${e(vorgang)}/${e(person)}`,
+    signiere("trainer", vorgang, person),
+  );
 } else {
   console.log("\nMit einer Personen-ID als zweitem Argument kommen Spieler-Status und Größen dazu.");
 }

@@ -13,6 +13,11 @@ import "server-only";
  *   /v/AUS-2026-014/12345?t=…        Spieler-Ansicht  -> ["status", vorgang, person]
  *   /g/AUS-2026-014/12345?t=…        Groessen         -> ["groessen", vorgang, person]
  *   /b/AUS-2026-014?t=…              Liste bestaetigen-> ["bestaetigen", vorgang]
+ *   /b/AUS-2026-014/12345?t=…        F2 als Trainer   -> ["trainer", vorgang, person]
+ *
+ * Der Trainer-Zweck liegt unter /b, weil er zur Liste gehoert: die Links auf
+ * die einzelnen Zeilen erzeugt F3 selbst. Er ist ein eigener Zweck, damit ein
+ * Spieler-Link nicht zum Trainerformular wird.
  *
  * Die Personen-ID gehoert zwingend unter die Signatur. Sonst koennte jemand mit
  * einem gueltigen Link die ID austauschen und die Groessen eines anderen Kindes
@@ -26,7 +31,7 @@ import "server-only";
 
 import { createHmac, timingSafeEqual } from "node:crypto";
 
-export type Zweck = "status" | "groessen" | "bestaetigen";
+export type Zweck = "status" | "groessen" | "bestaetigen" | "trainer";
 
 /**
  * Der Schluessel. Fehlt er, funktioniert kein einziger Link – das ist Absicht:
@@ -95,4 +100,11 @@ export function bestaetigenLink(vorgang: string): string | null {
   const token = signiere("bestaetigen", vorgang);
   if (!token) return null;
   return `/b/${encodeURIComponent(vorgang)}?t=${token}`;
+}
+
+/** Der Link, mit dem der Trainer die Angaben einer Person aendert (F2 als Trainer). */
+export function trainerLink(vorgang: string, person: string): string | null {
+  const token = signiere("trainer", vorgang, person);
+  if (!token) return null;
+  return `/b/${encodeURIComponent(vorgang)}/${encodeURIComponent(person)}?t=${token}`;
 }

@@ -107,6 +107,7 @@ export function ListeFormular({ liste, token }: { liste: Liste; token: string })
                 </th>
               ))}
               {liste.trikotsatz && <th className="pb-2">Nummer</th>}
+              <th className="pb-2" />
             </tr>
           </thead>
           <tbody>
@@ -142,6 +143,11 @@ export function ListeFormular({ liste, token }: { liste: Liste; token: string })
                     )}
                   </td>
                 )}
+                <td className="py-2 text-right">
+                  <a href={zeile.aendern} className="text-sm font-semibold text-pitch-700 underline">
+                    ändern
+                  </a>
+                </td>
               </tr>
             ))}
           </tbody>

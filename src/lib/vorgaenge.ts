@@ -38,6 +38,7 @@ import {
   istJugend as istJugendMannschaft,
   istVeraltet,
 } from "./groessen";
+import { trainerLink } from "./links";
 import { offen, pruefung, type Pruefung } from "./pruefungen";
 import { stufeAusName } from "./stufen";
 import type {
@@ -604,6 +605,7 @@ export type GroessenAbfrage = {
 export async function ladeGroessenAbfrage(
   nummer: string,
   personId: string,
+  alsTrainer = false,
 ): Promise<GroessenAbfrage | null> {
   if (!hubspotAktiv()) return null;
 
@@ -626,7 +628,9 @@ export async function ladeGroessenAbfrage(
   // einem alten Link nichts mehr eintragen.
   const kontaktIds = await assoziierteIds("deals", deal.id, "contacts");
   if (!kontaktIds.includes(personId)) return null;
-  if (ausgeschlossene(deal).has(personId)) return null;
+  // Wer ausgeschlossen ist, traegt selbst nichts mehr ein. Der Trainer schon:
+  // er muss den Ausschluss zuruecknehmen koennen.
+  if (!alsTrainer && ausgeschlossene(deal).has(personId)) return null;
 
   const [kontakte, positionsIds] = await Promise.all([
     batchLesen("contacts", [personId], KONTAKT_FELDER),
@@ -722,6 +726,8 @@ export type ListenZeile = {
   nummer: string;
   veraltet: boolean;
   torwart: boolean;
+  /** Der signierte Link, mit dem der Trainer diese Zeile aendert. */
+  aendern: string;
 };
 
 export type Liste = {
@@ -807,6 +813,7 @@ export async function ladeListe(nummer: string): Promise<Liste | null> {
     nummer: text(k, "trikotnummer") ?? "",
     veraltet: istVeraltet(text(k, "groesse_zuletzt_bestaetigt_am"), jugend),
     torwart: torwarte.has(k.id),
+    aendern: trainerLink(nummer, k.id) ?? "",
   }));
 
   return {
@@ -930,4 +937,142 @@ export async function bestaetigeListe(
     koerper: { properties: werte },
   });
   return antwort !== null;
+}
+
+/* ------------------------------------------------------------------ *
+ * F2 als Trainer (docs/formulare.md)
+ * ------------------------------------------------------------------ */
+
+export type TrainerAbfrage = GroessenAbfrage & {
+  name: string;
+  /** Rueckennummer, leer wenn keine vergeben. */
+  nummer: string;
+  ausgeschlossen: boolean;
+  torwart: boolean;
+  /** Nummern, die andere in dieser Mannschaft schon haben. */
+  belegteNummern: { nummer: string; name: string }[];
+};
+
+/**
+ * Dieselbe Abfrage wie fuer den Spieler, plus das, was nur der Trainer setzt:
+ * Rueckennummer, „bekommt diesmal nichts“ und „spielt Torwart“.
+ *
+ * Die belegten Nummern kommen mit, damit das Formular eine Dublette meldet,
+ * bevor sie geschrieben wird. Geprueft wird sie beim Speichern trotzdem
+ * noch einmal – zwischen Anzeigen und Absenden kann sich etwas aendern.
+ */
+export async function ladeTrainerAbfrage(
+  nummer: string,
+  personId: string,
+): Promise<TrainerAbfrage | null> {
+  const abfrage = await ladeGroessenAbfrage(nummer, personId, true);
+  if (!abfrage) return null;
+
+  const treffer = await hubspot<HsListe<HsObjekt>>({
+    pfad: "/crm/v3/objects/deals/search",
+    koerper: dealSuche(nummer, 1),
+  });
+  const deal = treffer?.results[0];
+  if (!deal) return null;
+
+  const kontaktIds = await assoziierteIds("deals", deal.id, "contacts");
+  const kontakte = await batchLesen("contacts", kontaktIds, KONTAKT_FELDER);
+  const ich = kontakte.find((k) => k.id === personId);
+  if (!ich) return null;
+
+  return {
+    ...abfrage,
+    name: personName(ich),
+    nummer: text(ich, "trikotnummer") ?? "",
+    ausgeschlossen: ausgeschlossene(deal).has(personId),
+    torwart: ids(deal, "torwarte").has(personId),
+    belegteNummern: kontakte
+      .filter((k) => k.id !== personId && text(k, "trikotnummer"))
+      .map((k) => ({ nummer: text(k, "trikotnummer") as string, name: personName(k) })),
+  };
+}
+
+/** Eine Record-ID in einer Liste von Record-IDs setzen oder entfernen. */
+function idsSchreiben(vorhanden: Set<string>, id: string, dabei: boolean): string {
+  const neu = new Set(vorhanden);
+  if (dabei) neu.add(id);
+  else neu.delete(id);
+  return [...neu].join(", ");
+}
+
+export type TrainerEingabe = {
+  groessen: Record<string, string>;
+  nummer: string;
+  ausgeschlossen: boolean;
+  torwart: boolean;
+};
+
+/**
+ * Schreibt die Angaben des Trainers zu einer Person.
+ *
+ * Groessen sind hier optional – der Trainer traegt oft nur eine Nummer nach.
+ * Das Bestaetigungsdatum wird nur gesetzt, wenn er wirklich eine Groesse
+ * angefasst hat; sonst wuerde eine fremde Bestaetigung eine alte Groesse
+ * wieder frisch aussehen lassen.
+ */
+export async function speichereTrainerAngaben(
+  abfrage: TrainerAbfrage,
+  eingabe: TrainerEingabe,
+): Promise<{ ok: boolean; fehler?: string }> {
+  const werte: Record<string, string> = {};
+
+  for (const frage of abfrage.fragen) {
+    const wert = eingabe.groessen[frage.feld];
+    if (!wert) continue;
+    if (!frage.werte.includes(wert)) return { ok: false, fehler: "Unbekannte Größe." };
+    werte[frage.feld] = wert;
+  }
+  if (Object.keys(werte).length > 0) {
+    werte.groesse_zuletzt_bestaetigt_am = new Date().toISOString().slice(0, 10);
+  }
+
+  if (eingabe.nummer !== "") {
+    const zahl = Number(eingabe.nummer);
+    if (!Number.isInteger(zahl) || zahl < 1 || zahl > 99) {
+      return { ok: false, fehler: "Die Rückennummer muss zwischen 1 und 99 liegen." };
+    }
+    const dublette = abfrage.belegteNummern.find((b) => b.nummer === eingabe.nummer);
+    if (dublette) {
+      return { ok: false, fehler: `Die ${eingabe.nummer} hat schon ${dublette.name}.` };
+    }
+  }
+  werte.trikotnummer = eingabe.nummer;
+
+  const kontaktOk = await hubspot<HsObjekt>({
+    pfad: `/crm/v3/objects/contacts/${encodeURIComponent(abfrage.person)}`,
+    methode: "PATCH",
+    koerper: { properties: werte },
+  });
+  if (!kontaktOk) return { ok: false };
+
+  // Ausschluss und Torwart haengen am Deal, nicht am Kontakt: beides gilt nur
+  // fuer diesen Vorgang, nicht fuer die naechste Runde.
+  const treffer = await hubspot<HsListe<HsObjekt>>({
+    pfad: "/crm/v3/objects/deals/search",
+    koerper: dealSuche(abfrage.vorgang, 1),
+  });
+  const deal = treffer?.results[0];
+  if (!deal) return { ok: false };
+
+  const dealOk = await hubspot<HsObjekt>({
+    pfad: `/crm/v3/objects/deals/${deal.id}`,
+    methode: "PATCH",
+    koerper: {
+      properties: {
+        ausgeschlossene_spieler: idsSchreiben(
+          ausgeschlossene(deal),
+          abfrage.person,
+          eingabe.ausgeschlossen,
+        ),
+        torwarte: idsSchreiben(ids(deal, "torwarte"), abfrage.person, eingabe.torwart),
+      },
+    },
+  });
+
+  return { ok: dealOk !== null };
 }
