@@ -15,8 +15,16 @@ Zugang über signierte Links: `/v/{vorgang}?t=…` (Status), `/g/{vorgang}/{hsid
 - Vor dem Rendern wird der Vorgang für Spieler gekürzt (`fuerSpieler`): fremde Namen und interne Verlaufseinträge werden entfernt, nicht nur ausgeblendet. Ausgeblendet hieße, sie stünden trotzdem im Quelltext.
 - Ein abgelehnter Link bekommt immer dieselbe Antwort, auch wenn es den Vorgang gar nicht gibt. Wer raten will, soll daraus nichts lernen.
 - Links baut `npm run link -- <vorgangsnummer> [personen-id]`, bis die Mails sie selbst verschicken.
-- Gebaut sind bisher nur die beiden `/v`-Routen. `/g` und `/b` bekommen ihre Token schon, ihre Seiten kommen mit F2 und F3.
-- `/` ist ein Schaufenster mit Beispieldaten und fasst HubSpot nicht an.
+- Gebaut sind `/v` (Status, zwei Rollen), `/g` (F2) und `/b` (F3). `/` ist ein Schaufenster mit Beispieldaten und fasst HubSpot nicht an.
+- Jede Server Action prüft das Token selbst. Eine Action ist eine eigene Adresse und lässt sich ohne die Seite aufrufen; sich darauf zu verlassen, dass die Seite schon geprüft hat, wäre keine Prüfung.
+
+### Stand von F2 und F3
+
+**F2 fertig,** bis auf die Trainer-Felder. Gefragt werden nur die Größenarten der Artikel dieses Vorgangs, jede einmal. Geändert werden darf nur auf Stufe 1. Geschrieben wird nur, was vorher als Frage rausging und in der HubSpot-Werteliste steht. Die Veraltungsregel (4 Monate Jugend, 12 Erwachsene) ist umgesetzt; ohne Bestätigungsdatum gilt eine Größe als veraltet. Es fehlen: Rückennummer, „bekommt diesmal nichts“, „spielt Torwart“ — sie gehören in die Trainer-Variante, die aus F3 heraus aufgerufen wird. Die Felder dafür stehen in HubSpot (`torwarte`, `ausgeschlossene_spieler`, `trikotnummer`). Es fehlt außerdem Mail M3.
+
+**F3 bis zur Bestätigung.** Tabelle mit Größen und Rückennummern, fehlend oder veraltet gelb, Nummer fehlend oder doppelt rot. Die sechs Prüfungen laufen und nennen im Klartext, was fehlt. Eine gefallene Prüfung verhindert das Bestätigen, auch mit gesetztem Häkchen. Prüfung 4 (Vereinslogo als Datei) und 5 (Summen gegen die Positionen) bleiben **offen** statt bestanden: das Logo kennt das Datenmodell nicht, und die Positionen entstehen erst danach. Offene Prüfungen blockieren nicht — sonst könnte niemand je bestätigen — stehen aber sichtbar da.
+
+Die Bestätigung schreibt `liste_bestaetigt_am`, `lieferadresse` und `hinweis_haendler`. **Die Stufe bleibt auf 1.** „Anfrage raus“ heißt, dass eine Anfrage rausgegangen ist; solange kitflow keine Mail verschickt, wäre dieser Stand eine Behauptung. Es fehlen also: Positionen am Deal anlegen, Händler-XLSX, M4 an beide Händler, M5 an den Trainer, M6 bei nicht bestandener Prüfung, Stufenwechsel. Alles davon hängt am Mailversand über Resend und an der Entscheidung XLSX in kitflow oder in Make (docs/offen.md).
 
 ## Statusseite `/v/{vorgang}`
 

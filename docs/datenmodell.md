@@ -38,6 +38,9 @@ Stand 10.09.2026. HubSpot ist die einzige Datenbasis. Neue Eigenschaften in der 
 | mannschaftscode | Text, z. B. JG2014-2015 | F1 |
 | trainer_email, groessen_frist, lieferadresse | Text / Datum / Text | F1 |
 | ausgeschlossene_spieler | Text, Record-IDs | F2 (Trainer) |
+| torwarte | Text, Record-IDs; wer die Torwartartikel bekommt | F2 (Trainer) |
+| liste_bestaetigt_am | Datum | F3 |
+| hinweis_haendler | Text; geht in die Anfrage | F3 |
 | angebot_intersport_*, angebot_11teamsports_* | Betrag, eingegangen am, gültig bis, Lieferzeit, Abweichung | Angebot eingelesen |
 | lieferant_gewaehlt, amount | Auswahl / Betrag | Spartenleitung |
 | kaskadenstufe, stufe_frist | Zahl 1–3 / Datum, nur Trikotsatz | Spartenleitung, Fristen |

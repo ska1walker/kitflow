@@ -38,6 +38,7 @@ import {
   istJugend as istJugendMannschaft,
   istVeraltet,
 } from "./groessen";
+import { offen, pruefung, type Pruefung } from "./pruefungen";
 import { stufeAusName } from "./stufen";
 import type {
   Artikel,
@@ -61,6 +62,11 @@ const DEAL_FELDER = [
   "amount",
   "lieferant_gewaehlt",
   "ausgeschlossene_spieler",
+  "torwarte",
+  "lieferadresse",
+  "trainer_email",
+  "liste_bestaetigt_am",
+  "hinweis_haendler",
   "angebot_intersport_am",
   "angebot_11teamsports_am",
   "zusage_sponsor",
@@ -98,6 +104,8 @@ const PRODUKT_FELDER = [
   "artikelnr_intersport",
   "artikelnr_11teamsports",
   "beflockung_standard",
+  "farbe",
+  "aktiv",
 ];
 
 /** Kontakt-Eigenschaften: Name, Mannschaft und die Groessen aus docs/datenmodell.md. */
@@ -698,5 +706,228 @@ export async function speichereGroessen(
     koerper: { properties: werte },
   });
 
+  return antwort !== null;
+}
+
+/* ------------------------------------------------------------------ *
+ * F3 · Liste bestaetigen (docs/formulare.md)
+ * ------------------------------------------------------------------ */
+
+/** Eine Zeile der Liste: eine Person mit ihren Groessen. */
+export type ListenZeile = {
+  person: string;
+  name: string;
+  /** Groesse je Groessenart, leer wenn nicht eingetragen. */
+  groessen: { art: Groessenart; label: string; wert: string }[];
+  nummer: string;
+  veraltet: boolean;
+  torwart: boolean;
+};
+
+export type Liste = {
+  vorgang: string;
+  mannschaft: string;
+  gegenstand: string;
+  trikotsatz: boolean;
+  jugend: boolean;
+  lieferadresse: string;
+  hinweisHaendler: string;
+  bestaetigtAm?: string;
+  arten: { art: Groessenart; label: string }[];
+  zeilen: ListenZeile[];
+  pruefungen: Pruefung[];
+  /** Bestaetigt wird nur auf Stufe 1. */
+  offen: boolean;
+};
+
+/** Record-IDs aus einem Freitextfeld mit Record-IDs. */
+function ids(deal: HsObjekt, feld: string): Set<string> {
+  const roh = text(deal, feld);
+  if (!roh) return new Set();
+  return new Set(roh.split(/[^0-9]+/).filter(Boolean));
+}
+
+/**
+ * Die Liste, die der Trainer prueft, samt der sechs Pruefungen.
+ *
+ * Bei Jugendmannschaften stehen hier Namen: der Trainer muss wissen, wessen
+ * Groesse fehlt. Diese Seite haengt an seinem eigenen signierten Link und geht
+ * an niemanden sonst (docs/formulare.md).
+ */
+export async function ladeListe(nummer: string): Promise<Liste | null> {
+  if (!hubspotAktiv()) return null;
+
+  const stufen = await pipelineStufen();
+  if (!stufen) return null;
+
+  const treffer = await hubspot<HsListe<HsObjekt>>({
+    pfad: "/crm/v3/objects/deals/search",
+    koerper: dealSuche(nummer, 1),
+  });
+  const deal = treffer?.results[0];
+  if (!deal || text(deal, "vorgangsnummer") !== nummer) return null;
+
+  const stufenName = stufen.get(deal.properties.dealstage ?? "");
+  const stufe = stufenName ? stufeAusName(stufenName) : null;
+  if (!stufe) return null;
+
+  const [kontaktIds, positionsIds] = await Promise.all([
+    assoziierteIds("deals", deal.id, "contacts"),
+    assoziierteIds("deals", deal.id, "line_items"),
+  ]);
+
+  const [kontakteRoh, positionen] = await Promise.all([
+    batchLesen("contacts", kontaktIds, KONTAKT_FELDER),
+    batchLesen("line_items", positionsIds, POSITION_FELDER),
+  ]);
+
+  const produktIds = [
+    ...new Set(positionen.map((p) => text(p, "hs_product_id")).filter((id): id is string => !!id)),
+  ];
+  const produkte = await batchLesen("products", produktIds, PRODUKT_FELDER);
+  const artikel = artikelAus(positionen, new Map(produkte.map((p) => [p.id, p])));
+
+  const raus = ausgeschlossene(deal);
+  const torwarte = ids(deal, "torwarte");
+  const kontakte = kontakteRoh.filter((k) => !raus.has(k.id));
+  const jugend = istJugend(deal);
+  const trikotsatz = text(deal, "ausstattungsart") === "Trikotsatz";
+
+  const arten = [...new Set(artikel.map((a) => a.groessenart))]
+    .filter((a) => a !== "ohne")
+    .map((art) => ({ art, label: GROESSEN_LABEL[art] }));
+
+  const zeilen: ListenZeile[] = kontakte.map((k) => ({
+    person: k.id,
+    name: personName(k),
+    groessen: arten.map(({ art, label }) => {
+      const feld = GROESSEN_FELD[art];
+      return { art, label, wert: (feld ? text(k, feld) : undefined) ?? "" };
+    }),
+    nummer: text(k, "trikotnummer") ?? "",
+    veraltet: istVeraltet(text(k, "groesse_zuletzt_bestaetigt_am"), jugend),
+    torwart: torwarte.has(k.id),
+  }));
+
+  return {
+    vorgang: nummer,
+    mannschaft: text(deal, "mannschaft") ?? text(deal, "mannschaftscode") ?? "",
+    gegenstand: text(deal, "ausstattungsart") ?? "Ausstattung",
+    trikotsatz,
+    jugend,
+    lieferadresse: text(deal, "lieferadresse") ?? "",
+    hinweisHaendler: text(deal, "hinweis_haendler") ?? "",
+    bestaetigtAm: kurzDatum(text(deal, "liste_bestaetigt_am")),
+    arten,
+    zeilen,
+    pruefungen: pruefeVorgang(deal, artikel, produkte, zeilen, trikotsatz),
+    offen: stufe === 1,
+  };
+}
+
+/** Die sechs Pruefungen aus docs/konzept.md, in dieser Reihenfolge. */
+function pruefeVorgang(
+  deal: HsObjekt,
+  artikel: Artikel[],
+  produkte: HsObjekt[],
+  zeilen: ListenZeile[],
+  trikotsatz: boolean,
+): Pruefung[] {
+  // 1 · Artikel sind aktive Produkte mit Herstellernummer und Farbe
+  const artikelMaengel: string[] = [];
+  if (artikel.length === 0) {
+    artikelMaengel.push("Es hängt kein Artikel am Vorgang.");
+  }
+  for (const p of produkte) {
+    const name = text(p, "name") ?? p.id;
+    if (!text(p, "hs_sku")) artikelMaengel.push(`${name}: keine Herstellernummer`);
+    if (!text(p, "farbe")) artikelMaengel.push(`${name}: keine Farbe`);
+    if (text(p, "aktiv") === "false") artikelMaengel.push(`${name}: nicht aktiv`);
+  }
+
+  // 2 · Jeder nicht ausgeschlossene Spieler hat eine aktuelle Groesse
+  const groessenMaengel: string[] = [];
+  for (const zeile of zeilen) {
+    const fehlend = zeile.groessen.filter((g) => !g.wert).map((g) => g.label);
+    if (fehlend.length > 0) groessenMaengel.push(`${zeile.name}: ${fehlend.join(", ")} fehlt`);
+    else if (zeile.veraltet) groessenMaengel.push(`${zeile.name}: Größe ist veraltet`);
+  }
+
+  // 3 · Rueckennummern vollstaendig und eindeutig, nur beim Trikotsatz
+  const nummernMaengel: string[] = [];
+  if (trikotsatz) {
+    const gesehen = new Map<string, string>();
+    for (const zeile of zeilen) {
+      if (!zeile.nummer) {
+        nummernMaengel.push(`${zeile.name}: keine Rückennummer`);
+        continue;
+      }
+      const zahl = Number(zeile.nummer);
+      if (!Number.isInteger(zahl) || zahl < 1 || zahl > 99) {
+        nummernMaengel.push(`${zeile.name}: Rückennummer ${zeile.nummer} liegt nicht zwischen 1 und 99`);
+        continue;
+      }
+      const schon = gesehen.get(zeile.nummer);
+      if (schon) nummernMaengel.push(`Rückennummer ${zeile.nummer} doppelt: ${schon} und ${zeile.name}`);
+      else gesehen.set(zeile.nummer, zeile.name);
+    }
+  }
+
+  // 4 · Beflockung je Artikel festgelegt; das Vereinslogo als Datei kennt das
+  //     Datenmodell nicht, deshalb bleibt diese Pruefung offen statt zu luegen.
+  const beflockungMaengel = produkte
+    .filter((p) => !text(p, "beflockung_standard"))
+    .map((p) => `${text(p, "name") ?? p.id}: keine Beflockung hinterlegt`);
+
+  // 6 · Lieferadresse und Trainer-Kontakt
+  const kontaktMaengel: string[] = [];
+  if (!text(deal, "lieferadresse")) kontaktMaengel.push("Lieferadresse fehlt");
+  if (!text(deal, "trainer_email")) kontaktMaengel.push("Trainer-E-Mail fehlt");
+
+  return [
+    pruefung(1, "Artikel sind aktive Produkte mit Herstellernummer und Farbe", artikelMaengel),
+    pruefung(2, "Jede Person hat eine aktuelle Größe je Größenart", groessenMaengel),
+    trikotsatz
+      ? pruefung(3, "Rückennummern vollständig und eindeutig", nummernMaengel)
+      : pruefung(3, "Rückennummern (nur beim Trikotsatz)", []),
+    beflockungMaengel.length > 0
+      ? pruefung(4, "Beflockung je Artikel festgelegt", beflockungMaengel)
+      : offen(4, "Beflockung und Vereinslogo", "Das Vereinslogo als Datei kennt das Datenmodell noch nicht."),
+    offen(5, "Summen je Artikel und Größe", "Prüfbar erst, wenn die Positionen am Deal stehen."),
+    pruefung(6, "Lieferadresse und Trainer-Kontakt gesetzt", kontaktMaengel),
+  ];
+}
+
+/**
+ * Nimmt die Bestaetigung des Trainers entgegen: Datum, Lieferadresse und der
+ * Hinweis an die Haendler.
+ *
+ * Die Stufe bleibt, wo sie ist. „Anfrage raus“ heisst, dass eine Anfrage
+ * rausgegangen ist; solange kitflow keine Mail verschickt, waere dieser Stand
+ * eine Behauptung.
+ */
+export async function bestaetigeListe(
+  nummer: string,
+  lieferadresse: string,
+  hinweis: string,
+): Promise<boolean> {
+  const treffer = await hubspot<HsListe<HsObjekt>>({
+    pfad: "/crm/v3/objects/deals/search",
+    koerper: dealSuche(nummer, 1),
+  });
+  const deal = treffer?.results[0];
+  if (!deal || text(deal, "vorgangsnummer") !== nummer) return false;
+
+  const werte: Record<string, string> = {
+    liste_bestaetigt_am: new Date().toISOString().slice(0, 10),
+  };
+  if (lieferadresse) werte.lieferadresse = lieferadresse;
+  if (hinweis) werte.hinweis_haendler = hinweis;
+
+  const antwort = await hubspot<HsObjekt>({
+    pfad: `/crm/v3/objects/deals/${deal.id}`,
+    methode: "PATCH",
+    koerper: { properties: werte },
+  });
   return antwort !== null;
 }
