@@ -1,4 +1,5 @@
-import { LETZTE_STUFE, STUFEN, VORGANG_STAND } from "@/lib/beispieldaten";
+import { LETZTE_STUFE, STUFEN } from "@/lib/stufen";
+import { fortschrittText } from "@/lib/texte";
 import type { StufeNr } from "@/lib/typen";
 
 /** Nur die Stufen der Leiste. Stufe 9 (Abgebrochen) liegt daneben. */
@@ -54,13 +55,9 @@ export function MiniLeiste({ stand }: { stand: StufeNr }) {
 }
 
 /** Die volle Schrittleiste im Statuskopf: acht Segmente mit Beschriftung. */
-export function Schrittleiste({ stand }: { stand: StufeNr }) {
+export function Schrittleiste({ stand, standText }: { stand: StufeNr; standText: string }) {
   const abgebrochen = stand > LETZTE_STUFE;
-  const info = abgebrochen
-    ? "Abgebrochen"
-    : stand < LETZTE_STUFE
-      ? `Schritt ${stand} von ${LETZTE_STUFE}`
-      : `Alle ${LETZTE_STUFE} Schritte erledigt`;
+  const info = fortschrittText(stand);
 
   return (
     <div className="mt-6" aria-label={`Fortschritt: ${info}`}>
@@ -91,7 +88,7 @@ export function Schrittleiste({ stand }: { stand: StufeNr }) {
 
       <div className="mt-2.5 flex justify-between gap-3 text-xs text-ink-500">
         <span className="tnum">{info}</span>
-        <span>{VORGANG_STAND}</span>
+        <span>{standText}</span>
       </div>
     </div>
   );

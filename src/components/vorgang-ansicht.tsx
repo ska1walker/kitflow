@@ -2,17 +2,9 @@
 
 import { Badge, Card, Fliese } from "./ui";
 import { IconArrowRight, IconBell, IconCheck, IconStop } from "./icons";
-import {
-  ABBRUCH_BEI,
-  LETZTE_STUFE,
-  SPIELER_GRUSS,
-  STUFEN_TEXTE,
-  VORGANG_NUMMER,
-  VORGANG_TITEL,
-  VORGANG_UNTERTITEL,
-  stufe as stufeVon,
-} from "@/lib/beispieldaten";
-import type { Ansicht, StufeNr } from "@/lib/typen";
+import { LETZTE_STUFE, stufe as stufeVon } from "@/lib/stufen";
+import { naechsterSchritt, statusText } from "@/lib/texte";
+import type { Ansicht, StufeNr, Vorgang } from "@/lib/typen";
 import { Schrittleiste } from "./schrittleiste";
 import {
   ArtikelKarte,
@@ -24,23 +16,22 @@ import {
 } from "./karten";
 
 /** Statuskopf: eine Überschrift, ein Satz, die Schrittleiste. Mehr nicht. */
-function StatusKopf({ stand, ansicht }: { stand: StufeNr; ansicht: Ansicht }) {
-  const s = stufeVon(stand);
+function StatusKopf({ vorgang, ansicht }: { vorgang: Vorgang; ansicht: Ansicht }) {
+  const s = stufeVon(vorgang.stufe);
   const Icon = s.icon;
-  const laeuft = stand < LETZTE_STUFE;
-  const text = ansicht === "spieler" ? STUFEN_TEXTE[stand].spieler : STUFEN_TEXTE[stand].trainer;
+  const laeuft = vorgang.stufe < LETZTE_STUFE;
 
   return (
     <Card className="px-5 pt-[22px] pb-5">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="eyebrow text-pitch-600">Vorgang {VORGANG_NUMMER}</span>
-        {stand > LETZTE_STUFE && <Badge tone="red">abgebrochen</Badge>}
+        <span className="eyebrow text-pitch-600">Vorgang {vorgang.nummer}</span>
+        {vorgang.stufe > LETZTE_STUFE && <Badge tone="red">abgebrochen</Badge>}
       </div>
       <h1 className="font-display mt-1.5 text-3xl font-extrabold tracking-tight text-ink-900">
-        {VORGANG_TITEL}
+        {vorgang.titel}
       </h1>
       <p className="mt-1 text-sm text-ink-600">
-        {ansicht === "spieler" ? SPIELER_GRUSS : VORGANG_UNTERTITEL}
+        {ansicht === "spieler" ? vorgang.spielerGruss : vorgang.untertitel}
       </p>
 
       <div className="mt-[22px] flex items-start gap-3.5 border-t border-ink-200 pt-5">
@@ -54,25 +45,22 @@ function StatusKopf({ stand, ansicht }: { stand: StufeNr; ansicht: Ansicht }) {
           <h2 className="font-display mt-0.5 mb-1.5 text-2xl font-bold tracking-tight text-ink-900">
             {s.titel}
           </h2>
-          <p className="max-w-[38rem] text-pretty text-ink-600">{text}</p>
+          <p className="max-w-[38rem] text-pretty text-ink-600">{statusText(vorgang, ansicht)}</p>
         </div>
       </div>
 
-      <Schrittleiste stand={stand} />
+      <Schrittleiste stand={vorgang.stufe} standText={vorgang.stand} />
     </Card>
   );
 }
 
 /** Wer als Nächstes am Zug ist – die Frage, die alle drei Rollen teilen. */
-function NaechsterSchritt({ stand, ansicht }: { stand: StufeNr; ansicht: Ansicht }) {
-  const naechster =
-    ansicht === "spieler"
-      ? STUFEN_TEXTE[stand].naechsterSpieler
-      : STUFEN_TEXTE[stand].naechsterTrainer;
+function NaechsterSchritt({ vorgang, ansicht }: { vorgang: Vorgang; ansicht: Ansicht }) {
+  const naechster = naechsterSchritt(vorgang, ansicht);
 
   if (!naechster) {
     // Abgeschlossen ist ein Erfolg, abgebrochen nicht – das darf nicht gleich aussehen.
-    const abgebrochen = stand > LETZTE_STUFE;
+    const abgebrochen = vorgang.stufe > LETZTE_STUFE;
     return (
       <div
         className={`flex items-start gap-3 rounded-2xl border px-4 py-3.5 ${
@@ -126,25 +114,26 @@ function NaechsterSchritt({ stand, ansicht }: { stand: StufeNr; ansicht: Ansicht
  * danach die Händler und das Geld. Spieler sehen nur ihre eigenen Größen.
  */
 export function VorgangAnsicht({
-  stand,
+  vorgang,
   ansicht,
   onDemo,
 }: {
-  stand: StufeNr;
+  vorgang: Vorgang;
   ansicht: Ansicht;
   onDemo: (text: string) => void;
 }) {
   // Bei einem Abbruch stehen die Karten auf dem Stand, den der Vorgang erreicht
   // hatte. Kopf und naechster Schritt sprechen weiter vom Abbruch selbst.
-  const datenStand: StufeNr = stand > LETZTE_STUFE ? ABBRUCH_BEI : stand;
+  const stand: StufeNr =
+    vorgang.stufe > LETZTE_STUFE ? (vorgang.abbruchBei ?? LETZTE_STUFE) : vorgang.stufe;
 
   if (ansicht === "spieler") {
     return (
       <>
-        <StatusKopf stand={stand} ansicht={ansicht} />
-        <NaechsterSchritt stand={stand} ansicht={ansicht} />
-        <MeineKarte stand={datenStand} onDemo={onDemo} />
-        <VerlaufKarte stand={stand} ansicht={ansicht} />
+        <StatusKopf vorgang={vorgang} ansicht={ansicht} />
+        <NaechsterSchritt vorgang={vorgang} ansicht={ansicht} />
+        <MeineKarte vorgang={vorgang} stand={stand} onDemo={onDemo} />
+        <VerlaufKarte vorgang={vorgang} stand={vorgang.stufe} ansicht={ansicht} />
       </>
     );
   }
@@ -152,22 +141,22 @@ export function VorgangAnsicht({
   // Ab der Auswahl ruecken Haendler und Geld nach vorn, die Groessen sind erledigt.
   // Auf Stufe 1 gibt es noch keine Haendler, dann steht die Groessenkarte allein.
   const arbeitsKarten =
-    datenStand >= 4
+    stand >= 4
       ? [
-          <HaendlerKarte key="haendler" stand={datenStand} />,
-          <GeldKarte key="geld" stand={datenStand} />,
+          <HaendlerKarte key="haendler" vorgang={vorgang} stand={stand} />,
+          <GeldKarte key="geld" vorgang={vorgang} stand={stand} />,
         ]
-      : datenStand >= 2
+      : stand >= 2
         ? [
-            <GroessenKarte key="groessen" stand={datenStand} onDemo={onDemo} />,
-            <HaendlerKarte key="haendler" stand={datenStand} />,
+            <GroessenKarte key="groessen" vorgang={vorgang} stand={stand} onDemo={onDemo} />,
+            <HaendlerKarte key="haendler" vorgang={vorgang} stand={stand} />,
           ]
-        : [<GroessenKarte key="groessen" stand={datenStand} onDemo={onDemo} />];
+        : [<GroessenKarte key="groessen" vorgang={vorgang} stand={stand} onDemo={onDemo} />];
 
   return (
     <>
-      <StatusKopf stand={stand} ansicht={ansicht} />
-      <NaechsterSchritt stand={stand} ansicht={ansicht} />
+      <StatusKopf vorgang={vorgang} ansicht={ansicht} />
+      <NaechsterSchritt vorgang={vorgang} ansicht={ansicht} />
 
       {arbeitsKarten.length === 1 ? (
         arbeitsKarten[0]
@@ -176,8 +165,8 @@ export function VorgangAnsicht({
       )}
 
       <div className="grid items-start gap-4 md:grid-cols-2">
-        <ArtikelKarte stand={datenStand} />
-        <VerlaufKarte stand={stand} ansicht={ansicht} />
+        <ArtikelKarte vorgang={vorgang} stand={stand} />
+        <VerlaufKarte vorgang={vorgang} stand={vorgang.stufe} ansicht={ansicht} />
       </div>
     </>
   );

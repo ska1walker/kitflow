@@ -3,20 +3,9 @@
 import type { ReactNode } from "react";
 import { Badge, Button, Card } from "./ui";
 import { IconBell, IconCheck } from "./icons";
-import {
-  ABBRUCH_BEI,
-  ABBRUCH_EREIGNIS,
-  ARTIKEL,
-  EREIGNISSE,
-  LETZTE_STUFE,
-  FEHLENDE_GROESSEN,
-  GROESSEN_EINGETRAGEN,
-  GROESSEN_GESAMT,
-  HAENDLER,
-  MEINE_AUSSTATTUNG,
-  MEINE_AUSSTATTUNG_HINWEIS,
-} from "@/lib/beispieldaten";
-import type { Ansicht, Artikel, ArtikelFuer, StufeNr } from "@/lib/typen";
+import { ABBRUCH_EREIGNIS } from "@/lib/beispieldaten";
+import { LETZTE_STUFE } from "@/lib/stufen";
+import type { Ansicht, Artikel, ArtikelFuer, StufeNr, Vorgang } from "@/lib/typen";
 
 /** Kartenkopf: Titel links, Status oder Randnotiz rechts. */
 function KartenKopf({ titel, rechts }: { titel: string; rechts?: ReactNode }) {
@@ -28,20 +17,35 @@ function KartenKopf({ titel, rechts }: { titel: string; rechts?: ReactNode }) {
   );
 }
 
+function Zeile({ titel, unter, rechts }: { titel: string; unter: string; rechts: ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-3 border-t border-ink-100 py-[11px] first:border-t-0 first:pt-0">
+      <div className="flex min-w-0 flex-col">
+        <b className="text-sm font-semibold">{titel}</b>
+        <small className="text-xs text-ink-500">{unter}</small>
+      </div>
+      {rechts}
+    </div>
+  );
+}
+
 /**
  * Größen: bis die Liste vollständig ist, das Kernstück der Trainer-Ansicht.
  * Danach nur noch Beleg, dass der Trainer sie bestätigt hat.
  */
 export function GroessenKarte({
+  vorgang,
   stand,
   onDemo,
 }: {
+  vorgang: Vorgang;
   stand: StufeNr;
   onDemo: (text: string) => void;
 }) {
   const laeuft = stand === 1;
-  const eingetragen = laeuft ? GROESSEN_EINGETRAGEN : GROESSEN_GESAMT;
-  const anteil = (eingetragen / GROESSEN_GESAMT) * 100;
+  const eingetragen = laeuft ? vorgang.groessenEingetragen : vorgang.groessenGesamt;
+  const anteil = vorgang.groessenGesamt > 0 ? (eingetragen / vorgang.groessenGesamt) * 100 : 0;
+  const fehlen = Math.max(0, vorgang.groessenGesamt - eingetragen);
 
   return (
     <Card className="p-5">
@@ -63,7 +67,7 @@ export function GroessenKarte({
         <strong className="tnum text-[32px] leading-none font-extrabold tracking-[-0.03em]">
           {eingetragen}
         </strong>
-        <span className="text-ink-600">von {GROESSEN_GESAMT} eingetragen</span>
+        <span className="text-ink-600">von {vorgang.groessenGesamt} eingetragen</span>
       </div>
 
       <div className="mt-2.5 mb-3 h-1.5 overflow-hidden rounded-full bg-ink-100">
@@ -72,23 +76,30 @@ export function GroessenKarte({
 
       {laeuft ? (
         <>
-          <ul className="flex flex-col gap-1.5">
-            {FEHLENDE_GROESSEN.map((person) => (
-              <li
-                key={person}
-                className="flex items-center justify-between gap-2.5 rounded-lg bg-ink-50 px-2.5 py-2 text-sm"
-              >
-                <span>{person}</span>
-                <Badge tone="amber">fehlt</Badge>
-              </li>
-            ))}
-          </ul>
+          {vorgang.fehlendeGroessen.length > 0 ? (
+            <ul className="flex flex-col gap-1.5">
+              {vorgang.fehlendeGroessen.map((person) => (
+                <li
+                  key={person}
+                  className="flex items-center justify-between gap-2.5 rounded-lg bg-ink-50 px-2.5 py-2 text-sm"
+                >
+                  <span>{person}</span>
+                  <Badge tone="amber">fehlt</Badge>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            // Bei Jugendmannschaften nennt die Seite keine Namen.
+            <p className="text-sm text-ink-600">
+              {fehlen} von {vorgang.groessenGesamt} fehlen noch.
+            </p>
+          )}
           <div className="mt-3.5 flex flex-wrap gap-2">
             <Button
               onClick={() => onDemo("Erinnerung verschickt – im Entwurf passiert noch nichts.")}
             >
               <IconBell width={16} height={16} />
-              Erinnerung an {FEHLENDE_GROESSEN.length} senden
+              Erinnerung an {fehlen} senden
             </Button>
             <Button
               variante="sekundaer"
@@ -101,7 +112,10 @@ export function GroessenKarte({
       ) : (
         <>
           <p className="text-sm text-ink-600">
-            Liste am 09.09. von dir bestätigt. 17 Feldspieler, 1 Torwart.
+            {vorgang.groessenBestaetigtAm
+              ? `Liste am ${vorgang.groessenBestaetigtAm} von dir bestätigt. `
+              : "Liste von dir bestätigt. "}
+            {vorgang.feldspielerAnzahl} Feldspieler, {vorgang.torwartAnzahl} Torwart.
           </p>
           <div className="mt-3.5 flex flex-wrap gap-2">
             <Button
@@ -117,20 +131,8 @@ export function GroessenKarte({
   );
 }
 
-function Zeile({ titel, unter, rechts }: { titel: string; unter: string; rechts: ReactNode }) {
-  return (
-    <div className="flex items-center justify-between gap-3 border-t border-ink-100 py-[11px] first:border-t-0 first:pt-0">
-      <div className="flex min-w-0 flex-col">
-        <b className="text-sm font-semibold">{titel}</b>
-        <small className="text-xs text-ink-500">{unter}</small>
-      </div>
-      {rechts}
-    </div>
-  );
-}
-
 /** Händler: jede Anfrage geht an beide, damit es ein Vergleichsangebot gibt. */
-export function HaendlerKarte({ stand }: { stand: StufeNr }) {
+export function HaendlerKarte({ vorgang, stand }: { vorgang: Vorgang; stand: StufeNr }) {
   if (stand < 2) return null;
 
   function status(gewaehlt: boolean, angebotAm: string) {
@@ -145,7 +147,7 @@ export function HaendlerKarte({ stand }: { stand: StufeNr }) {
       );
     }
     if (stand >= 3) return <Badge tone="outline">Angebot da · {angebotAm}</Badge>;
-    return <Badge tone="amber">angefragt · 09.09.</Badge>;
+    return <Badge tone="amber">angefragt</Badge>;
   }
 
   return (
@@ -155,7 +157,7 @@ export function HaendlerKarte({ stand }: { stand: StufeNr }) {
         rechts={<span className="text-xs text-ink-400">jede Anfrage geht an beide</span>}
       />
       <div className="flex flex-col">
-        {HAENDLER.map((h) => (
+        {vorgang.haendler.map((h) => (
           <Zeile
             key={h.name}
             titel={h.name}
@@ -172,7 +174,7 @@ export function HaendlerKarte({ stand }: { stand: StufeNr }) {
  * Finanzierung: erst ab der Auswahl relevant. Bestellt wird erst, wenn das Geld
  * da ist. Eine Zusage allein macht nie bestellbar (docs/konzept.md).
  */
-export function GeldKarte({ stand }: { stand: StufeNr }) {
+export function GeldKarte({ vorgang, stand }: { vorgang: Vorgang; stand: StufeNr }) {
   if (stand < 4) return null;
   const geldDa = stand >= 5;
 
@@ -188,18 +190,24 @@ export function GeldKarte({ stand }: { stand: StufeNr }) {
       />
       <div className="flex flex-col">
         <Zeile
-          titel="Sponsor VGH"
-          unter="übernimmt den Trikotsatz komplett"
-          rechts={<Badge tone="outline">zugesagt</Badge>}
+          titel={vorgang.sponsor ? `Sponsor ${vorgang.sponsor}` : "Finanzierung"}
+          unter="übernimmt den Satz komplett"
+          rechts={
+            vorgang.finanzierungZugesagt ? (
+              <Badge tone="outline">zugesagt</Badge>
+            ) : (
+              <Badge tone="neutral">offen</Badge>
+            )
+          }
         />
         <Zeile
           titel="Eingang Vereinskonto"
           unter="Bestellt wird erst danach"
           rechts={
-            geldDa ? (
+            geldDa && vorgang.geldEingangAm ? (
               <Badge tone="pitch">
                 <IconCheck width={14} height={14} />
-                18.09.
+                {vorgang.geldEingangAm}
               </Badge>
             ) : (
               <Badge tone="neutral">offen</Badge>
@@ -211,11 +219,6 @@ export function GeldKarte({ stand }: { stand: StufeNr }) {
   );
 }
 
-const GRUPPEN: { fuer: ArtikelFuer; titel: string; anzahl: string }[] = [
-  { fuer: "feldspieler", titel: "Feldspieler", anzahl: "17 Personen" },
-  { fuer: "torwart", titel: "Torwart", anzahl: "1 Person" },
-];
-
 function ArtikelGruppe({
   titel,
   anzahl,
@@ -225,6 +228,7 @@ function ArtikelGruppe({
   anzahl: string;
   artikel: Artikel[];
 }) {
+  if (artikel.length === 0) return null;
   return (
     <div className="mt-3.5 first:mt-0">
       <div className="mb-1.5 flex items-center justify-between text-xs font-semibold text-ink-500">
@@ -246,24 +250,34 @@ function ArtikelGruppe({
   );
 }
 
-export function ArtikelKarte({ stand }: { stand: StufeNr }) {
+export function ArtikelKarte({ vorgang, stand }: { vorgang: Vorgang; stand: StufeNr }) {
+  const gruppen: { fuer: ArtikelFuer; titel: string; anzahl: number }[] = [
+    { fuer: "feldspieler", titel: "Feldspieler", anzahl: vorgang.feldspielerAnzahl },
+    { fuer: "torwart", titel: "Torwart", anzahl: vorgang.torwartAnzahl },
+  ];
+
   return (
     <Card className="p-5">
       <KartenKopf
         titel="Artikel"
-        rechts={<span className="text-xs text-ink-400">Beflockung Standard auf den Trikots</span>}
+        rechts={
+          vorgang.beflockung ? (
+            <span className="text-xs text-ink-400">Beflockung {vorgang.beflockung}</span>
+          ) : undefined
+        }
       />
-      {GRUPPEN.map((g) => (
+      {gruppen.map((g) => (
         <ArtikelGruppe
           key={g.fuer}
           titel={g.titel}
-          anzahl={g.anzahl}
-          artikel={ARTIKEL.filter((a) => a.fuer === g.fuer)}
+          anzahl={`${g.anzahl} ${g.anzahl === 1 ? "Person" : "Personen"}`}
+          artikel={vorgang.artikel.filter((a) => a.fuer === g.fuer)}
         />
       ))}
-      {stand >= 4 && (
+      {stand >= 4 && vorgang.groessenBestaetigtAm && (
         <p className="mt-3.5 text-xs text-ink-400">
-          Größen: 18 von 18, Liste am 09.09. bestätigt. 54 Positionen.
+          Größen: {vorgang.groessenGesamt} von {vorgang.groessenGesamt}, Liste am{" "}
+          {vorgang.groessenBestaetigtAm} bestätigt.
         </p>
       )}
     </Card>
@@ -272,9 +286,11 @@ export function ArtikelKarte({ stand }: { stand: StufeNr }) {
 
 /** Spieler-Ansicht: nur die eigenen Größen, nie Beträge (docs/konzept.md). */
 export function MeineKarte({
+  vorgang,
   stand,
   onDemo,
 }: {
+  vorgang: Vorgang;
   stand: StufeNr;
   onDemo: (text: string) => void;
 }) {
@@ -294,14 +310,14 @@ export function MeineKarte({
         }
       />
       <dl className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        {MEINE_AUSSTATTUNG.map((e) => (
+        {vorgang.meineAusstattung.map((e) => (
           <div key={e.feld} className="rounded-xl border border-ink-200 px-3 py-2.5">
             <dt className="text-xs font-medium text-ink-500">{e.feld}</dt>
             <dd className="tnum mt-0.5 text-xl font-bold tracking-[-0.02em]">{e.wert}</dd>
           </div>
         ))}
       </dl>
-      <p className="mt-3 text-sm text-ink-600">{MEINE_AUSSTATTUNG_HINWEIS}</p>
+      <p className="mt-3 text-sm text-ink-600">{vorgang.meinHinweis}</p>
       {stand === 1 && (
         <div className="mt-3.5 flex flex-wrap gap-2">
           <Button onClick={() => onDemo("Hier öffnet sich später deine Größenabfrage.")}>
@@ -317,14 +333,22 @@ export function MeineKarte({
  * Verlauf: nur, was bis zum aktuellen Stand passiert ist, neueste zuerst.
  * Interne Einträge sehen Trainer und Spartenleitung, Spieler nicht.
  */
-export function VerlaufKarte({ stand, ansicht }: { stand: StufeNr; ansicht: Ansicht }) {
+export function VerlaufKarte({
+  vorgang,
+  stand,
+  ansicht,
+}: {
+  vorgang: Vorgang;
+  stand: StufeNr;
+  ansicht: Ansicht;
+}) {
   // Ein abgebrochener Vorgang hat nie geliefert oder bezahlt: sein Verlauf endet
   // bei der Stufe des Abbruchs und schliesst mit dem Abbruch selbst.
   const abgebrochen = stand > LETZTE_STUFE;
-  const bis = abgebrochen ? ABBRUCH_BEI : stand;
-  const eintraege = EREIGNISSE.filter(
-    (e) => e.ab <= bis && !(ansicht === "spieler" && e.intern),
-  ).reverse();
+  const bis = abgebrochen ? (vorgang.abbruchBei ?? LETZTE_STUFE) : stand;
+  const eintraege = vorgang.verlauf
+    .filter((e) => e.ab <= bis && !(ansicht === "spieler" && e.intern))
+    .reverse();
   if (abgebrochen) eintraege.unshift(ABBRUCH_EREIGNIS);
 
   return (

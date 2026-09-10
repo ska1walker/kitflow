@@ -99,3 +99,51 @@ export type VorgangsZeile = {
   /** Im Entwurf ist nur der gesteuerte Vorgang anklickbar. */
   verlinkt?: boolean;
 };
+
+/** Wer die Groesse einer Person haelt. Ohne Kontaktdaten, ohne Betraege. */
+export type PersonGroesse = {
+  feld: string;
+  wert: string;
+};
+
+/**
+ * Ein vollstaendiger Vorgang, so wie die Statusseite ihn braucht.
+ *
+ * Zusammengesetzt aus HubSpot: Deal, Positionen und Kontakte. `quelle` sagt,
+ * ob echte Daten oder Beispieldaten angezeigt werden – die Oberflaeche muss
+ * Beispieldaten kennzeichnen (CLAUDE.md).
+ */
+export type Vorgang = {
+  nummer: string;
+  titel: string;
+  untertitel: string;
+  stufe: StufeNr;
+  /** Bei Stufe 9: die Stufe, die der Vorgang vor dem Abbruch erreicht hatte. */
+  abbruchBei?: StufeNr;
+  stand: string;
+
+  sponsor?: string;
+  finanzierungZugesagt: boolean;
+  geldEingangAm?: string;
+
+  groessenEingetragen: number;
+  groessenGesamt: number;
+  groessenBestaetigtAm?: string;
+  /** Nur Erwachsene namentlich; bei Jugend bleibt die Liste leer. */
+  fehlendeGroessen: string[];
+
+  beflockung?: string;
+  feldspielerAnzahl: number;
+  torwartAnzahl: number;
+
+  haendler: Haendler[];
+  artikel: Artikel[];
+  verlauf: Ereignis[];
+
+  /** Die Ausstattung der Person, die den Link geoeffnet hat. */
+  meineAusstattung: PersonGroesse[];
+  meinHinweis: string;
+  spielerGruss: string;
+
+  quelle: "hubspot" | "beispiel";
+};

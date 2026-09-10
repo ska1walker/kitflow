@@ -1,77 +1,23 @@
 /**
  * Beispieldaten der Statusseite.
  *
- * Namen, Termine und Betraege sind erfunden und in der Oberflaeche als
- * Beispieldaten gekennzeichnet. Die Artikel sind echt und stammen aus Kais
- * Anfrage (docs/datenmodell.md), ebenso die beiden Haendler.
+ * Sie greifen nur, solange HubSpot nicht angebunden ist. Namen, Termine und
+ * Betraege sind erfunden und werden in der Oberflaeche gekennzeichnet. Die
+ * Artikel und die beiden Haendler sind echt und stammen aus Kais Anfrage
+ * (docs/datenmodell.md).
  *
  * Namen von Kindern stehen bewusst nicht im Code (CLAUDE.md): beim
  * Jugendvorgang zeigt die Seite nur Zaehlstaende.
  */
 
-import {
-  IconRuler,
-  IconSend,
-  IconDokument,
-  IconMuenzen,
-  IconCheck,
-  IconWarenkorb,
-  IconLieferung,
-  IconFahne,
-} from "@/components/icons";
-import type {
-  Artikel,
-  Ereignis,
-  Haendler,
-  Stufe,
-  StufeNr,
-  StufenText,
-  VorgangsZeile,
-} from "./typen";
+import type { Artikel, Ereignis, Haendler, StufeNr, Vorgang, VorgangsZeile } from "./typen";
 
 export const VEREIN = { kuerzel: "EM", name: "Eintracht Munster · Fußball" };
 
 export const VORGANG_NUMMER = "AUS-2026-014";
-export const VORGANG_TITEL = "Herren Ü40 · Trikotsatz";
-export const VORGANG_UNTERTITEL =
-  "18 Personen · Sponsor VGH · Händler Intersport Uelzen und 11teamsports";
-export const VORGANG_STAND = "Stand: heute, 07:30 Uhr";
-export const SPIELER_GRUSS =
-  "Hallo Jonas, hier siehst du, wo deine neue Ausstattung gerade steckt.";
-
-/** Stufen der HubSpot-Pipeline „Ausstattung“ (docs/konzept.md). */
-export const STUFEN: Stufe[] = [
-  { nr: 1, intern: "Größen laufen", kurz: "Größen", titel: "Größen werden gesammelt", icon: IconRuler },
-  { nr: 2, intern: "Anfrage raus", kurz: "Anfrage", titel: "Angebote angefragt", icon: IconSend },
-  { nr: 3, intern: "Angebote da", kurz: "Angebote", titel: "Beide Angebote sind da", icon: IconDokument },
-  { nr: 4, intern: "Finanzierung", kurz: "Finanzierung", titel: "Finanzierung läuft", icon: IconMuenzen },
-  { nr: 5, intern: "Bestellbar", kurz: "Geld da", titel: "Das Geld ist da", icon: IconCheck },
-  { nr: 6, intern: "Bestellt", kurz: "Bestellt", titel: "Bestellt", icon: IconWarenkorb },
-  { nr: 7, intern: "Geliefert", kurz: "Geliefert", titel: "Geliefert", icon: IconLieferung },
-  { nr: 8, intern: "Abgeschlossen", kurz: "Abgeschlossen", titel: "Abgeschlossen", icon: IconFahne },
-  { nr: 9, intern: "Abgebrochen", kurz: "Abgebrochen", titel: "Abgebrochen", icon: IconFahne },
-];
-
-export function stufe(nr: StufeNr): Stufe {
-  return STUFEN[nr - 1];
-}
-
-/** Die letzte Stufe der Schrittleiste. Stufe 9 liegt daneben. */
-export const LETZTE_STUFE: StufeNr = 8;
-
-export const GROESSEN_EINGETRAGEN = 14;
-export const GROESSEN_GESAMT = 18;
-
-/** Erwachsenen-Mannschaft, deshalb stehen hier Beispielnamen. */
-export const FEHLENDE_GROESSEN = [
-  "Oliver Brandt",
-  "Kevin Stolte",
-  "Timo Bartels",
-  "Patrick Wulf",
-];
 
 /** Echte Artikel aus Kais Anfrage (docs/datenmodell.md). */
-export const ARTIKEL: Artikel[] = [
+const ARTIKEL: Artikel[] = [
   {
     name: "Hummel hmlCORE XK Poly T-Shirt Weiss F9001",
     herstellernummer: "211943",
@@ -116,8 +62,8 @@ export const ARTIKEL: Artikel[] = [
   },
 ];
 
-/** Jede Anfrage geht an beide Händler (docs/konzept.md). */
-export const HAENDLER: Haendler[] = [
+/** Jede Anfrage geht an beide Haendler (docs/konzept.md). */
+const HAENDLER: Haendler[] = [
   {
     name: "11teamsports",
     ansprechpartner: "Michael Hillebrecht",
@@ -132,18 +78,7 @@ export const HAENDLER: Haendler[] = [
   },
 ];
 
-/** Spieler-Ansicht: die eigenen Größen. Keine Beträge (docs/konzept.md). */
-export const MEINE_AUSSTATTUNG = [
-  { feld: "Trikot", wert: "L" },
-  { feld: "Kurze Sporthose", wert: "L" },
-  { feld: "Schuhgröße", wert: "43" },
-  { feld: "Rückennummer", wert: "7" },
-];
-
-export const MEINE_AUSSTATTUNG_HINWEIS =
-  "Trikot mit Vereinslogo, „EINTRACHT MUNSTER“ und deiner Nummer. Du zahlst nichts, der Sponsor VGH übernimmt.";
-
-export const EREIGNISSE: Ereignis[] = [
+const VERLAUF: Ereignis[] = [
   {
     ab: 1,
     datum: "01.09.",
@@ -215,96 +150,7 @@ export const EREIGNISSE: Ereignis[] = [
   },
 ];
 
-export const STUFEN_TEXTE: Record<StufeNr, StufenText> = {
-  1: {
-    trainer: "14 von 18 haben ihre Größen eingetragen. Frist ist Montag, 08.09., 20 Uhr.",
-    spieler:
-      "Deine Größen sind drin. Bis zur Frist am Montag, 08.09., 20 Uhr, kannst du sie noch ändern.",
-    naechsterTrainer: {
-      wer: "Du",
-      was: "Wenn alle drin sind, bekommst du die Liste zum Prüfen. Vier fehlen noch.",
-      du: true,
-    },
-    naechsterSpieler: {
-      wer: "Die Mannschaft",
-      was: "Sobald alle ihre Größen eingetragen haben, prüft der Trainer die Liste.",
-    },
-  },
-  2: {
-    trainer: "Intersport Uelzen und 11teamsports haben die Liste seit 09.09.",
-    spieler: "Die Liste ist bei zwei Händlern. Sie erstellen jetzt ihre Angebote.",
-    naechsterTrainer: {
-      wer: "Die Händler",
-      was: "Sobald beide Angebote da sind, wählt die Spartenleitung aus, spätestens fünf Tage nach dem ersten.",
-    },
-    naechsterSpieler: { wer: "Die Händler", was: "Für dich gibt es gerade nichts zu tun." },
-  },
-  3: {
-    trainer:
-      "Beide Angebote sind da. Die Spartenleitung vergleicht Preis, Lieferzeit und Beflockung.",
-    spieler: "Beide Angebote sind da. Die Spartenleitung entscheidet in den nächsten Tagen.",
-    naechsterTrainer: {
-      wer: "Spartenleitung",
-      was: "wählt ein Angebot aus. Du bekommst danach eine Mail.",
-    },
-    naechsterSpieler: { wer: "Spartenleitung", was: "Für dich gibt es gerade nichts zu tun." },
-  },
-  4: {
-    trainer:
-      "11teamsports ist gewählt. Der Sponsor VGH hat zugesagt, das Geld ist aber noch nicht auf dem Vereinskonto.",
-    spieler: "Ein Angebot ist gewählt. Jetzt kommt das Geld vom Sponsor.",
-    naechsterTrainer: {
-      wer: "Sponsor VGH",
-      was: "überweist. Bestellt wird erst, wenn das Geld da ist. Eine Zusage allein reicht nicht.",
-    },
-    naechsterSpieler: { wer: "Sponsor", was: "Für dich gibt es gerade nichts zu tun." },
-  },
-  5: {
-    trainer: "Das Geld ist da, die Deckungsprüfung ist erfüllt. Die Bestellung kann raus.",
-    spieler: "Das Geld ist da, die Bestellung geht in Kürze raus.",
-    naechsterTrainer: { wer: "Spartenleitung", was: "gibt die Bestellung frei." },
-    naechsterSpieler: { wer: "Spartenleitung", was: "Für dich gibt es gerade nichts zu tun." },
-  },
-  6: {
-    trainer: "Bestellt bei 11teamsports am 18.09. Liefertermin laut Händler: KW 41.",
-    spieler: "Bestellt. Die Lieferung ist für KW 41 angekündigt.",
-    naechsterTrainer: { wer: "11teamsports", was: "liefert beflockt an dich als Trainer." },
-    naechsterSpieler: {
-      wer: "Händler",
-      was: "liefert an deinen Trainer. Er gibt die Sachen aus.",
-    },
-  },
-  7: {
-    trainer: "Geliefert am 07.10., 54 Teile. Bitte ausgeben und kurz bestätigen.",
-    spieler: "Die Sachen sind beim Trainer. Er gibt sie beim nächsten Training aus.",
-    naechsterTrainer: {
-      wer: "Du",
-      was: "gibst die Sachen aus und bestätigst es mit einem Klick.",
-      du: true,
-    },
-    naechsterSpieler: { wer: "Trainer", was: "gibt die Sachen aus." },
-  },
-  8: {
-    trainer:
-      "Alles ausgegeben, die Rechnung ist bezahlt und gebucht. Die Größen sind für die nächste Runde gespeichert.",
-    spieler: "Fertig. Deine Größen sind für die nächste Bestellung gespeichert.",
-    naechsterTrainer: null,
-    naechsterSpieler: null,
-  },
-  9: {
-    trainer: "Dieser Vorgang wurde von der Spartenleitung abgebrochen. Es wurde nichts bestellt.",
-    spieler: "Dieser Vorgang wurde abgebrochen. Es wurde nichts bestellt.",
-    naechsterTrainer: null,
-    naechsterSpieler: null,
-  },
-};
-
-/**
- * Bei welcher Stufe der Beispiel-Abbruch passiert ist. Ein abgebrochener
- * Vorgang hat nie geliefert oder bezahlt, sein Verlauf endet hier.
- */
-export const ABBRUCH_BEI: StufeNr = 4;
-
+/** Der Eintrag, mit dem ein abgebrochener Vorgang schliesst. */
 export const ABBRUCH_EREIGNIS: Ereignis = {
   ab: 9,
   datum: "15.09.",
@@ -313,7 +159,42 @@ export const ABBRUCH_EREIGNIS: Ereignis = {
   sub: "Sponsor hat abgesagt, kein Spartenbudget freigegeben",
 };
 
-/** Auf wen der gesteuerte Vorgang je Stufe wartet. */
+/** Erwachsenen-Mannschaft, deshalb stehen hier Beispielnamen. */
+const FEHLENDE_GROESSEN = ["Oliver Brandt", "Kevin Stolte", "Timo Bartels", "Patrick Wulf"];
+
+export const BEISPIEL_VORGANG: Vorgang = {
+  nummer: VORGANG_NUMMER,
+  titel: "Herren Ü40 · Trikotsatz",
+  untertitel: "18 Personen · Sponsor VGH · Händler Intersport Uelzen und 11teamsports",
+  stufe: 2,
+  abbruchBei: 4,
+  stand: "Stand: heute, 07:30 Uhr",
+  sponsor: "VGH",
+  finanzierungZugesagt: true,
+  geldEingangAm: "18.09.",
+  groessenEingetragen: 14,
+  groessenGesamt: 18,
+  groessenBestaetigtAm: "09.09.",
+  fehlendeGroessen: FEHLENDE_GROESSEN,
+  beflockung: "Standard auf den Trikots",
+  feldspielerAnzahl: 17,
+  torwartAnzahl: 1,
+  haendler: HAENDLER,
+  artikel: ARTIKEL,
+  verlauf: VERLAUF,
+  meineAusstattung: [
+    { feld: "Trikot", wert: "L" },
+    { feld: "Kurze Sporthose", wert: "L" },
+    { feld: "Schuhgröße", wert: "43" },
+    { feld: "Rückennummer", wert: "7" },
+  ],
+  meinHinweis:
+    "Trikot mit Vereinslogo, „EINTRACHT MUNSTER“ und deiner Nummer. Du zahlst nichts, der Sponsor VGH übernimmt.",
+  spielerGruss: "Hallo Jonas, hier siehst du, wo deine neue Ausstattung gerade steckt.",
+  quelle: "beispiel",
+};
+
+/** Auf wen der Beispiel-Vorgang je Stufe wartet. */
 const WARTET_AUF: Record<StufeNr, string> = {
   1: "Mannschaft",
   2: "Händler",
@@ -326,8 +207,8 @@ const WARTET_AUF: Record<StufeNr, string> = {
   9: "–",
 };
 
-/** Die uebrigen Vorgaenge der Sparte, fester Stand. Ohne Namen von Kindern. */
-const WEITERE_VORGAENGE: VorgangsZeile[] = [
+/** Die uebrigen Vorgaenge der Sparte. Ohne Namen von Kindern. */
+const WEITERE_ZEILEN: VorgangsZeile[] = [
   {
     nummer: "AUS-2026-012",
     mannschaft: "JG 2014/2015",
@@ -358,7 +239,7 @@ const WEITERE_VORGAENGE: VorgangsZeile[] = [
 ];
 
 /** Der erste Vorgang folgt dem Regler, damit Uebersicht und Detail zusammenpassen. */
-export function vorgaenge(aktuelleStufe: StufeNr): VorgangsZeile[] {
+export function beispielZeilen(aktuelleStufe: StufeNr): VorgangsZeile[] {
   return [
     {
       nummer: VORGANG_NUMMER,
@@ -370,6 +251,6 @@ export function vorgaenge(aktuelleStufe: StufeNr): VorgangsZeile[] {
       du: aktuelleStufe === 3 || aktuelleStufe === 5,
       verlinkt: true,
     },
-    ...WEITERE_VORGAENGE,
+    ...WEITERE_ZEILEN,
   ];
 }

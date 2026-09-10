@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { DemoBadge, SelectFeld } from "./ui";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { Badge, DemoBadge, SelectFeld } from "./ui";
 import { IconTrikot } from "./icons";
-import { STUFEN, VEREIN } from "@/lib/beispieldaten";
+import { beispielZeilen, VEREIN } from "@/lib/beispieldaten";
 import { abonnieren, aktuellerEntwurf, setzeEntwurf, standardEntwurf } from "@/lib/entwurf";
-import type { Ansicht, StufeNr } from "@/lib/typen";
+import { STUFEN } from "@/lib/stufen";
+import type { Ansicht, StufeNr, Vorgang, VorgangsZeile } from "@/lib/typen";
 import { VorgangAnsicht } from "./vorgang-ansicht";
 import { SpartenAnsicht } from "./sparten-ansicht";
 
@@ -45,26 +46,33 @@ function Kopfzeile({ breit }: { breit: boolean }) {
 }
 
 /**
- * Nur im Entwurf: Rolle wechseln und den Stand durchspielen. Faellt weg, sobald
- * die Rolle am signierten Link haengt und die Daten aus HubSpot kommen.
+ * Rolle wechseln und, solange Beispieldaten laufen, den Stand durchspielen.
+ *
+ * Der Stand-Regler fällt weg, sobald HubSpot liefert: dann kommt die Stufe aus
+ * dem Deal. Der Rollenwechsel bleibt, bis die Rolle am signierten Link hängt
+ * (docs/konzept.md).
  */
-function EntwurfsLeiste({
+function Leiste({
   ansicht,
   stand,
+  beispiel,
   onAnsicht,
   onStand,
 }: {
   ansicht: Ansicht;
   stand: StufeNr;
+  beispiel: boolean;
   onAnsicht: (a: Ansicht) => void;
   onStand: (s: StufeNr) => void;
 }) {
   return (
     <section
-      aria-label="Entwurfssteuerung"
-      className="flex flex-wrap items-center gap-x-4 gap-y-2.5 rounded-2xl border border-dashed border-ink-300 bg-white px-3.5 py-3"
+      aria-label="Ansicht und Stand"
+      className={`flex flex-wrap items-center gap-x-4 gap-y-2.5 rounded-2xl border bg-white px-3.5 py-3 ${
+        beispiel ? "border-dashed border-ink-300" : "border-ink-200"
+      }`}
     >
-      <DemoBadge />
+      {beispiel ? <DemoBadge /> : <Badge tone="pitch">HubSpot</Badge>}
 
       <div
         role="group"
@@ -89,7 +97,7 @@ function EntwurfsLeiste({
         })}
       </div>
 
-      {ansicht !== "sparte" && (
+      {beispiel && ansicht !== "sparte" && (
         <div className="flex items-center gap-2">
           <span className="text-xs font-medium text-ink-500">Stand</span>
           <SelectFeld
@@ -108,20 +116,29 @@ function EntwurfsLeiste({
       )}
 
       <p className="basis-full text-xs text-ink-500">
-        Diese Leiste gibt es nur im Entwurf. Namen und Termine sind erfunden. Die Artikel und die
-        beiden Händler stammen aus einer echten Anfrage.
+        {beispiel
+          ? "HubSpot ist noch nicht angebunden. Namen und Termine sind erfunden, die Artikel und die beiden Händler stammen aus einer echten Anfrage."
+          : "Daten aus HubSpot. Die Rolle hängt später am Link, dann fällt diese Leiste weg."}
       </p>
     </section>
   );
 }
 
-export function Statusseite() {
+export function Statusseite({
+  vorgang,
+  zeilen,
+}: {
+  vorgang: Vorgang;
+  zeilen: VorgangsZeile[];
+}) {
+  const beispiel = vorgang.quelle === "beispiel";
+
   // Rolle und Stand liegen im Entwurfs-Store, damit ein Reload sie behaelt.
-  const { ansicht, stand } = useSyncExternalStore(
-    abonnieren,
-    aktuellerEntwurf,
-    standardEntwurf,
-  );
+  const gespeichert = useSyncExternalStore(abonnieren, aktuellerEntwurf, standardEntwurf);
+  const ansicht = gespeichert.ansicht;
+  // Nur im Beispielmodus steuert der Regler die Stufe; sonst gilt der Deal.
+  const stand: StufeNr = beispiel ? gespeichert.stand : vorgang.stufe;
+
   const [hinweis, setHinweis] = useState("");
   const hinweisTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -152,6 +169,15 @@ export function Statusseite() {
     window.scrollTo({ top: 0 });
   }, [setAnsicht]);
 
+  // Im Beispielmodus folgt die Uebersicht dem Regler, damit Detail und Liste
+  // denselben Stand zeigen. Mit HubSpot kommen die Zeilen vom Server.
+  const sichtbareZeilen = useMemo(
+    () => (beispiel ? beispielZeilen(stand) : zeilen),
+    [beispiel, stand, zeilen],
+  );
+
+  const angezeigterVorgang: Vorgang = beispiel ? { ...vorgang, stufe: stand } : vorgang;
+
   const breit = ansicht === "sparte";
 
   return (
@@ -160,17 +186,26 @@ export function Statusseite() {
 
       <main className="pt-5 pb-14">
         <div className={`mx-auto flex flex-col gap-4 px-4 ${breit ? "max-w-6xl" : "max-w-3xl"}`}>
-          <EntwurfsLeiste
+          <Leiste
             ansicht={ansicht}
             stand={stand}
+            beispiel={beispiel}
             onAnsicht={setAnsicht}
             onStand={setStand}
           />
 
           {breit ? (
-            <SpartenAnsicht stand={stand} onOeffnen={oeffneVorgang} onDemo={zeigeHinweis} />
+            <SpartenAnsicht
+              zeilen={sichtbareZeilen}
+              onOeffnen={oeffneVorgang}
+              onDemo={zeigeHinweis}
+            />
           ) : (
-            <VorgangAnsicht stand={stand} ansicht={ansicht} onDemo={zeigeHinweis} />
+            <VorgangAnsicht
+              vorgang={angezeigterVorgang}
+              ansicht={ansicht}
+              onDemo={zeigeHinweis}
+            />
           )}
         </div>
       </main>

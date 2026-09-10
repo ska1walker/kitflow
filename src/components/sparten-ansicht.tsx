@@ -1,8 +1,8 @@
 "use client";
 
 import { Badge } from "./ui";
-import { LETZTE_STUFE, VORGANG_NUMMER, stufe as stufeVon, vorgaenge } from "@/lib/beispieldaten";
-import type { StufeNr, VorgangsZeile } from "@/lib/typen";
+import { LETZTE_STUFE, stufe as stufeVon } from "@/lib/stufen";
+import type { VorgangsZeile } from "@/lib/typen";
 import { MiniLeiste } from "./schrittleiste";
 
 function Zeile({
@@ -20,7 +20,7 @@ function Zeile({
       onClick={
         vorgang.verlinkt
           ? onOeffnen
-          : () => onDemo(`Im Entwurf ist nur ${VORGANG_NUMMER} klickbar.`)
+          : () => onDemo("Dieser Vorgang bekommt seine eigene Seite, sobald HubSpot ihn liefert.")
       }
       className="grid w-full grid-cols-1 items-center gap-2 rounded-2xl border border-ink-200 bg-white px-[18px] py-3.5 text-left shadow-soft transition-colors hover:border-pitch-300 md:grid-cols-[132px_minmax(0,1.3fr)_minmax(0,1.4fr)_minmax(0,1fr)] md:gap-4"
     >
@@ -47,7 +47,11 @@ function Zeile({
         {vorgang.warnung ? (
           <Badge tone="amber">{vorgang.warnung}</Badge>
         ) : (
-          <small className="text-xs text-ink-400">{vorgang.frist ?? `seit ${vorgang.seit}`}</small>
+          (vorgang.frist || vorgang.seit) && (
+            <small className="text-xs text-ink-400">
+              {vorgang.frist ?? `seit ${vorgang.seit}`}
+            </small>
+          )
         )}
       </span>
     </button>
@@ -59,18 +63,17 @@ function Zeile({
  * Frage, die hier zählt – wo hängt es und wer ist am Zug.
  */
 export function SpartenAnsicht({
-  stand,
+  zeilen,
   onOeffnen,
   onDemo,
 }: {
-  stand: StufeNr;
-  onOeffnen: () => void;
+  zeilen: VorgangsZeile[];
+  onOeffnen: (nummer: string) => void;
   onDemo: (text: string) => void;
 }) {
-  const liste = vorgaenge(stand);
-  const laufen = liste.filter((v) => v.stufe < LETZTE_STUFE).length;
-  const fuerDich = liste.filter((v) => v.du).length;
-  const haengen = liste.filter((v) => v.warnung).length;
+  const laufen = zeilen.filter((v) => v.stufe < LETZTE_STUFE).length;
+  const fuerDich = zeilen.filter((v) => v.du).length;
+  const haengen = zeilen.filter((v) => v.warnung).length;
 
   return (
     <>
@@ -99,14 +102,15 @@ export function SpartenAnsicht({
       </section>
 
       <div className="flex flex-col gap-2.5">
-        {liste.map((v) => (
-          <Zeile key={v.nummer} vorgang={v} onOeffnen={onOeffnen} onDemo={onDemo} />
+        {zeilen.map((v) => (
+          <Zeile
+            key={v.nummer}
+            vorgang={v}
+            onOeffnen={() => onOeffnen(v.nummer)}
+            onDemo={onDemo}
+          />
         ))}
       </div>
-
-      <p className="text-xs text-ink-400">
-        Der Stand von AUS-2026-014 folgt dem Regler in den Ansichten Trainer und Spieler.
-      </p>
     </>
   );
 }
