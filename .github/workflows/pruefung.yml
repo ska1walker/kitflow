@@ -1,0 +1,38 @@
+name: Prüfung
+
+# Dieselben drei Befehle, die vor „fertig“ auch lokal laufen. Wird einer rot,
+# ist der Pull Request rot – niemand muss daran denken.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Ein neuer Push auf denselben Branch loest den vorigen Lauf ab.
+concurrency:
+  group: pruefung-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  pruefen:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run typecheck
+
+      - run: npm run lint
+
+      # Ohne HUBSPOT_TOKEN und ohne HUBSPOT_AUTH_VIA_PROXY laeuft der Build auf
+      # den Beispieldaten. Er braucht kein Geheimnis und geht nicht ins Netz.
+      - run: npm run build
