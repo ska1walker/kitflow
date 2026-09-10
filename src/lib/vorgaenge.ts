@@ -30,6 +30,14 @@ import {
   type HsListe,
   type HsObjekt,
 } from "./hubspot";
+import {
+  GROESSEN_FELD,
+  GROESSEN_FELDER,
+  GROESSEN_LABEL,
+  groessenWerte,
+  istJugend as istJugendMannschaft,
+  istVeraltet,
+} from "./groessen";
 import { stufeAusName } from "./stufen";
 import type {
   Artikel,
@@ -106,25 +114,6 @@ const KONTAKT_FELDER = [
   "groesse_zuletzt_bestaetigt_am",
 ];
 
-/** Die Groessen-Eigenschaften eines Kontakts (docs/datenmodell.md). */
-const GROESSEN_FELDER = [
-  "trikot",
-  "trainingsanzug_oberteil",
-  "kurze_sporthose",
-  "trainingshose",
-  "schuhgroesse",
-];
-
-/** Beschriftung je Groessenart, wie sie in der Spieler-Ansicht steht. */
-const GROESSEN_LABEL: Record<Groessenart, string> = {
-  trikot: "Trikot",
-  oberteil: "Oberteil",
-  shorts: "Kurze Sporthose",
-  trainingshose: "Trainingshose",
-  schuhe: "Schuhgröße",
-  ohne: "Ausstattung",
-};
-
 /** Die beiden Haendler, an die jede Anfrage geht (docs/konzept.md). */
 const HAENDLER_SPALTEN = [
   { name: "11teamsports", feld: "angebot_11teamsports_am" },
@@ -182,23 +171,10 @@ function tageSeit(wert: string | undefined): number | null {
   return Math.floor((Date.now() - zeitpunkt.getTime()) / 86_400_000);
 }
 
-/**
- * Jugendmannschaft? Die Werte von `team` sind Jahrgaenge 2007 bis 2022 sowie
- * „Mädchen“; alles andere ist Erwachsenensport (docs/datenmodell.md).
- *
- * Im Zweifel Jugend: dann nennt die Seite keine Namen. Namen von Kindern
- * gehoeren nicht in die Oberflaeche (CLAUDE.md).
- */
+/** Jugendmannschaft? Entscheidet ueber Namen in der Oberflaeche und ueber die
+ * Frist, ab der eine Groesse als veraltet gilt. */
 function istJugend(deal: HsObjekt): boolean {
-  const mannschaft = text(deal, "mannschaft");
-  const code = text(deal, "mannschaftscode");
-
-  if (!mannschaft && !code) return true;
-  if (code && /^JG/i.test(code)) return true;
-  if (!mannschaft) return true;
-
-  const werte = mannschaft.split(";").map((w) => w.trim());
-  return werte.some((w) => /^20(0[7-9]|1\d|2[0-2])$/.test(w) || w === "Mädchen");
+  return istJugendMannschaft(text(deal, "mannschaft"), text(deal, "mannschaftscode"));
 }
 
 /** Record-IDs aus dem Freitextfeld `ausgeschlossene_spieler`. */
@@ -578,4 +554,149 @@ export async function ladeVorgang(nummer?: string, personId?: string): Promise<V
 
     quelle: "hubspot",
   };
+}
+
+/* ------------------------------------------------------------------ *
+ * F2 · Groessenabfrage (docs/formulare.md)
+ * ------------------------------------------------------------------ */
+
+/** Eine Groessenart, die dieser Vorgang von dieser Person braucht. */
+export type GroessenFrage = {
+  art: Groessenart;
+  label: string;
+  /** Die HubSpot-Eigenschaft am Kontakt, zugleich der Feldname im Formular. */
+  feld: string;
+  werte: string[];
+  /** Aktueller Wert, leer wenn keiner da oder veraltet. */
+  wert: string;
+  /** Es gab einen Wert, er ist aber zu alt zum Vorbelegen. */
+  veraltet: boolean;
+};
+
+export type GroessenAbfrage = {
+  vorgang: string;
+  person: string;
+  anrede: string;
+  mannschaft: string;
+  gegenstand: string;
+  frist?: string;
+  jugend: boolean;
+  fragen: GroessenFrage[];
+  /** Nur auf Stufe 1 darf geaendert werden (docs/formulare.md). */
+  offen: boolean;
+};
+
+/**
+ * Alles, was die Groessenabfrage einer Person braucht.
+ *
+ * `null` heisst: gibt es nicht, gehoert nicht zusammen, oder HubSpot antwortet
+ * nicht. Die Seite macht daraus dieselbe Antwort wie bei einem falschen Token,
+ * damit sich ueber die Antwort nichts erraten laesst.
+ */
+export async function ladeGroessenAbfrage(
+  nummer: string,
+  personId: string,
+): Promise<GroessenAbfrage | null> {
+  if (!hubspotAktiv()) return null;
+
+  const stufen = await pipelineStufen();
+  if (!stufen) return null;
+
+  const treffer = await hubspot<HsListe<HsObjekt>>({
+    pfad: "/crm/v3/objects/deals/search",
+    koerper: dealSuche(nummer, 1),
+  });
+  const deal = treffer?.results[0];
+  if (!deal || text(deal, "vorgangsnummer") !== nummer) return null;
+
+  const stufenName = stufen.get(deal.properties.dealstage ?? "");
+  const stufe = stufenName ? stufeAusName(stufenName) : null;
+  if (!stufe) return null;
+
+  // Der Token bindet die Person schon an den Vorgang. Die Verknuepfung wird
+  // trotzdem geprueft: wer inzwischen aus der Mannschaft raus ist, soll mit
+  // einem alten Link nichts mehr eintragen.
+  const kontaktIds = await assoziierteIds("deals", deal.id, "contacts");
+  if (!kontaktIds.includes(personId)) return null;
+  if (ausgeschlossene(deal).has(personId)) return null;
+
+  const [kontakte, positionsIds] = await Promise.all([
+    batchLesen("contacts", [personId], KONTAKT_FELDER),
+    assoziierteIds("deals", deal.id, "line_items"),
+  ]);
+  const kontakt = kontakte[0];
+  if (!kontakt) return null;
+
+  const positionen = await batchLesen("line_items", positionsIds, POSITION_FELDER);
+  const produktIds = [
+    ...new Set(positionen.map((p) => text(p, "hs_product_id")).filter((id): id is string => !!id)),
+  ];
+  const produkte = new Map(
+    (await batchLesen("products", produktIds, PRODUKT_FELDER)).map((p) => [p.id, p]),
+  );
+  const artikel = artikelAus(positionen, produkte);
+
+  const jugend = istJugend(deal);
+  const veraltet = istVeraltet(text(kontakt, "groesse_zuletzt_bestaetigt_am"), jugend);
+
+  // Jede Groessenart nur einmal fragen, auch wenn mehrere Artikel sie brauchen.
+  const arten = [...new Set(artikel.map((a) => a.groessenart))].filter((a) => a !== "ohne");
+
+  const fragen: GroessenFrage[] = arten.map((art) => {
+    const feld = GROESSEN_FELD[art];
+    const wert = feld ? (text(kontakt, feld) ?? "") : "";
+    return {
+      art,
+      label: GROESSEN_LABEL[art],
+      feld: feld ?? art,
+      werte: groessenWerte(art),
+      wert: veraltet ? "" : wert,
+      veraltet: veraltet && wert !== "",
+    };
+  });
+
+  return {
+    vorgang: nummer,
+    person: personId,
+    anrede: text(kontakt, "firstname") ?? "",
+    mannschaft: text(deal, "mannschaft") ?? text(deal, "mannschaftscode") ?? "",
+    gegenstand: text(deal, "ausstattungsart") ?? "Ausstattung",
+    frist: kurzDatum(text(deal, "groessen_frist")),
+    jugend,
+    fragen,
+    offen: stufe === 1,
+  };
+}
+
+/**
+ * Schreibt die Groessen einer Person und setzt das Bestaetigungsdatum.
+ *
+ * Geschrieben wird nur, was zu diesem Vorgang gehoert und in der HubSpot-Liste
+ * steht. Ein Formular laesst sich nachbauen, deshalb wird hier nichts
+ * uebernommen, was nicht vorher als Frage rausging.
+ */
+export async function speichereGroessen(
+  abfrage: GroessenAbfrage,
+  eingaben: Record<string, string>,
+): Promise<boolean> {
+  const werte: Record<string, string> = {};
+
+  for (const frage of abfrage.fragen) {
+    const wert = eingaben[frage.feld];
+    if (!wert) continue;
+    if (!frage.werte.includes(wert)) return false;
+    werte[frage.feld] = wert;
+  }
+
+  if (Object.keys(werte).length === 0) return false;
+
+  werte.groesse_zuletzt_bestaetigt_am = new Date().toISOString().slice(0, 10);
+
+  const antwort = await hubspot<HsObjekt>({
+    pfad: `/crm/v3/objects/contacts/${encodeURIComponent(abfrage.person)}`,
+    methode: "PATCH",
+    koerper: { properties: werte },
+  });
+
+  return antwort !== null;
 }

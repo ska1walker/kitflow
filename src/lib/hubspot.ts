@@ -32,8 +32,10 @@ export const PIPELINE_NAME = "Ausstattung";
 
 type Abfrage = {
   pfad: string;
-  /** Gesetzt heisst POST; der Wert ist der Rumpf der Anfrage. */
+  /** Der Rumpf der Anfrage. Gesetzt heisst POST, sofern `methode` fehlt. */
   koerper?: Record<string, unknown>;
+  /** Fuer Schreibzugriffe, die kein POST sind – etwa PATCH auf einen Kontakt. */
+  methode?: "GET" | "POST" | "PATCH";
 };
 
 /** Nexts Signal „diese Route muss dynamisch sein“, erkennbar am digest. */
@@ -51,7 +53,7 @@ function istDynamikSignal(fehler: unknown): boolean {
  *
  * Fehlermeldungen enthalten bewusst weder Token noch Personendaten.
  */
-export async function hubspot<T>({ pfad, koerper }: Abfrage): Promise<T | null> {
+export async function hubspot<T>({ pfad, koerper, methode }: Abfrage): Promise<T | null> {
   if (!hubspotAktiv()) return null;
 
   const token = process.env.HUBSPOT_TOKEN;
@@ -60,7 +62,7 @@ export async function hubspot<T>({ pfad, koerper }: Abfrage): Promise<T | null> 
 
   try {
     const antwort = await fetch(`${BASIS}${pfad}`, {
-      method: koerper ? "POST" : "GET",
+      method: methode ?? (koerper ? "POST" : "GET"),
       headers: kopf,
       body: koerper ? JSON.stringify(koerper) : undefined,
       // Der Stand eines Vorgangs aendert sich laufend, deshalb nicht cachen.
