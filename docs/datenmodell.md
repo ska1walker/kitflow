@@ -71,6 +71,8 @@ Noch leer. Erste echte Artikel aus Kais Anfrage:
 
 Produkt, Menge; angelegt: `groesse`, `rueckennummer`, `spieler_hsid`, `spieler_name`, `sponsor`.
 
+**Eine Position ohne `spieler_hsid` ist die Artikelliste des Vorgangs.** F1 legt je gemeldetem Artikel eine solche Zeile an, F2 liest daraus, welche Größen zu fragen sind, und F3 klappt sie später zu Person mal Artikel auf. So bleibt die Artikelliste in HubSpot sichtbar und bearbeitbar, statt in einem Textfeld zu verschwinden.
+
 `spieler_hsid` ist der Schlüssel, an dem die App hängt: sie zählt darüber Feldspieler und Torwart
 (wer eine Torwart-Position hat, ist Torwart) und sucht darüber die Ausstattung der Person, die den
 Link geöffnet hat. Ohne `spieler_hsid` bleibt die Spieler-Ansicht leer.

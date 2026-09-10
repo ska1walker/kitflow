@@ -34,8 +34,11 @@ type Abfrage = {
   pfad: string;
   /** Der Rumpf der Anfrage. Gesetzt heisst POST, sofern `methode` fehlt. */
   koerper?: Record<string, unknown>;
-  /** Fuer Schreibzugriffe, die kein POST sind – etwa PATCH auf einen Kontakt. */
-  methode?: "GET" | "POST" | "PATCH";
+  /**
+   * Fuer Schreibzugriffe, die kein POST sind: PATCH aendert Eigenschaften,
+   * PUT legt eine Verknuepfung an (die hat keinen Rumpf).
+   */
+  methode?: "GET" | "POST" | "PATCH" | "PUT";
 };
 
 /** Nexts Signal „diese Route muss dynamisch sein“, erkennbar am digest. */

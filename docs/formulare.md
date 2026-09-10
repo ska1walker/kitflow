@@ -18,6 +18,18 @@ Zugang über signierte Links: `/v/{vorgang}?t=…` (Status), `/g/{vorgang}/{hsid
 - Gebaut sind `/v` (Status, zwei Rollen), `/g` (F2) und `/b` (F3). `/` ist ein Schaufenster mit Beispieldaten und fasst HubSpot nicht an.
 - Jede Server Action prüft das Token selbst. Eine Action ist eine eigene Adresse und lässt sich ohne die Seite aufrufen; sich darauf zu verlassen, dass die Seite schon geprüft hat, wäre keine Prüfung.
 
+### Stand von F1
+
+**Gebaut unter `/neu`,** die einzige Seite ohne Token. Sie liest nichts aus HubSpot, sie legt nur an; es gibt dort also nichts zu sehen, was jemandem gehört. Gegen Bots hat sie ein verstecktes Feld.
+
+Angelegt werden: der Deal auf Stufe 1 mit der nächsten freien Vorgangsnummer des Jahres, je Artikel ein Produkt (vorhandene werden über `hs_sku` wiederverwendet), je Artikel **eine Position ohne `spieler_hsid`** — das ist die Artikelliste des Vorgangs, aus der F2 die Größenarten liest und die F3 später zu Person mal Artikel aufklappt — und die Verknüpfung zu allen Kontakten, deren `team` eine der gewählten Mannschaften ist.
+
+Findet sich zu keiner gewählten Mannschaft ein Kontakt, steht der Vorgang sofort auf Stufe 9 und die Seite sagt, dass die Mannschaft in HubSpot gepflegt werden muss (docs/formulare.md, M7).
+
+Es fehlt Mail M1. Solange sie fehlt, zeigt die Danke-Seite alle Links im Klartext, damit sie nicht verloren gehen. Ebenfalls offen: die Auswahl aus dem Artikelstamm statt freier Felder, und der Wunschtermin für die Lieferung, für den es keine Eigenschaft gibt.
+
+Die Vorgangsnummer kommt aus einer Suche über die bestehenden Nummern. Zwei Meldungen in derselben Sekunde bekämen dieselbe; bei einer Handvoll Vorgängen im Jahr ist das kein reales Risiko.
+
 ### Stand von F2 und F3
 
 **F2 fertig.** Gefragt werden nur die Größenarten der Artikel dieses Vorgangs, jede einmal. Geändert werden darf nur auf Stufe 1. Geschrieben wird nur, was vorher als Frage rausging und in der HubSpot-Werteliste steht. Die Veraltungsregel (4 Monate Jugend, 12 Erwachsene) ist umgesetzt; ohne Bestätigungsdatum gilt eine Größe als veraltet. Es fehlt Mail M3.
