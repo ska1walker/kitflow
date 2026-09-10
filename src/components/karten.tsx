@@ -22,7 +22,7 @@ function Zeile({ titel, unter, rechts }: { titel: string; unter: string; rechts:
     <div className="flex items-center justify-between gap-3 border-t border-ink-100 py-[11px] first:border-t-0 first:pt-0">
       <div className="flex min-w-0 flex-col">
         <b className="text-sm font-semibold">{titel}</b>
-        <small className="text-xs text-ink-500">{unter}</small>
+        {unter && <small className="text-xs text-ink-500">{unter}</small>}
       </div>
       {rechts}
     </div>
@@ -146,7 +146,9 @@ export function HaendlerKarte({ vorgang, stand }: { vorgang: Vorgang; stand: Stu
         <Badge tone="neutral">nicht gewählt</Badge>
       );
     }
-    if (stand >= 3) return <Badge tone="outline">Angebot da · {angebotAm}</Badge>;
+    if (stand >= 3) {
+      return <Badge tone="outline">{angebotAm ? `Angebot da · ${angebotAm}` : "Angebot da"}</Badge>;
+    }
     return <Badge tone="amber">angefragt</Badge>;
   }
 
@@ -252,9 +254,26 @@ function ArtikelGruppe({
 
 export function ArtikelKarte({ vorgang, stand }: { vorgang: Vorgang; stand: StufeNr }) {
   const gruppen: { fuer: ArtikelFuer; titel: string; anzahl: number }[] = [
+    // „Alle“ steht zuerst und faengt Artikel ohne Rollenzuordnung auf.
+    {
+      fuer: "alle",
+      titel: "Alle",
+      anzahl: vorgang.feldspielerAnzahl + vorgang.torwartAnzahl,
+    },
     { fuer: "feldspieler", titel: "Feldspieler", anzahl: vorgang.feldspielerAnzahl },
     { fuer: "torwart", titel: "Torwart", anzahl: vorgang.torwartAnzahl },
   ];
+
+  if (vorgang.artikel.length === 0) {
+    return (
+      <Card className="p-5">
+        <KartenKopf titel="Artikel" />
+        <p className="text-sm text-ink-600">
+          Die Artikel stehen fest, sobald die Positionen am Vorgang hängen.
+        </p>
+      </Card>
+    );
+  }
 
   return (
     <Card className="p-5">
@@ -309,15 +328,19 @@ export function MeineKarte({
           )
         }
       />
-      <dl className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        {vorgang.meineAusstattung.map((e) => (
-          <div key={e.feld} className="rounded-xl border border-ink-200 px-3 py-2.5">
-            <dt className="text-xs font-medium text-ink-500">{e.feld}</dt>
-            <dd className="tnum mt-0.5 text-xl font-bold tracking-[-0.02em]">{e.wert}</dd>
-          </div>
-        ))}
-      </dl>
-      <p className="mt-3 text-sm text-ink-600">{vorgang.meinHinweis}</p>
+      {vorgang.meineAusstattung.length > 0 && (
+        <dl className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {vorgang.meineAusstattung.map((e) => (
+            <div key={e.feld} className="rounded-xl border border-ink-200 px-3 py-2.5">
+              <dt className="text-xs font-medium text-ink-500">{e.feld}</dt>
+              <dd className="tnum mt-0.5 text-xl font-bold tracking-[-0.02em]">{e.wert}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      <p className={`text-sm text-ink-600 ${vorgang.meineAusstattung.length > 0 ? "mt-3" : ""}`}>
+        {vorgang.meinHinweis}
+      </p>
       {stand === 1 && (
         <div className="mt-3.5 flex flex-wrap gap-2">
           <Button onClick={() => onDemo("Hier öffnet sich später deine Größenabfrage.")}>
@@ -349,7 +372,15 @@ export function VerlaufKarte({
   const eintraege = vorgang.verlauf
     .filter((e) => e.ab <= bis && !(ansicht === "spieler" && e.intern))
     .reverse();
-  if (abgebrochen) eintraege.unshift(ABBRUCH_EREIGNIS);
+  // Der Beispiel-Abbruch hat einen erfundenen Grund. An einen echten Vorgang
+  // gehoert er nicht, dort steht nur die nackte Tatsache.
+  if (abgebrochen) {
+    eintraege.unshift(
+      vorgang.quelle === "beispiel"
+        ? ABBRUCH_EREIGNIS
+        : { ab: 9, datum: "", uhrzeit: "", text: "Vorgang abgebrochen" },
+    );
+  }
 
   return (
     <Card className="p-5">
@@ -357,6 +388,9 @@ export function VerlaufKarte({
         titel="Verlauf"
         rechts={<span className="text-xs text-ink-400">neueste zuerst</span>}
       />
+      {eintraege.length === 0 && (
+        <p className="text-sm text-ink-600">Noch keine datierten Schritte.</p>
+      )}
       <ol className="relative">
         {eintraege.map((e, i) => (
           <li

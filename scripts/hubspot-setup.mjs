@@ -117,11 +117,13 @@ const DEAL_FELDER = [
   }),
 
   feld("angebot_intersport_betrag", "Angebot Intersport Betrag", "number", "number"),
+  feld("angebot_intersport_am", "Angebot Intersport eingegangen am", "date", "date"),
   feld("angebot_intersport_gueltig_bis", "Angebot Intersport gültig bis", "date", "date"),
   feld("angebot_intersport_lieferzeit", "Angebot Intersport Lieferzeit", "string", "text"),
   feld("angebot_intersport_abweichung", "Angebot Intersport Abweichung", "string", "textarea"),
 
   feld("angebot_11teamsports_betrag", "Angebot 11teamsports Betrag", "number", "number"),
+  feld("angebot_11teamsports_am", "Angebot 11teamsports eingegangen am", "date", "date"),
   feld("angebot_11teamsports_gueltig_bis", "Angebot 11teamsports gültig bis", "date", "date"),
   feld("angebot_11teamsports_lieferzeit", "Angebot 11teamsports Lieferzeit", "string", "text"),
   feld("angebot_11teamsports_abweichung", "Angebot 11teamsports Abweichung", "string", "textarea"),
@@ -146,6 +148,9 @@ const DEAL_FELDER = [
 
   feld("zusage_sponsor", "Zusage Sponsor", "number", "number"),
   feld("eingang_verein", "Eingang Vereinskonto", "number", "number"),
+  feld("eingang_am", "Geld eingegangen am", "date", "date", {
+    description: "Tag, an dem die Deckung erfuellt war",
+  }),
   feld("vorkasse_bestaetigt", "Vorkasse bestätigt", "number", "number"),
   feld("spartenbudget_freigegeben", "Spartenbudget freigegeben", "number", "number"),
 
@@ -178,6 +183,61 @@ const KONTAKT_FELDER = [
     fieldType: "date",
     groupName: GRUPPE,
   },
+];
+
+/**
+ * Produkt-Eigenschaften nach docs/datenmodell.md.
+ *
+ * `groessenart` und `fuer` speichern genau die Schluessel aus src/lib/typen.ts,
+ * damit die App die Werte ohne Uebersetzungstabelle lesen kann.
+ */
+const PRODUKT_FELDER = [
+  feld("artikelnr_intersport", "Artikelnr. Intersport", "string", "text"),
+  feld("artikelnr_11teamsports", "Artikelnr. 11teamsports", "string", "text"),
+  feld("hersteller", "Hersteller", "string", "text"),
+  feld("farbe", "Farbe", "string", "text"),
+  feld("groessenart", "Größenart", "enumeration", "select", {
+    options: [
+      { label: "Trikot", value: "trikot", displayOrder: 0 },
+      { label: "Oberteil", value: "oberteil", displayOrder: 1 },
+      { label: "Kurze Sporthose", value: "shorts", displayOrder: 2 },
+      { label: "Trainingshose", value: "trainingshose", displayOrder: 3 },
+      { label: "Schuhgröße", value: "schuhe", displayOrder: 4 },
+      { label: "ohne Größe", value: "ohne", displayOrder: 5 },
+    ],
+  }),
+  feld("fuer", "Für", "enumeration", "select", {
+    options: [
+      { label: "Alle", value: "alle", displayOrder: 0 },
+      { label: "Feldspieler", value: "feldspieler", displayOrder: 1 },
+      { label: "Torwart", value: "torwart", displayOrder: 2 },
+    ],
+  }),
+  feld("beflockung_standard", "Beflockung Standard", "string", "text"),
+  feld("aktiv", "Aktiv", "enumeration", "booleancheckbox", {
+    options: [
+      { label: "Ja", value: "true", displayOrder: 0 },
+      { label: "Nein", value: "false", displayOrder: 1 },
+    ],
+  }),
+  feld("auslaufdatum", "Auslaufdatum", "date", "date"),
+];
+
+/** Positionen = Person x Artikel am Deal (docs/datenmodell.md). */
+const POSITION_FELDER = [
+  feld("groesse", "Größe", "string", "text"),
+  feld("rueckennummer", "Rückennummer", "string", "text"),
+  feld("spieler_hsid", "Spieler Record-ID", "string", "text"),
+  // Bei Jugendmannschaften nie anzeigen (CLAUDE.md). Die App zaehlt dann nur.
+  feld("spieler_name", "Spieler Name", "string", "text"),
+  feld("sponsor", "Sponsor", "string", "text"),
+];
+
+/** Firmen sind Sponsoren oder Lieferanten (docs/datenmodell.md). */
+const FIRMEN_FELDER = [
+  feld("rolle", "Rolle", "enumeration", "select", {
+    options: auswahl(["Sponsor", "Lieferant"]),
+  }),
 ];
 
 /** kurze_sporthose kennt bisher nur S bis XXXL (docs/datenmodell.md). */
@@ -292,8 +352,9 @@ async function main() {
   await pipelineAnlegen();
 
   console.log("\nEigenschaftsgruppe");
-  await gruppeAnlegen("deals");
-  await gruppeAnlegen("contacts");
+  for (const objekt of ["deals", "contacts", "products", "line_items", "companies"]) {
+    await gruppeAnlegen(objekt);
+  }
 
   console.log("\nDeal-Eigenschaften");
   for (const definition of DEAL_FELDER) await feldAnlegen("deals", definition);
@@ -301,6 +362,15 @@ async function main() {
   console.log("\nKontakt-Eigenschaften");
   for (const definition of KONTAKT_FELDER) await feldAnlegen("contacts", definition);
   await hosengroessenErgaenzen();
+
+  console.log("\nProdukt-Eigenschaften");
+  for (const definition of PRODUKT_FELDER) await feldAnlegen("products", definition);
+
+  console.log("\nPositions-Eigenschaften");
+  for (const definition of POSITION_FELDER) await feldAnlegen("line_items", definition);
+
+  console.log("\nFirmen-Eigenschaften");
+  for (const definition of FIRMEN_FELDER) await feldAnlegen("companies", definition);
 
   console.log(
     `\nFertig. angelegt: ${angelegt}, schon vorhanden: ${vorhanden}, Fehler: ${fehler}`,

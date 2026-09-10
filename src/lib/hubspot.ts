@@ -32,7 +32,8 @@ export const PIPELINE_NAME = "Ausstattung";
 
 type Abfrage = {
   pfad: string;
-  suche?: Record<string, unknown>;
+  /** Gesetzt heisst POST; der Wert ist der Rumpf der Anfrage. */
+  koerper?: Record<string, unknown>;
 };
 
 /** Nexts Signal „diese Route muss dynamisch sein“, erkennbar am digest. */
@@ -50,7 +51,7 @@ function istDynamikSignal(fehler: unknown): boolean {
  *
  * Fehlermeldungen enthalten bewusst weder Token noch Personendaten.
  */
-export async function hubspot<T>({ pfad, suche }: Abfrage): Promise<T | null> {
+export async function hubspot<T>({ pfad, koerper }: Abfrage): Promise<T | null> {
   if (!hubspotAktiv()) return null;
 
   const token = process.env.HUBSPOT_TOKEN;
@@ -59,9 +60,9 @@ export async function hubspot<T>({ pfad, suche }: Abfrage): Promise<T | null> {
 
   try {
     const antwort = await fetch(`${BASIS}${pfad}`, {
-      method: suche ? "POST" : "GET",
+      method: koerper ? "POST" : "GET",
       headers: kopf,
-      body: suche ? JSON.stringify(suche) : undefined,
+      body: koerper ? JSON.stringify(koerper) : undefined,
       // Der Stand eines Vorgangs aendert sich laufend, deshalb nicht cachen.
       cache: "no-store",
     });
@@ -114,4 +115,48 @@ export async function pipelineStufen(): Promise<Map<string, string> | null> {
   }
 
   return new Map(pipeline.stages.map((s) => [s.id, s.label]));
+}
+
+/**
+ * Die IDs der Objekte, die an einem Objekt haengen – etwa die Positionen und
+ * die Kontakte eines Deals. Leer statt `null`, damit die Aufrufer den Vorgang
+ * auch dann bauen koennen, wenn eine Verknuepfung fehlt.
+ */
+export async function assoziierteIds(
+  vonTyp: string,
+  vonId: string,
+  zuTyp: string,
+): Promise<string[]> {
+  const daten = await hubspot<HsListe<{ toObjectId: number | string }>>({
+    pfad: `/crm/v4/objects/${vonTyp}/${vonId}/associations/${zuTyp}?limit=500`,
+  });
+  if (!daten) return [];
+  return daten.results.map((r) => String(r.toObjectId));
+}
+
+/**
+ * Mehrere Objekte in einem Aufruf lesen. HubSpot nimmt 100 pro Bündel, also
+ * bündeln wir selbst. Eigenschaften, die es im Portal nicht gibt, laesst
+ * HubSpot in der Antwort einfach weg – ein fehlendes Feld ist kein Fehler.
+ */
+export async function batchLesen(
+  typ: string,
+  ids: string[],
+  felder: string[],
+): Promise<HsObjekt[]> {
+  const alle: HsObjekt[] = [];
+
+  for (let i = 0; i < ids.length; i += 100) {
+    const daten = await hubspot<HsListe<HsObjekt>>({
+      pfad: `/crm/v3/objects/${typ}/batch/read`,
+      koerper: {
+        properties: felder,
+        propertiesWithHistory: [],
+        inputs: ids.slice(i, i + 100).map((id) => ({ id })),
+      },
+    });
+    if (daten) alle.push(...daten.results);
+  }
+
+  return alle;
 }
