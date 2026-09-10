@@ -1,0 +1,154 @@
+@import "tailwindcss";
+
+/*
+ * Tokens nach docs/design-coachbase.md. Neue Farben ausschliesslich hier als
+ * Token ergaenzen, nie als Hex-Wert im JSX.
+ */
+@theme {
+  /* pitch – Identitaet (Violett) */
+  --color-pitch-50: #f5f3ff;
+  --color-pitch-100: #ede9fe;
+  --color-pitch-200: #ddd6fe;
+  --color-pitch-300: #c4b5fd;
+  --color-pitch-400: #a78bfa;
+  --color-pitch-500: #8b5cf6;
+  --color-pitch-600: #7c3aed;
+  --color-pitch-700: #6d28d9;
+  --color-pitch-800: #5b21b6;
+  --color-pitch-900: #4c1d95;
+  --color-pitch-950: #2e1065;
+
+  /* signal – Akzent (Neon-Lime). Nie als Text auf Weiss. */
+  --color-signal-300: #ddff66;
+  --color-signal-400: #c6ff1a;
+  --color-signal-500: #aef000;
+  --color-signal-600: #8bc400;
+
+  /* ink – Neutrale (Zinc) */
+  --color-ink-50: #fafafa;
+  --color-ink-100: #f4f4f5;
+  --color-ink-200: #e4e4e7;
+  --color-ink-300: #d4d4d8;
+  --color-ink-400: #a1a1aa;
+  --color-ink-500: #71717a;
+  --color-ink-600: #52525b;
+  --color-ink-700: #3f3f46;
+  --color-ink-800: #27272a;
+  --color-ink-900: #18181b;
+  --color-ink-950: #09090b;
+
+  /* Flaechen */
+  --color-paper: #fafafa;
+
+  /* Schrift */
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --font-display: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+
+  /* Schatten */
+  --shadow-soft: 0 1px 2px rgb(9 9 11 / 0.03), 0 10px 28px -18px rgb(9 9 11 / 0.12);
+  --shadow-pop: 0 12px 48px -12px rgb(9 9 11 / 0.2);
+  --shadow-float: 0 1px 2px rgb(9 9 11 / 0.06), 0 6px 16px -6px rgb(9 9 11 / 0.12),
+    0 24px 48px -16px rgb(9 9 11 / 0.28);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--color-paper);
+  color: var(--color-ink-900);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Jede Headline. */
+.font-display {
+  font-family: var(--font-display);
+  letter-spacing: -0.025em;
+  font-feature-settings: "ss01";
+  text-wrap: balance;
+}
+
+.text-pretty {
+  text-wrap: pretty;
+}
+
+/* Technisches Label ueber einer Headline. */
+.eyebrow {
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.6875rem;
+  font-weight: 500;
+}
+
+/* Gleich breite Ziffern fuer Tabellen und Zaehler. */
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Hervorhebung im Fliesstext – der einzige Weg, Neon auf Weiss zu setzen. */
+.neon-mark {
+  background-image: linear-gradient(transparent 58%, var(--color-signal-400) 0);
+  padding-inline: 0.05em;
+}
+
+/*
+ * Zwei Bewegungen der Statusseite, die sich mit Utility-Klassen nicht sauber
+ * ausdruecken lassen: der Ring um den laufenden Schritt und der Balken darin.
+ */
+@keyframes kf-puls {
+  0% {
+    transform: scale(0.92);
+    opacity: 0.6;
+  }
+  100% {
+    transform: scale(1.12);
+    opacity: 0;
+  }
+}
+
+.kf-live::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: 17px;
+  border: 2px solid var(--color-pitch-400);
+  opacity: 0.55;
+  animation: kf-puls 1.8s ease-out infinite;
+}
+
+@keyframes kf-lauf {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(230%);
+  }
+}
+
+.kf-lauf::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 45%;
+  border-radius: 9999px;
+  background: var(--color-pitch-600);
+  animation: kf-lauf 2.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  .kf-live::after {
+    animation: none;
+  }
+  .kf-lauf::after {
+    animation: none;
+    width: 100%;
+  }
+}
