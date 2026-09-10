@@ -13,12 +13,11 @@ Stand 10.09.2026. HubSpot ist die einzige Datenbasis. Neue Eigenschaften in der 
 - Nachgezogen am 10.09.2026: die Positions-Eigenschaften (`line_items`), die Eigenschaftsgruppe auf
   Produkten, Positionen und Firmen sowie drei Datumsfelder am Deal, die die Statusseite anzeigt:
   `angebot_intersport_am`, `angebot_11teamsports_am`, `eingang_am`.
-- **Offen, blockiert durch fehlende Scopes:** die Produkt-Eigenschaften (`groessenart`, `fuer`,
-  `artikelnr_intersport`, `artikelnr_11teamsports`, `hersteller`, `farbe`, `beflockung_standard`,
-  `aktiv`, `auslaufdatum`) und `companies.rolle`. HubSpot verlangt dafür
-  `inbounddb-product-library-write` bzw. `companies-write`. Bis die Scopes am Service-Schlüssel
-  hängen, liest die App Artikel ohne Größenart und ohne Rollenzuordnung; das Skript legt sie beim
-  nächsten Lauf nach.
+- Nachgezogen nach Erweiterung der Scopes: die neun Produkt-Eigenschaften und `companies.rolle`.
+  Der Service-Schlüssel braucht dafür `inbounddb-product-library-write` und `companies-write`.
+- `products.groessenart` und `products.fuer` speichern genau die Schlüssel aus `src/lib/typen.ts`
+  (`trikot`/`oberteil`/`shorts`/`trainingshose`/`schuhe`/`ohne` bzw. `alle`/`feldspieler`/`torwart`),
+  damit die App ohne Übersetzungstabelle liest. Beim Pflegen die Werte nicht umbenennen.
 - Das Skript ist wiederholbar: Vorhandenes wird erkannt und übersprungen, nie überschrieben, nie gelöscht.
 - Zugriff für kitflow: HubSpot Service-Schlüssel (früher Private App) mit mindestens
   crm.objects.deals.read/write, crm.objects.contacts.read/write, crm.objects.line_items.read/write,
@@ -52,7 +51,7 @@ Stand 10.09.2026. HubSpot ist die einzige Datenbasis. Neue Eigenschaften in der 
 
 ## Produkte = Artikelstamm
 
-`name`, `hs_sku` = Herstellernummer; neu: `artikelnr_intersport`, `artikelnr_11teamsports`, `hersteller`, `farbe`, `groessenart` (trikot / oberteil / shorts / trainingshose / schuhe / ohne), `fuer` (Alle / Feldspieler / Torwart), `beflockung_standard`, `aktiv`, `auslaufdatum`.
+`name`, `hs_sku` = Herstellernummer; angelegt: `artikelnr_intersport`, `artikelnr_11teamsports`, `hersteller`, `farbe`, `groessenart` (trikot / oberteil / shorts / trainingshose / schuhe / ohne), `fuer` (alle / feldspieler / torwart), `beflockung_standard`, `aktiv`, `auslaufdatum`.
 
 Noch leer. Erste echte Artikel aus Kais Anfrage:
 
@@ -93,7 +92,7 @@ Weitere Fakten: `team` (Jahrgänge 2007–2022, 1./2./3. Herren, Ü30, Ü40 Team
 
 ## Firmen
 
-Neu: `rolle` (Sponsor / Lieferant). Intersport Uelzen mit Jens Bormann, 11teamsports mit Michael Hillebrecht.
+Angelegt: `rolle` (Sponsor / Lieferant). Intersport Uelzen mit Jens Bormann, 11teamsports mit Michael Hillebrecht.
 
 ## Größenarten – Zuordnung
 
