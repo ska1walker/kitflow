@@ -4,6 +4,20 @@ Stand 10.09.2026. Ersetzt die Tally-Entwürfe F1 kdoMYe, F2 Zj7qVo, F3 eqJkAe (n
 
 Zugang über signierte Links: `/v/{vorgang}?t=…` (Status), `/g/{vorgang}/{hsid}?t=…` (Größen), `/b/{vorgang}?t=…` (Liste bestätigen). Token prüft Vorgang, Rolle, Kontakt und dass die Pipeline-Stufe passt; sonst freundliche Meldung statt Formular.
 
+### Stand der Umsetzung (`src/lib/links.ts`)
+
+- Signiert wird `HMAC-SHA256` über Zweck und die Teile, die in der URL stehen, mit `\n` getrennt; Schlüssel aus `LINK_SECRET`, mindestens 32 Zeichen. Fehlt er, funktioniert kein Link — die Anwendung fällt nicht offen auf.
+- Die Personen-ID steht mit unter der Signatur. Sonst ließe sie sich in der Adresszeile austauschen und man sähe die Größen eines anderen Kindes.
+- Der Zweck steht mit darunter, damit ein Status-Link nicht als Bestätigungs-Link durchgeht.
+- Verglichen wird in konstanter Zeit (`timingSafeEqual`).
+- **Kein Ablaufdatum.** Ob eine Seite noch etwas darf, entscheidet die Stufe des Vorgangs, nicht die Uhr. Ein Link, den Eltern in einer Gruppe weiterreichen, soll nicht mitten in der Frist sterben.
+- Die Rolle steht nicht in der URL: `/v/{vorgang}` ist die Trainer-Ansicht, `/v/{vorgang}/{hsid}` die Spieler-Ansicht derselben Person. Der Umschalter fällt dort weg.
+- Vor dem Rendern wird der Vorgang für Spieler gekürzt (`fuerSpieler`): fremde Namen und interne Verlaufseinträge werden entfernt, nicht nur ausgeblendet. Ausgeblendet hieße, sie stünden trotzdem im Quelltext.
+- Ein abgelehnter Link bekommt immer dieselbe Antwort, auch wenn es den Vorgang gar nicht gibt. Wer raten will, soll daraus nichts lernen.
+- Links baut `npm run link -- <vorgangsnummer> [personen-id]`, bis die Mails sie selbst verschicken.
+- Gebaut sind bisher nur die beiden `/v`-Routen. `/g` und `/b` bekommen ihre Token schon, ihre Seiten kommen mit F2 und F3.
+- `/` ist ein Schaufenster mit Beispieldaten und fasst HubSpot nicht an.
+
 ## Statusseite `/v/{vorgang}`
 
 Entwurf: prototyp/statusseite.html. Drei Ansichten:

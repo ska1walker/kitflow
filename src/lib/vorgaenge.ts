@@ -404,6 +404,23 @@ function zurZeile(deal: HsObjekt, stufe: StufeNr): VorgangsZeile {
   };
 }
 
+/**
+ * Streicht aus einem Vorgang alles, was ein Spieler nicht sehen darf, bevor er
+ * an den Browser geht (docs/formulare.md: „keine anderen Namen“).
+ *
+ * Die Karten blenden diese Felder ohnehin aus, aber ausgeblendet heisst nicht
+ * abwesend: der ganze Vorgang landet im Quelltext der Seite. Wer ihn anschaut,
+ * laese sonst die Namen derer, die noch keine Groesse eingetragen haben, und
+ * die internen Verlaufseintraege mit.
+ */
+export function fuerSpieler(vorgang: Vorgang): Vorgang {
+  return {
+    ...vorgang,
+    fehlendeGroessen: [],
+    verlauf: vorgang.verlauf.filter((e) => !e.intern),
+  };
+}
+
 /** Die Suche nach Deals der Ausstattungs-Pipeline. */
 function dealSuche(nummer: string | undefined, limit: number) {
   return {
