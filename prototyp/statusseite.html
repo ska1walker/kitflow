@@ -1,0 +1,481 @@
+<title>kitflow Statusseite</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600&display=swap">
+<style>
+:root{
+  --pitch-50:#f5f3ff;--pitch-100:#ede9fe;--pitch-200:#ddd6fe;--pitch-300:#c4b5fd;--pitch-400:#a78bfa;--pitch-500:#8b5cf6;--pitch-600:#7c3aed;--pitch-700:#6d28d9;--pitch-800:#5b21b6;
+  --signal-300:#ddff66;--signal-400:#c6ff1a;
+  --ink-50:#fafafa;--ink-100:#f4f4f5;--ink-200:#e4e4e7;--ink-300:#d4d4d8;--ink-400:#a1a1aa;--ink-500:#71717a;--ink-600:#52525b;--ink-700:#3f3f46;--ink-800:#27272a;--ink-900:#18181b;--ink-950:#09090b;
+  --amber-50:#fffbeb;--amber-100:#fef3c7;--amber-200:#fde68a;--amber-700:#b45309;--amber-800:#92400e;
+  --paper:#fafafa;--white:#ffffff;
+  --shadow-soft:0 1px 2px rgba(9,9,11,.04),0 2px 8px rgba(9,9,11,.05);
+  --shadow-pop:0 12px 32px rgba(9,9,11,.14),0 2px 6px rgba(9,9,11,.06);
+  --sans:"Geist",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+  --mono:"Geist Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html{background:var(--paper)}
+body{margin:0;background:var(--paper);color:var(--ink-900);font-family:var(--sans);font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased}
+button,select{font:inherit;color:inherit}
+.font-display{letter-spacing:-.025em;font-feature-settings:"ss01";text-wrap:balance}
+.eyebrow{font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:var(--pitch-600);font-weight:500}
+.tnum{font-variant-numeric:tabular-nums}
+.pretty{text-wrap:pretty}
+:focus-visible{outline:none;box-shadow:0 0 0 2px var(--white),0 0 0 4px var(--pitch-300)}
+
+/* Gerüst */
+.header{position:sticky;top:0;z-index:40;height:64px;background:rgba(250,250,250,.88);backdrop-filter:blur(8px);border-bottom:1px solid var(--ink-200)}
+.wrap{max-width:48rem;margin:0 auto;padding-inline:16px}
+.wrap.wide{max-width:72rem}
+.header .wrap{height:100%;display:flex;align-items:center;justify-content:space-between;gap:16px}
+.brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--ink-900)}
+.tile{display:flex;align-items:center;justify-content:center;border-radius:12px;background:var(--ink-950);color:var(--signal-400);flex:none}
+.tile.sm{width:32px;height:32px;border-radius:10px}
+.tile.md{width:40px;height:40px}
+.tile.lg{width:48px;height:48px;border-radius:14px}
+.brand b{font-weight:800;font-size:18px;letter-spacing:-.03em}
+.club{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink-600)}
+.wappen{width:28px;height:28px;border-radius:999px;background:var(--pitch-100);color:var(--pitch-700);display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:10px;font-weight:600}
+main{padding-block:20px 56px}
+.stack{display:flex;flex-direction:column;gap:16px}
+
+/* Entwurfsleiste */
+.draft{border:1px dashed var(--ink-300);border-radius:16px;background:var(--white);padding:12px 14px;display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px}
+.draft .note{font-size:12px;color:var(--ink-500);flex-basis:100%}
+.badge{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:3px 10px;font-size:12px;font-weight:600;line-height:1.4;white-space:nowrap}
+.badge.amber{background:var(--amber-100);color:var(--amber-800)}
+.badge.pitch{background:var(--pitch-100);color:var(--pitch-700)}
+.badge.neutral{background:var(--ink-100);color:var(--ink-700)}
+.badge.outline{border:1px solid var(--ink-200);background:var(--white);color:var(--ink-700)}
+.seg{display:inline-flex;border:1px solid var(--ink-200);border-radius:999px;padding:3px;background:var(--ink-50)}
+.seg button{border:0;background:transparent;border-radius:999px;padding:6px 12px;font-size:13px;font-weight:600;color:var(--ink-600);cursor:pointer;transition:background-color .15s,color .15s}
+.seg button[aria-pressed="true"]{background:var(--ink-950);color:var(--white)}
+.seg button:hover:not([aria-pressed="true"]){background:var(--white);color:var(--ink-900)}
+.field{display:flex;align-items:center;gap:8px}
+.field label{font-size:12px;font-weight:500;color:var(--ink-500)}
+.select{appearance:none;border:1px solid var(--ink-200);border-radius:10px;background:var(--white) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2371717a' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 10px center;padding:7px 32px 7px 12px;font-size:13px;font-weight:500;cursor:pointer}
+.select:focus{outline:none;border-color:var(--pitch-400);box-shadow:0 0 0 3px var(--pitch-100)}
+
+/* Karten */
+.card{background:var(--white);border:1px solid var(--ink-200);border-radius:16px;box-shadow:var(--shadow-soft)}
+.card-pad{padding:20px}
+.card h3{margin:0;font-size:17px;font-weight:700;letter-spacing:-.02em}
+.card-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
+.muted{color:var(--ink-600)}
+.meta{font-size:12px;color:var(--ink-400)}
+
+/* Statuskopf */
+.hero{padding:22px 20px 20px}
+.hero h1{margin:6px 0 0;font-size:30px;line-height:1.15;font-weight:800}
+.hero .sub{margin:4px 0 0;color:var(--ink-600);font-size:14px}
+.now{display:flex;gap:14px;align-items:flex-start;margin-top:22px;padding-top:20px;border-top:1px solid var(--ink-200)}
+.now .label{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-500)}
+.now h2{margin:2px 0 6px;font-size:24px;line-height:1.2;font-weight:700}
+.now p{margin:0;color:var(--ink-600);max-width:38rem}
+.tile.live{position:relative}
+.tile.live::after{content:"";position:absolute;inset:-4px;border-radius:17px;border:2px solid var(--pitch-400);opacity:.55;animation:puls 1.8s ease-out infinite}
+@keyframes puls{0%{transform:scale(.92);opacity:.6}100%{transform:scale(1.12);opacity:0}}
+
+/* Schrittleiste */
+.track{margin-top:22px}
+.track-bar{display:grid;grid-template-columns:repeat(8,1fr);gap:4px}
+.seg-step{height:8px;border-radius:999px;background:var(--ink-200);position:relative;overflow:hidden}
+.seg-step.done{background:var(--pitch-600)}
+.seg-step.current{background:var(--pitch-200)}
+.seg-step.current::after{content:"";position:absolute;inset:0;width:45%;border-radius:999px;background:var(--pitch-600);animation:lauf 2.4s ease-in-out infinite}
+@keyframes lauf{0%{transform:translateX(-100%)}100%{transform:translateX(230%)}}
+.track-labels{display:grid;grid-template-columns:repeat(8,1fr);gap:4px;margin-top:8px}
+.track-labels span{font-size:11px;line-height:1.3;color:var(--ink-400);text-wrap:balance}
+.track-labels span.done{color:var(--ink-600)}
+.track-labels span.current{color:var(--ink-900);font-weight:600}
+.track-foot{display:flex;justify-content:space-between;gap:12px;margin-top:10px;font-size:12px;color:var(--ink-500)}
+@media (max-width:600px){.track-labels{display:none}}
+
+/* Als Nächstes */
+.next{display:flex;gap:12px;align-items:flex-start;padding:14px 16px;border-radius:16px;background:var(--pitch-50);border:1px solid var(--pitch-100)}
+.next .ico{color:var(--pitch-700);flex:none;margin-top:2px}
+.next b{display:block;font-size:14px}
+.next span{font-size:14px;color:var(--ink-700)}
+.next.you{background:var(--amber-50);border-color:var(--amber-200)}
+.next.you .ico{color:var(--amber-700)}
+
+/* Raster */
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}
+@media (max-width:720px){.grid2{grid-template-columns:1fr}}
+
+/* Zähler */
+.count{display:flex;align-items:baseline;gap:6px}
+.count strong{font-size:32px;font-weight:800;letter-spacing:-.03em;line-height:1}
+.meter{height:6px;border-radius:999px;background:var(--ink-100);overflow:hidden;margin:10px 0 12px}
+.meter i{display:block;height:100%;background:var(--pitch-600);border-radius:999px}
+.people{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.people li{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:14px;padding:8px 10px;border-radius:10px;background:var(--ink-50)}
+
+/* Zeilen */
+.rows{display:flex;flex-direction:column}
+.row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:11px 0;border-top:1px solid var(--ink-100)}
+.row:first-child{border-top:0;padding-top:0}
+.row .who{display:flex;flex-direction:column;min-width:0}
+.row .who b{font-size:14px;font-weight:600}
+.row .who small{font-size:12px;color:var(--ink-500)}
+
+/* Artikel */
+.art-group+.art-group{margin-top:14px}
+.art-group .gh{display:flex;justify-content:space-between;align-items:center;font-size:12px;font-weight:600;color:var(--ink-500);margin-bottom:6px}
+.art{display:flex;justify-content:space-between;gap:10px;font-size:13px;padding:6px 0;border-top:1px solid var(--ink-100)}
+.art span:first-child{min-width:0}
+.art code{font-family:var(--mono);font-size:11px;color:var(--ink-500);white-space:nowrap}
+
+/* Verlauf */
+.log{list-style:none;margin:0;padding:0;position:relative}
+.log li{display:grid;grid-template-columns:92px 18px 1fr;gap:10px;padding-bottom:16px;position:relative}
+.log li:last-child{padding-bottom:0}
+.log time{font-family:var(--mono);font-size:12px;color:var(--ink-500);font-variant-numeric:tabular-nums;line-height:1.35;padding-top:1px}
+.log time b{display:block;color:var(--ink-800);font-weight:500}
+.log .dot{position:relative;display:flex;justify-content:center}
+.log .dot::before{content:"";width:10px;height:10px;border-radius:999px;background:var(--white);border:2px solid var(--pitch-400);margin-top:4px;z-index:1}
+.log li:first-child .dot::before{background:var(--pitch-600);border-color:var(--pitch-600)}
+.log .dot::after{content:"";position:absolute;top:16px;bottom:-4px;width:2px;background:var(--ink-200)}
+.log li:last-child .dot::after{display:none}
+.log p{margin:0;font-size:14px;color:var(--ink-800)}
+.log p small{display:block;font-size:12px;color:var(--ink-500);margin-top:1px}
+
+/* Meine Ausstattung */
+.mine{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.mine div{border:1px solid var(--ink-200);border-radius:12px;padding:10px 12px}
+.mine dt{font-size:11px;color:var(--ink-500);font-weight:500}
+.mine dd{margin:2px 0 0;font-size:20px;font-weight:700;letter-spacing:-.02em}
+@media (max-width:520px){.mine{grid-template-columns:repeat(2,1fr)}}
+
+/* Buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border-radius:12px;border:0;background:var(--ink-950);color:var(--white);padding:10px 18px;font-size:14px;font-weight:600;cursor:pointer;transition:background-color .15s}
+.btn:hover{background:var(--ink-800)}
+.btn.sec{background:var(--white);color:var(--ink-800);border:1px solid var(--ink-200);border-radius:999px;padding:8px 14px;font-size:13px}
+.btn.sec:hover{background:var(--ink-50)}
+.actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+
+/* Spartenleitung */
+.summary{display:flex;flex-wrap:wrap;gap:8px}
+.vlist{display:flex;flex-direction:column;gap:10px}
+.vrow{display:grid;grid-template-columns:132px minmax(0,1.3fr) minmax(0,1.4fr) minmax(0,1fr);gap:16px;align-items:center;padding:14px 18px;cursor:pointer;text-align:left;width:100%;font:inherit;color:inherit;transition:border-color .15s}
+.vrow:hover{border-color:var(--pitch-300)}
+.vrow .nr{font-family:var(--mono);font-size:12px;color:var(--ink-600);font-variant-numeric:tabular-nums}
+.vrow .t b{display:block;font-size:15px;font-weight:700;letter-spacing:-.01em}
+.vrow .t small{font-size:12px;color:var(--ink-500)}
+.mini{display:grid;grid-template-columns:repeat(8,1fr);gap:3px;margin-top:6px}
+.mini i{height:5px;border-radius:999px;background:var(--ink-200)}
+.mini i.done{background:var(--pitch-600)}
+.mini i.current{background:var(--pitch-300)}
+.vrow .st{font-size:13px;font-weight:600}
+.vrow .wait{display:flex;flex-direction:column;align-items:flex-start;gap:4px;font-size:13px}
+@media (max-width:760px){.vrow{grid-template-columns:1fr;gap:8px}}
+.section-title{display:flex;align-items:end;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.section-title h1{margin:4px 0 0;font-size:30px;font-weight:800;line-height:1.15}
+
+/* Toast */
+.toast{position:fixed;left:50%;bottom:20px;transform:translate(-50%,20px);opacity:0;z-index:50;background:var(--ink-950);color:var(--white);font-size:13px;padding:10px 16px;border-radius:12px;box-shadow:var(--shadow-pop);transition:opacity .2s,transform .2s;pointer-events:none;max-width:calc(100% - 32px)}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-shirt" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" d="M8 3 3.5 5.5l1.8 4.2L7.5 9v12h9V9l2.2.7 1.8-4.2L16 3c-.6 1.6-2.1 2.6-4 2.6S8.6 4.6 8 3Z"/></symbol>
+    <symbol id="i-ruler" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" d="M3 16.5 16.5 3 21 7.5 7.5 21 3 16.5Z"/><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="m7 12.5 2 2M10 9.5l1.5 1.5M13 6.5l2 2"/></symbol>
+    <symbol id="i-send" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" d="M21 3 3 10.5l7 2.5 2.5 7L21 3Z"/><path fill="none" stroke="currentColor" stroke-width="1.8" d="m10 13 4.5-4.5"/></symbol>
+    <symbol id="i-doc" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" d="M6 3h8l4 4v14H6V3Z"/><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M14 3v4h4M9 12h6M9 16h6"/></symbol>
+    <symbol id="i-coins" viewBox="0 0 24 24"><ellipse cx="9" cy="7" rx="5" ry="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path fill="none" stroke="currentColor" stroke-width="1.8" d="M4 7v5c0 1.4 2.2 2.5 5 2.5s5-1.1 5-2.5V7M10 17.2c.9.8 2.7 1.3 5 1.3 2.8 0 5-1.1 5-2.5v-5c0-1.4-2.2-2.5-5-2.5"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
+    <symbol id="i-cart" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M3 4h2.5l2.2 11h10.6L20.5 7H7"/><circle cx="9.5" cy="19" r="1.4" fill="currentColor"/><circle cx="17" cy="19" r="1.4" fill="currentColor"/></symbol>
+    <symbol id="i-truck" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" d="M2.5 6h11v10h-11zM13.5 9.5h4l3 3.5V16h-7z"/><circle cx="6.5" cy="17.5" r="1.8" fill="var(--ink-950)" stroke="currentColor" stroke-width="1.8"/><circle cx="17" cy="17.5" r="1.8" fill="var(--ink-950)" stroke="currentColor" stroke-width="1.8"/></symbol>
+    <symbol id="i-flag" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M5 21V4M5 4h11l-2 4 2 4H5"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" d="M5 12h14M13 6l6 6-6 6"/></symbol>
+    <symbol id="i-bell" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" d="M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15L6 16Z"/><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M10 20.5a2 2 0 0 0 4 0"/></symbol>
+    <symbol id="i-kit" viewBox="0 0 24 24"><path fill="currentColor" d="M8.2 3.2 3.6 5.7l1.9 4.4 2-.6V20.8h9V9.5l2 .6 1.9-4.4-4.6-2.5c-.7 1.5-2.1 2.4-3.8 2.4S8.9 4.7 8.2 3.2Z"/></symbol>
+  </defs>
+</svg>
+
+<header class="header">
+  <div class="wrap" id="hwrap">
+    <a class="brand" href="#" aria-label="kitflow Startseite">
+      <span class="tile sm"><svg width="18" height="18"><use href="#i-kit"/></svg></span>
+      <b>kitflow</b>
+    </a>
+    <div class="club"><span class="wappen" aria-hidden="true">EM</span><span>Eintracht Munster · Fußball</span></div>
+  </div>
+</header>
+
+<main>
+  <div class="wrap stack" id="app"></div>
+</main>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(function(){
+  var STUFEN = [
+    {n:1, kurz:"Größen", titel:"Größen werden gesammelt", icon:"i-ruler"},
+    {n:2, kurz:"Anfrage", titel:"Angebote angefragt", icon:"i-send"},
+    {n:3, kurz:"Angebote", titel:"Beide Angebote sind da", icon:"i-doc"},
+    {n:4, kurz:"Finanzierung", titel:"Finanzierung läuft", icon:"i-coins"},
+    {n:5, kurz:"Geld da", titel:"Das Geld ist da", icon:"i-check"},
+    {n:6, kurz:"Bestellt", titel:"Bestellt", icon:"i-cart"},
+    {n:7, kurz:"Geliefert", titel:"Geliefert", icon:"i-truck"},
+    {n:8, kurz:"Abgeschlossen", titel:"Abgeschlossen", icon:"i-flag"}
+  ];
+
+  // Beispieldaten, erfundene Namen
+  var SPIELER = ["Jonas Behrens","Malte Wiechmann","Sören Pape","Tobias Lüdtke","Henning Rademacher","Florian Kracke","Dennis Möhle","Christian Voß","Marcel Harms","Stefan Gerken","Lars Cordes","Patrick Wulf","Andreas Heitmann","Nils Schröder","Jan-Hendrik Meyer","Timo Bartels","Oliver Brandt","Kevin Stolte"];
+  var FEHLEN = ["Oliver Brandt","Kevin Stolte","Timo Bartels","Patrick Wulf"];
+
+  var ARTIKEL = {
+    feld:[["Hummel hmlCORE XK Poly T-Shirt Weiß","211943"],["Hummel hmlCORE XK Poly Short Weiß","211466"],["Hummel Pro Football Sock","201.160"]],
+    tor:[["adidas Tiro 24 Competition Torwarttrikot langarm Blau","IN0410"],["adidas Tiro 24 Pro Torwartshort Blau","IN0452"],["adidas Adisock 23 Strumpfstutzen","IB7795"]]
+  };
+
+  // Verlauf: ab welcher Stufe ein Eintrag sichtbar ist; nurTrainer = intern
+  var EREIGNISSE = [
+    {ab:1, d:"01.09.", t:"18:42", text:"Anfrage eingegangen", sub:"Trikotsatz für 18 Personen, Sponsor VGH"},
+    {ab:1, d:"01.09.", t:"18:44", text:"Größen-Links an 18 Personen verschickt", sub:"Frist: Mo 08.09., 20 Uhr"},
+    {ab:1, d:"06.09.", t:"10:00", text:"Erinnerung an 4 Personen verschickt", nurTrainer:true},
+    {ab:2, d:"08.09.", t:"20:00", text:"Größen komplett: 18 von 18"},
+    {ab:2, d:"09.09.", t:"07:15", text:"Liste vom Trainer bestätigt"},
+    {ab:2, d:"09.09.", t:"07:16", text:"Anfrage an Intersport Uelzen und 11teamsports verschickt"},
+    {ab:3, d:"10.09.", t:"11:05", text:"Angebot von 11teamsports eingegangen"},
+    {ab:3, d:"12.09.", t:"09:30", text:"Angebot von Intersport Uelzen eingegangen"},
+    {ab:4, d:"13.09.", t:"19:10", text:"Angebot von 11teamsports gewählt"},
+    {ab:4, d:"13.09.", t:"19:12", text:"Sponsor VGH um Zahlung gebeten", nurTrainer:true},
+    {ab:5, d:"18.09.", t:"08:30", text:"Geld vom Sponsor ist auf dem Vereinskonto"},
+    {ab:6, d:"18.09.", t:"12:05", text:"Bestellung an 11teamsports verschickt", sub:"Liefertermin laut Händler: KW 41"},
+    {ab:7, d:"07.10.", t:"15:20", text:"Lieferung beim Trainer angekommen", sub:"54 Teile, beflockt"},
+    {ab:8, d:"09.10.", t:"19:45", text:"An die Mannschaft ausgegeben"},
+    {ab:8, d:"10.10.", t:"09:00", text:"Rechnung bezahlt und gebucht", nurTrainer:true}
+  ];
+
+  var TEXT = {
+    1:{t:"14 von 18 haben ihre Größen eingetragen. Frist ist Montag, 08.09., 20 Uhr.",
+       s:"Deine Größen sind drin. Bis zur Frist am Montag, 08.09., 20 Uhr, kannst du sie noch ändern.",
+       next:{wer:"Du", was:"Wenn alle drin sind, bekommst du die Liste zum Prüfen. Vier fehlen noch.", du:true},
+       nextS:{wer:"Die Mannschaft", was:"Sobald alle ihre Größen eingetragen haben, prüft der Trainer die Liste."}},
+    2:{t:"Intersport Uelzen und 11teamsports haben die Liste seit 09.09.",
+       s:"Die Liste ist bei zwei Händlern. Sie erstellen jetzt ihre Angebote.",
+       next:{wer:"Die Händler", was:"Sobald beide Angebote da sind, wählt die Spartenleitung aus, spätestens fünf Tage nach dem ersten."},
+       nextS:{wer:"Die Händler", was:"Für dich gibt es gerade nichts zu tun."}},
+    3:{t:"Beide Angebote sind da. Die Spartenleitung vergleicht Preis, Lieferzeit und Beflockung.",
+       s:"Beide Angebote sind da. Die Spartenleitung entscheidet in den nächsten Tagen.",
+       next:{wer:"Spartenleitung", was:"wählt ein Angebot aus. Du bekommst danach eine Mail."},
+       nextS:{wer:"Spartenleitung", was:"Für dich gibt es gerade nichts zu tun."}},
+    4:{t:"11teamsports ist gewählt. Der Sponsor VGH hat zugesagt, das Geld ist aber noch nicht auf dem Vereinskonto.",
+       s:"Ein Angebot ist gewählt. Jetzt kommt das Geld vom Sponsor.",
+       next:{wer:"Sponsor VGH", was:"überweist. Bestellt wird erst, wenn das Geld auf dem Vereinskonto ist."},
+       nextS:{wer:"Sponsor", was:"Für dich gibt es gerade nichts zu tun."}},
+    5:{t:"Das Geld ist da. Die Bestellung geht in Kürze an 11teamsports.",
+       s:"Das Geld ist da, die Bestellung geht in Kürze raus.",
+       next:{wer:"Spartenleitung", was:"gibt die Bestellung frei."},
+       nextS:{wer:"Spartenleitung", was:"Für dich gibt es gerade nichts zu tun."}},
+    6:{t:"Bestellt bei 11teamsports am 18.09. Liefertermin laut Händler: KW 41.",
+       s:"Bestellt. Die Lieferung ist für KW 41 angekündigt.",
+       next:{wer:"11teamsports", was:"liefert beflockt an dich als Trainer."},
+       nextS:{wer:"Händler", was:"liefert an deinen Trainer. Er gibt die Sachen aus."}},
+    7:{t:"Geliefert am 07.10., 54 Teile. Bitte ausgeben und kurz bestätigen.",
+       s:"Die Sachen sind beim Trainer. Er gibt sie beim nächsten Training aus.",
+       next:{wer:"Du", was:"gibst die Sachen aus und bestätigst es mit einem Klick.", du:true},
+       nextS:{wer:"Trainer", was:"gibt die Sachen aus."}},
+    8:{t:"Alles ausgegeben und abgerechnet. Die Größen sind für die nächste Runde gespeichert.",
+       s:"Fertig. Deine Größen sind für die nächste Bestellung gespeichert.",
+       next:null, nextS:null}
+  };
+
+  var state = {view:"trainer", stufe:2};
+  try{ var saved = JSON.parse(localStorage.getItem("kitflow-entwurf")||"null"); if(saved&&saved.view&&saved.stufe){state=saved;} }catch(e){}
+  function save(){ try{ localStorage.setItem("kitflow-entwurf", JSON.stringify(state)); }catch(e){} }
+
+  function ico(id,size){ size=size||20; return '<svg width="'+size+'" height="'+size+'" aria-hidden="true"><use href="#'+id+'"/></svg>'; }
+  function esc(s){ return String(s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];}); }
+
+  function draftBar(){
+    var opts = STUFEN.map(function(s){ return '<option value="'+s.n+'"'+(s.n===state.stufe?' selected':'')+'>'+s.n+' · '+s.titel+'</option>'; }).join("");
+    function b(v,l){ return '<button type="button" data-view="'+v+'" aria-pressed="'+(state.view===v)+'">'+l+'</button>'; }
+    return '<section class="draft" aria-label="Entwurfssteuerung">'+
+      '<span class="badge amber">Entwurf · Beispieldaten</span>'+
+      '<div class="seg" role="group" aria-label="Ansicht">'+b("trainer","Trainer")+b("spieler","Spieler")+b("sparte","Spartenleitung")+'</div>'+
+      (state.view!=="sparte" ? '<div class="field"><label for="stufe">Stand</label><select class="select" id="stufe">'+opts+'</select></div>' : '')+
+      '<p class="note" style="margin:0">Diese Leiste gibt es nur im Entwurf. Namen und Termine sind erfunden, die Artikel stammen aus deiner letzten Anfrage.</p>'+
+    '</section>';
+  }
+
+  function track(n){
+    var bars="", labels="";
+    STUFEN.forEach(function(s){
+      var c = s.n<n ? "done" : (s.n===n && n<8 ? "current" : (s.n===n ? "done" : ""));
+      bars += '<div class="seg-step '+c+'" title="'+s.titel+'"></div>';
+      labels += '<span class="'+c+'">'+s.kurz+'</span>';
+    });
+    var info = n<8 ? "Schritt "+n+" von 8" : "Alle 8 Schritte erledigt";
+    return '<div class="track" aria-label="Fortschritt: '+info+'">'+
+      '<div class="track-bar">'+bars+'</div>'+
+      '<div class="track-labels" aria-hidden="true">'+labels+'</div>'+
+      '<div class="track-foot"><span class="tnum">'+info+'</span><span>Stand: heute, 07:30 Uhr</span></div>'+
+    '</div>';
+  }
+
+  function hero(n, rolle){
+    var s = STUFEN[n-1];
+    var txt = rolle==="spieler" ? TEXT[n].s : TEXT[n].t;
+    var live = n<8 ? " live" : "";
+    var gruss = rolle==="spieler" ? '<p class="sub">Hallo Jonas, hier siehst du, wo deine neue Ausstattung gerade steckt.</p>' : '<p class="sub">18 Personen · Sponsor VGH · Händler Intersport Uelzen und 11teamsports</p>';
+    return '<section class="card hero">'+
+      '<div class="eyebrow">Vorgang AUS-2026-014</div>'+
+      '<h1 class="font-display">Herren Ü40 · Trikotsatz</h1>'+ gruss +
+      '<div class="now">'+
+        '<span class="tile lg'+live+'">'+ico(s.icon,24)+'</span>'+
+        '<div><div class="label">Aktueller Stand</div><h2 class="font-display">'+s.titel+'</h2><p class="pretty">'+esc(txt)+'</p></div>'+
+      '</div>'+ track(n) +
+    '</section>';
+  }
+
+  function nextBox(n, rolle){
+    var nx = rolle==="spieler" ? TEXT[n].nextS : TEXT[n].next;
+    if(!nx) return '<div class="next"><span class="ico">'+ico("i-check")+'</span><div><b>Nichts mehr offen</b><span>Dieser Vorgang ist abgeschlossen.</span></div></div>';
+    return '<div class="next'+(nx.du?' you':'')+'"><span class="ico">'+ico(nx.du?"i-bell":"i-arrow")+'</span><div><b>Als Nächstes: '+esc(nx.wer)+'</b><span>'+esc(nx.was)+'</span></div></div>';
+  }
+
+  function groessenKarte(n){
+    if(n===1){
+      var list = FEHLEN.map(function(p){ return '<li><span>'+esc(p)+'</span><span class="badge amber">fehlt</span></li>'; }).join("");
+      return '<section class="card card-pad"><div class="card-head"><h3>Größen</h3><span class="badge pitch">läuft</span></div>'+
+        '<div class="count"><strong class="tnum">14</strong><span class="muted">von 18 eingetragen</span></div>'+
+        '<div class="meter"><i style="width:77.8%"></i></div>'+
+        '<ul class="people">'+list+'</ul>'+
+        '<div class="actions"><button type="button" class="btn" data-demo="Erinnerung verschickt – im Entwurf passiert noch nichts.">'+ico("i-bell",16)+'Erinnerung an 4 senden</button>'+
+        '<button type="button" class="btn sec" data-demo="Hier öffnet sich später die Größenabfrage für diese Person.">Größe selbst eintragen</button></div>'+
+      '</section>';
+    }
+    return '<section class="card card-pad"><div class="card-head"><h3>Größen</h3><span class="badge pitch">'+ico("i-check",14)+'komplett</span></div>'+
+      '<div class="count"><strong class="tnum">18</strong><span class="muted">von 18 eingetragen</span></div>'+
+      '<div class="meter"><i style="width:100%"></i></div>'+
+      '<p class="muted" style="margin:0;font-size:14px">Liste am 09.09. von dir bestätigt. 17 Feldspieler, 1 Torwart.</p>'+
+      '<div class="actions"><button type="button" class="btn sec" data-demo="Hier öffnet sich später die Größenliste.">Liste ansehen</button></div>'+
+    '</section>';
+  }
+
+  function haendlerKarte(n){
+    if(n<2) return "";
+    function st(h){
+      if(h==="11"){ if(n>=4) return '<span class="badge pitch">'+ico("i-check",14)+'gewählt</span>'; if(n>=3) return '<span class="badge outline">Angebot da · 10.09.</span>'; return '<span class="badge outline">Angebot da · 10.09.</span>'; }
+      if(n>=4) return '<span class="badge neutral">nicht gewählt</span>';
+      if(n>=3) return '<span class="badge outline">Angebot da · 12.09.</span>';
+      return '<span class="badge amber">angefragt · 09.09.</span>';
+    }
+    return '<section class="card card-pad"><div class="card-head"><h3>Händler</h3><span class="meta">jede Anfrage geht an beide</span></div><div class="rows">'+
+      '<div class="row"><div class="who"><b>11teamsports</b><small>Michael Hillebrecht</small></div>'+st("11")+'</div>'+
+      '<div class="row"><div class="who"><b>Intersport Uelzen</b><small>Jens Bormann</small></div>'+st("is")+'</div>'+
+    '</div></section>';
+  }
+
+  function geldKarte(n){
+    if(n<4) return "";
+    return '<section class="card card-pad"><div class="card-head"><h3>Finanzierung</h3><span class="badge '+(n>=5?'pitch':'amber')+'">'+(n>=5?'Geld da':'wartet auf Geld')+'</span></div><div class="rows">'+
+      '<div class="row"><div class="who"><b>Sponsor VGH</b><small>übernimmt den Trikotsatz komplett</small></div><span class="badge outline">zugesagt</span></div>'+
+      '<div class="row"><div class="who"><b>Eingang Vereinskonto</b><small>Bestellt wird erst danach</small></div>'+(n>=5?'<span class="badge pitch">'+ico("i-check",14)+'18.09.</span>':'<span class="badge neutral">offen</span>')+'</div>'+
+    '</div></section>';
+  }
+
+  function artikelKarte(n){
+    function g(titel, anz, arr){
+      return '<div class="art-group"><div class="gh"><span>'+titel+'</span><span class="tnum">'+anz+'</span></div>'+
+        arr.map(function(a){ return '<div class="art"><span>'+esc(a[0])+'</span><code>'+a[1]+'</code></div>'; }).join("")+'</div>';
+    }
+    return '<section class="card card-pad"><div class="card-head"><h3>Artikel</h3><span class="meta">Beflockung Standard auf den Trikots</span></div>'+
+      g("Feldspieler","17 Personen",ARTIKEL.feld)+g("Torwart","1 Person",ARTIKEL.tor)+
+      (n>=4 ? '<p class="meta" style="margin:14px 0 0">Größen: 18 von 18, Liste am 09.09. bestätigt.</p>' : '')+'</section>';
+  }
+
+  function meineKarte(n){
+    var edit = n===1 ? '<div class="actions"><button type="button" class="btn" data-demo="Hier öffnet sich später deine Größenabfrage.">Größen ändern</button></div>' : '';
+    return '<section class="card card-pad"><div class="card-head"><h3>Deine Ausstattung</h3>'+(n>=7?'<span class="badge pitch">'+ico("i-check",14)+'beim Trainer</span>':'<span class="badge outline">Feldspieler</span>')+'</div>'+
+      '<dl class="mine" style="margin:0"><div><dt>Trikot</dt><dd class="tnum">L</dd></div><div><dt>Kurze Hose</dt><dd class="tnum">L</dd></div><div><dt>Socken (Schuh)</dt><dd class="tnum">43</dd></div><div><dt>Nummer</dt><dd class="tnum">7</dd></div></dl>'+
+      '<p class="muted" style="margin:12px 0 0;font-size:14px">Trikot mit Vereinslogo, „EINTRACHT MUNSTER“ und deiner Nummer. Du zahlst nichts, der Sponsor VGH übernimmt.</p>'+ edit +
+    '</section>';
+  }
+
+  function verlauf(n, rolle){
+    var items = EREIGNISSE.filter(function(e){ return e.ab<=n && !(rolle==="spieler" && e.nurTrainer); }).reverse();
+    var lis = items.map(function(e){
+      return '<li><time><b>'+e.d+'</b>'+e.t+'</time><span class="dot"></span><p>'+esc(e.text)+(e.sub?'<small>'+esc(e.sub)+'</small>':'')+'</p></li>';
+    }).join("");
+    return '<section class="card card-pad"><div class="card-head"><h3>Verlauf</h3><span class="meta">neueste zuerst</span></div><ol class="log">'+lis+'</ol></section>';
+  }
+
+  function vorgangView(){
+    var n = state.stufe, r = state.view;
+    var h = hero(n,r) + nextBox(n,r);
+    if(r==="trainer"){
+      var cards = (n>=4 ? [haendlerKarte(n), geldKarte(n)] : [groessenKarte(n), haendlerKarte(n)]).filter(Boolean);
+      if(cards.length===1){ h += cards[0]; } else { h += '<div class="grid2">'+cards.join("")+'</div>'; }
+      h += '<div class="grid2">'+artikelKarte(n)+verlauf(n,r)+'</div>';
+    } else {
+      h += meineKarte(n) + verlauf(n,r);
+    }
+    return h;
+  }
+
+  function spartenView(){
+    var n = state.stufe;
+    var wart014 = {1:"Mannschaft",2:"Händler",3:"dich",4:"Sponsor VGH",5:"dich",6:"11teamsports",7:"Trainer",8:"–"}[n];
+    var liste = [
+      {nr:"AUS-2026-014", team:"Herren Ü40", art:"Trikotsatz · 18 Personen", s:n, wart:wart014, seit:"heute", du:(n===3||n===5), link:true},
+      {nr:"AUS-2026-012", team:"JG 2014/2015", art:"Trainingsanzüge · 16 Personen", s:1, wart:"Eltern · 9 von 16", seit:"3 Tage", frist:"Frist Fr 12.09."},
+      {nr:"AUS-2026-011", team:"Damen", art:"Aufwärmshirts · 15 Personen", s:4, wart:"Mannschaftsanteil", seit:"12 Tage", warn:"seit 12 Tagen offen"},
+      {nr:"AUS-2026-009", team:"JG 2012", art:"Trikotsatz · 14 Personen", s:6, wart:"Intersport Uelzen", seit:"9 Tage", frist:"Lieferung KW 39"}
+    ];
+    var offen = liste.filter(function(v){return v.s<8;}).length;
+    var fuerDich = liste.filter(function(v){return v.du;}).length;
+    var rows = liste.map(function(v){
+      var mini = ""; for(var i=1;i<=8;i++){ mini += '<i class="'+(i<v.s||v.s===8?"done":(i===v.s?"current":""))+'"></i>'; }
+      var waitBadge = v.du ? '<span class="badge amber">wartet auf dich</span>' : '<span>wartet auf <b>'+esc(v.wart)+'</b></span>';
+      var extra = v.warn ? '<span class="badge amber">'+esc(v.warn)+'</span>' : (v.frist ? '<small class="meta">'+esc(v.frist)+'</small>' : '<small class="meta">seit '+esc(v.seit)+'</small>');
+      return '<button type="button" class="card vrow"'+(v.link?' data-open="1"':' data-demo="Im Entwurf ist nur AUS-2026-014 klickbar."')+'>'+
+        '<span class="nr">'+v.nr+'</span>'+
+        '<span class="t"><b>'+esc(v.team)+'</b><small>'+esc(v.art)+'</small></span>'+
+        '<span><span class="st">'+STUFEN[v.s-1].titel+'</span><span class="mini" aria-hidden="true">'+mini+'</span></span>'+
+        '<span class="wait">'+waitBadge+extra+'</span>'+
+      '</button>';
+    }).join("");
+    return '<section class="section-title"><div><div class="eyebrow">Spartenleitung</div><h1 class="font-display">Alle Ausstattungs-Vorgänge</h1></div>'+
+      '<div class="summary"><span class="badge outline tnum">'+offen+' laufen</span>'+(fuerDich?'<span class="badge amber tnum">'+fuerDich+' wartet auf dich</span>':'')+'<span class="badge outline">1 hängt</span></div></section>'+
+      '<div class="vlist">'+rows+'</div>'+
+      '<p class="meta" style="margin:4px 0 0">Stand von AUS-2026-014 folgt dem Regler in den Ansichten Trainer und Spieler.</p>';
+  }
+
+  function render(){
+    var app = document.getElementById("app");
+    var wide = state.view==="sparte";
+    app.className = "wrap stack" + (wide ? " wide" : "");
+    document.getElementById("hwrap").className = "wrap" + (wide ? " wide" : "");
+    app.innerHTML = draftBar() + (wide ? spartenView() : vorgangView());
+  }
+
+  var toastT;
+  function toast(msg){
+    var t = document.getElementById("toast"); t.textContent = msg; t.classList.add("show");
+    clearTimeout(toastT); toastT = setTimeout(function(){ t.classList.remove("show"); }, 2600);
+  }
+
+  document.addEventListener("click", function(ev){
+    var v = ev.target.closest("[data-view]");
+    if(v){ state.view = v.getAttribute("data-view"); save(); render(); return; }
+    var o = ev.target.closest("[data-open]");
+    if(o){ state.view = "trainer"; save(); render(); window.scrollTo({top:0}); return; }
+    var d = ev.target.closest("[data-demo]");
+    if(d){ toast(d.getAttribute("data-demo")); }
+  });
+  document.addEventListener("change", function(ev){
+    if(ev.target.id==="stufe"){ state.stufe = parseInt(ev.target.value,10)||1; save(); render(); var s=document.getElementById("stufe"); if(s) s.focus(); }
+  });
+
+  render();
+})();
+</script>
