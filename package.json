@@ -3,11 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "NODE_OPTIONS=--use-env-proxy next dev",
     "build": "next build",
-    "start": "next start",
+    "start": "NODE_OPTIONS=--use-env-proxy next start",
     "lint": "eslint",
-    "hubspot-setup": "node scripts/hubspot-setup.mjs"
+    "hubspot-setup": "node --use-env-proxy scripts/hubspot-setup.mjs"
   },
   "dependencies": {
     "next": "16.2.6",

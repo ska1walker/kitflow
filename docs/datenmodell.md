@@ -4,8 +4,20 @@ Stand 10.09.2026. HubSpot ist die einzige Datenbasis. Neue Eigenschaften in der 
 
 ## Einrichtung
 
-- Die einzige Pipeline „Sales Pipeline“ (0 Deals) wird zu „Ausstattung“ mit den Stufen aus docs/konzept.md.
-- Zugriff für kitflow: HubSpot Private App mit mindestens crm.objects.deals.read/write, crm.objects.contacts.read/write, crm.objects.line_items.read/write, crm.objects.products.read, crm.objects.companies.read; für die Einrichtung zusätzlich crm.schemas.deals.write, crm.schemas.contacts.write, crm.schemas.companies.write.
+- Erledigt am 10.09.2026 über `npm run hubspot-setup -- --apply`. Angelegt wurden die Pipeline
+  „Ausstattung“ (Id 4119853284) mit den neun Stufen aus docs/konzept.md, die Eigenschaftsgruppe
+  „Ausstattung“ auf Deals und Kontakten, 33 Deal-Eigenschaften und 2 Kontakt-Eigenschaften.
+  Ergänzt wurde `kurze_sporthose` um 116 bis 176 und XS.
+- Die alte „Sales Pipeline“ bleibt daneben stehen, statt umbenannt zu werden. Sie hat 0 Deals und
+  stört nicht; kitflow sucht die Pipeline über ihre Bezeichnung „Ausstattung“.
+- Das Skript ist wiederholbar: Vorhandenes wird erkannt und übersprungen, nie überschrieben, nie gelöscht.
+- Zugriff für kitflow: HubSpot Service-Schlüssel (früher Private App) mit mindestens
+  crm.objects.deals.read/write, crm.objects.contacts.read/write, crm.objects.line_items.read/write,
+  crm.objects.products.read, crm.objects.companies.read; für die Einrichtung zusätzlich
+  crm.schemas.deals.write, crm.schemas.contacts.write, crm.schemas.companies.write.
+- Der Schlüssel liegt nie im Repo. Lokal und in Produktion steht er in `HUBSPOT_TOKEN`. In der
+  Claude-Cloud-Umgebung hängt er stattdessen an den Zugangsdaten für api.hubapi.com, der Proxy setzt
+  den Authorization-Header, und `.env.local` enthält nur `HUBSPOT_AUTH_VIA_PROXY=1`.
 - Die bestehende Make-Verbindung 2981268 bleibt unverändert (gehört zu Spartenzuordnung und Passantrag).
 
 ## Deal = Vorgang

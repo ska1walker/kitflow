@@ -1,18 +1,30 @@
 import "server-only";
 
 /**
- * HubSpot-Zugriff über eine Private App. HubSpot ist die einzige Datenbasis
- * (CLAUDE.md); kitflow hat keine eigene Datenbank.
+ * HubSpot-Zugriff über einen Service-Schlüssel. HubSpot ist die einzige
+ * Datenbasis (CLAUDE.md); kitflow hat keine eigene Datenbank.
  *
- * Der Token steht ausschliesslich serverseitig in `HUBSPOT_TOKEN` und darf
- * weder ins Bundle noch in ein Log geraten. Fehlt er, laeuft die Oberflaeche
- * mit Beispieldaten weiter – siehe src/lib/vorgaenge.ts.
+ * Zwei Wege zur Anmeldung, beide rein serverseitig:
+ *
+ *  - `HUBSPOT_TOKEN` gesetzt: wir schicken den Authorization-Header selbst.
+ *    So laeuft es in Produktion.
+ *  - `HUBSPOT_AUTH_VIA_PROXY=1`: der Schluessel haengt in der Cloud-Umgebung
+ *    an den Zugangsdaten fuer api.hubapi.com und der Proxy setzt den Header.
+ *    Dann duerfen wir keinen eigenen setzen, sonst stehen zwei drin.
+ *
+ * Ohne beides laeuft die Oberflaeche mit Beispieldaten weiter, siehe
+ * src/lib/vorgaenge.ts. Der Schluessel darf weder ins Bundle noch in ein Log.
  */
 
 const BASIS = "https://api.hubapi.com";
 
+/** Anmeldung ueber den Proxy statt ueber einen eigenen Header. */
+function ueberProxy(): boolean {
+  return process.env.HUBSPOT_AUTH_VIA_PROXY === "1";
+}
+
 export function hubspotAktiv(): boolean {
-  return Boolean(process.env.HUBSPOT_TOKEN);
+  return Boolean(process.env.HUBSPOT_TOKEN) || ueberProxy();
 }
 
 /** Name der Pipeline aus docs/datenmodell.md. */
@@ -23,6 +35,15 @@ type Abfrage = {
   suche?: Record<string, unknown>;
 };
 
+/** Nexts Signal „diese Route muss dynamisch sein“, erkennbar am digest. */
+function istDynamikSignal(fehler: unknown): boolean {
+  return (
+    typeof fehler === "object" &&
+    fehler !== null &&
+    (fehler as { digest?: unknown }).digest === "DYNAMIC_SERVER_USAGE"
+  );
+}
+
 /**
  * Ein Aufruf gegen die HubSpot-API. Wirft nie: Fehler werden gemeldet und mit
  * `null` beantwortet, damit ein Ausfall die Seite nicht zerlegt.
@@ -30,16 +51,16 @@ type Abfrage = {
  * Fehlermeldungen enthalten bewusst weder Token noch Personendaten.
  */
 export async function hubspot<T>({ pfad, suche }: Abfrage): Promise<T | null> {
+  if (!hubspotAktiv()) return null;
+
   const token = process.env.HUBSPOT_TOKEN;
-  if (!token) return null;
+  const kopf: Record<string, string> = { "Content-Type": "application/json" };
+  if (token) kopf.Authorization = `Bearer ${token}`;
 
   try {
     const antwort = await fetch(`${BASIS}${pfad}`, {
       method: suche ? "POST" : "GET",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
+      headers: kopf,
       body: suche ? JSON.stringify(suche) : undefined,
       // Der Stand eines Vorgangs aendert sich laufend, deshalb nicht cachen.
       cache: "no-store",
@@ -52,6 +73,11 @@ export async function hubspot<T>({ pfad, suche }: Abfrage): Promise<T | null> {
 
     return (await antwort.json()) as T;
   } catch (fehler) {
+    // Next meldet ueber einen geworfenen Fehler, dass die Route wegen
+    // `no-store` dynamisch werden muss. Der gehoert nicht uns: schlucken wir
+    // ihn, waere die Route faelschlich statisch.
+    if (istDynamikSignal(fehler)) throw fehler;
+
     console.error(
       `HubSpot nicht erreichbar bei ${pfad}:`,
       fehler instanceof Error ? fehler.message : "unbekannter Fehler",

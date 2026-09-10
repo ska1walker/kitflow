@@ -5,10 +5,19 @@
  * dokumentierte Luecke bei `kurze_sporthose`.
  *
  * Aufruf:
- *   HUBSPOT_TOKEN=pat-... node scripts/hubspot-setup.mjs          # nur zeigen
- *   HUBSPOT_TOKEN=pat-... node scripts/hubspot-setup.mjs --apply  # anlegen
+ *   npm run hubspot-setup             # nur zeigen
+ *   npm run hubspot-setup -- --apply  # anlegen
+ *
+ * Der npm-Aufruf setzt `--use-env-proxy`. Ohne das ignoriert fetch in Node 22
+ * die Proxy-Variablen und laeuft in der Cloud-Umgebung in eine Sperre. Ohne
+ * Proxy im Netz ist das Flag wirkungslos.
  *
  * Ohne --apply wird nichts geschrieben, das Skript zeigt nur, was fehlt.
+ *
+ * Der Schluessel kommt entweder aus HUBSPOT_TOKEN oder, in der Cloud-Umgebung,
+ * vom Proxy: dort haengen die Zugangsdaten am Host api.hubapi.com und der
+ * Authorization-Header wird jeder Anfrage angehaengt. Dann darf das Skript
+ * keinen eigenen Header setzen, sonst stehen zwei drin.
  *
  * Das Skript ist wiederholbar: Vorhandenes wird erkannt und uebersprungen, nie
  * ueberschrieben. Es loescht nichts.
@@ -22,19 +31,17 @@ const BASIS = "https://api.hubapi.com";
 const TOKEN = process.env.HUBSPOT_TOKEN;
 const ANWENDEN = process.argv.includes("--apply");
 
-if (!TOKEN) {
-  console.error("HUBSPOT_TOKEN fehlt. Private App anlegen, Token setzen, erneut starten.");
-  process.exit(1);
-}
-
 let angelegt = 0;
 let vorhanden = 0;
 let fehler = 0;
 
 async function api(pfad, methode = "GET", koerper) {
+  const kopf = { "Content-Type": "application/json" };
+  if (TOKEN) kopf.Authorization = `Bearer ${TOKEN}`;
+
   const antwort = await fetch(`${BASIS}${pfad}`, {
     method: methode,
-    headers: { Authorization: `Bearer ${TOKEN}`, "Content-Type": "application/json" },
+    headers: kopf,
     body: koerper ? JSON.stringify(koerper) : undefined,
   });
   const text = await antwort.text();
