@@ -79,6 +79,9 @@ export type Artikel = {
   artikelnrIntersport?: string;
   groessenart: Groessenart;
   fuer: ArtikelFuer;
+  /** Nur in der Voranfrage: der grobe Bereich statt einzelner Größen. */
+  groesseVon?: string;
+  groesseBis?: string;
 };
 
 export type Haendler = {
@@ -130,6 +133,9 @@ export type Vorgang = {
   sponsor?: string;
   finanzierungZugesagt: boolean;
   geldEingangAm?: string;
+
+  /** Nur in der Voranfrage (Stufe 0): die Schätzung des Trainers. */
+  personenGeschaetzt?: number;
 
   groessenEingetragen: number;
   groessenGesamt: number;

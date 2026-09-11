@@ -1,6 +1,6 @@
 import { KeinZugang } from "@/components/kein-zugang";
 import { Statusseite } from "@/components/statusseite";
-import { pruefe } from "@/lib/links";
+import { ergaenzenLink, pruefe } from "@/lib/links";
 import { ladeVorgang } from "@/lib/vorgaenge";
 
 /**
@@ -24,5 +24,13 @@ export default async function TrainerStatus(props: PageProps<"/v/[vorgang]">) {
   // gleiche Antwort wie bei einem falschen Token.
   if (vorgang.quelle !== "hubspot" || vorgang.nummer !== nummer) return <KeinZugang />;
 
-  return <Statusseite vorgang={vorgang} zeilen={[]} festeAnsicht="trainer" />;
+  // Auf Stufe 0 braucht der Trainer einen Weg weiter und einen zurueck. Der
+  // Ergaenzungslink wird hier serverseitig signiert, damit er nicht aus einer
+  // Mail gekramt werden muss (docs/konzept.md).
+  const voranfrage =
+    vorgang.stufe === 0 ? { ergaenzen: ergaenzenLink(nummer) ?? "", token: t } : undefined;
+
+  return (
+    <Statusseite vorgang={vorgang} zeilen={[]} festeAnsicht="trainer" voranfrage={voranfrage} />
+  );
 }

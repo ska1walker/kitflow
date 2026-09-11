@@ -95,6 +95,8 @@ const POSITION_FELDER = [
   "spieler_hsid",
   "spieler_name",
   "sponsor",
+  "groesse_von",
+  "groesse_bis",
 ];
 
 /** Produkt-Eigenschaften. Die eigenen Felder braucht der Artikelstamm. */
@@ -225,6 +227,10 @@ function artikelAus(positionen: HsObjekt[], produkte: Map<string, HsObjekt>): Ar
       artikelnrIntersport: produkt ? text(produkt, "artikelnr_intersport") : undefined,
       groessenart: alsGroessenart(produkt ? text(produkt, "groessenart") : undefined),
       fuer: alsArtikelFuer(produkt ? text(produkt, "fuer") : undefined),
+      // Der Bereich haengt an der Position, nicht am Produkt: er gilt fuer
+      // diesen Vorgang, nicht fuer den Artikel an sich.
+      groesseVon: text(position, "groesse_von"),
+      groesseBis: text(position, "groesse_bis"),
     });
   }
 
@@ -548,6 +554,8 @@ export async function ladeVorgang(nummer?: string, personId?: string): Promise<V
     sponsor,
     finanzierungZugesagt: zahl(deal, "zusage_sponsor") > 0,
     geldEingangAm: gedeckt ? kurzDatum(text(deal, "eingang_am")) : undefined,
+
+    personenGeschaetzt: zahl(deal, "personen_geschaetzt") || undefined,
 
     groessenEingetragen: mitGroesse.length,
     groessenGesamt: kontakte.length,

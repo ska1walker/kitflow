@@ -6,6 +6,7 @@ import { LETZTE_STUFE, stufe as stufeVon } from "@/lib/stufen";
 import { naechsterSchritt, statusText } from "@/lib/texte";
 import type { Ansicht, StufeNr, Vorgang } from "@/lib/typen";
 import { Schrittleiste } from "./schrittleiste";
+import { VoranfrageKarte } from "./voranfrage-karte";
 import {
   ArtikelKarte,
   GeldKarte,
@@ -117,10 +118,13 @@ export function VorgangAnsicht({
   vorgang,
   ansicht,
   onDemo,
+  voranfrage,
 }: {
   vorgang: Vorgang;
   ansicht: Ansicht;
   onDemo: (text: string) => void;
+  /** Nur am Trainer-Link gesetzt: die beiden Wege aus der Voranfrage heraus. */
+  voranfrage?: { ergaenzen: string; token: string };
 }) {
   // Bei einem Abbruch stehen die Karten auf dem Stand, den der Vorgang erreicht
   // hatte. Kopf und naechster Schritt sprechen weiter vom Abbruch selbst.
@@ -138,10 +142,15 @@ export function VorgangAnsicht({
     );
   }
 
+  // In der Voranfrage gibt es noch keine Groessen und keine Haendler. Eine
+  // Groessenkarte mit „0 von 0“ und dem Abzeichen „laeuft“ waere schlicht
+  // unwahr: es laeuft nichts, es haengt bewusst noch niemand am Vorgang.
   // Ab der Auswahl ruecken Haendler und Geld nach vorn, die Groessen sind erledigt.
   // Auf Stufe 1 gibt es noch keine Haendler, dann steht die Groessenkarte allein.
   const arbeitsKarten =
-    stand >= 4
+    stand === 0
+      ? []
+      : stand >= 4
       ? [
           <HaendlerKarte key="haendler" vorgang={vorgang} stand={stand} />,
           <GeldKarte key="geld" vorgang={vorgang} stand={stand} />,
@@ -158,7 +167,15 @@ export function VorgangAnsicht({
       <StatusKopf vorgang={vorgang} ansicht={ansicht} />
       <NaechsterSchritt vorgang={vorgang} ansicht={ansicht} />
 
-      {arbeitsKarten.length === 1 ? (
+      {vorgang.stufe === 0 && voranfrage && (
+        <VoranfrageKarte
+          vorgang={vorgang.nummer}
+          ergaenzen={voranfrage.ergaenzen}
+          token={voranfrage.token}
+        />
+      )}
+
+      {arbeitsKarten.length === 0 ? null : arbeitsKarten.length === 1 ? (
         arbeitsKarten[0]
       ) : (
         <div className="grid items-start gap-4 md:grid-cols-2">{arbeitsKarten}</div>

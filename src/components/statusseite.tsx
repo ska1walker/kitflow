@@ -128,6 +128,7 @@ export function Statusseite({
   vorgang,
   zeilen,
   festeAnsicht,
+  voranfrage,
 }: {
   vorgang: Vorgang;
   zeilen: VorgangsZeile[];
@@ -136,6 +137,8 @@ export function Statusseite({
    * Umschalter weg: wer den Link hat, sieht genau eine Ansicht.
    */
   festeAnsicht?: Ansicht;
+  /** Nur am Trainer-Link gesetzt (docs/formulare.md, F1b). */
+  voranfrage?: { ergaenzen: string; token: string };
 }) {
   const beispiel = vorgang.quelle === "beispiel";
 
@@ -213,6 +216,7 @@ export function Statusseite({
               vorgang={angezeigterVorgang}
               ansicht={ansicht}
               onDemo={zeigeHinweis}
+              voranfrage={voranfrage}
             />
           )}
         </div>
