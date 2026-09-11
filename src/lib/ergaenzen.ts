@@ -54,6 +54,7 @@ export type VoranfrageArtikel = {
 export type Voranfrage = {
   vorgang: string;
   dealId: string;
+  trainerEmail: string;
   mannschaft: string;
   teams: string[];
   ausstattungsart: string;
@@ -192,6 +193,7 @@ export async function ladeVoranfrage(nummer: string): Promise<Voranfrage | null>
   return {
     vorgang: nummer,
     dealId: deal.id,
+    trainerEmail: text(deal, "trainer_email"),
     mannschaft: text(deal, "mannschaft").split(";").filter(Boolean).join(", "),
     teams: text(deal, "mannschaft").split(";").filter(Boolean),
     ausstattungsart: text(deal, "ausstattungsart"),
@@ -327,6 +329,10 @@ export async function ergaenzeVorgang(
     vorgang: nummer,
     modus: "vollstaendig",
     ohnePersonen,
+    artikelText: voranfrage.artikel.map((a) => {
+      const name = [a.hersteller, a.bezeichnung].filter(Boolean).join(" ");
+      return `${name}, ${a.stueck} Stück je Person`;
+    }),
     trainerStatus: statusLink(nummer) ?? "",
     bestaetigen: bestaetigenLink(nummer) ?? "",
     ergaenzen: "",

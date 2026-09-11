@@ -15,6 +15,7 @@ import {
   type ErgaenzungArtikel,
 } from "@/lib/ergaenzen";
 import { BEFLOCKUNGEN } from "@/lib/mannschaften";
+import { absolut, sendeM1 } from "@/lib/mail";
 import type { ArtikelFuer } from "@/lib/typen";
 import type { BedarfErgebnis } from "@/lib/bedarf";
 
@@ -116,5 +117,23 @@ export async function angabenErgaenzen(
     };
   }
 
-  return { stand: "fertig", ergebnis };
+  // Jetzt gibt es Groessenlinks: M1 im vollstaendigen Zuschnitt an den Trainer.
+  // Der Vorname steht in keiner Eigenschaft, die Mail kommt ohne ihn aus.
+  const mailAn = ergebnis.ohnePersonen
+    ? null
+    : await sendeM1(voranfrage.trainerEmail, {
+        vorgang: ergebnis.vorgang,
+        vorname: "",
+        mannschaft: voranfrage.mannschaft,
+        artikel: ergebnis.artikelText,
+        groessenFrist,
+        statusLink: absolut(ergebnis.trainerStatus) ?? "",
+        bestaetigenLink: absolut(ergebnis.bestaetigen) ?? undefined,
+        personen: ergebnis.personen.map((p) => ({
+          name: p.name,
+          groessen: absolut(p.groessen) ?? "",
+        })),
+      });
+
+  return { stand: "fertig", ergebnis: { ...ergebnis, mailAn: mailAn ?? undefined } };
 }

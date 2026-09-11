@@ -85,6 +85,10 @@ export type BedarfErgebnis = {
   ergaenzen: string;
   /** Kein Kontakt mit dieser Mannschaft: der Vorgang steht auf Abgebrochen. */
   ohnePersonen: boolean;
+  /** Adresse, an die M1 ging. Leer heisst: es wurde keine Mail verschickt. */
+  mailAn?: string;
+  /** Die Artikel im Klartext, so wie sie in der Mail stehen. */
+  artikelText: string[];
 };
 
 /** Nur die Werte, die HubSpot kennt. Alles andere waere ein Tippfehler. */
@@ -296,6 +300,11 @@ export async function meldeBedarf(eingabe: BedarfEingabe): Promise<BedarfErgebni
     vorgang: nummer,
     modus: eingabe.modus,
     ohnePersonen,
+    artikelText: eingabe.artikel.map((a) => {
+      const name = [a.hersteller, a.bezeichnung].filter(Boolean).join(" ");
+      const bereich = a.groesseVon && a.groesseBis ? `, Größen ${a.groesseVon} bis ${a.groesseBis}` : "";
+      return `${name}, ${a.stueck} Stück je Person${bereich}`;
+    }),
     trainerStatus: statusLink(nummer) ?? "",
     bestaetigen: voranfrage ? "" : (bestaetigenLink(nummer) ?? ""),
     ergaenzen: voranfrage ? (ergaenzenLink(nummer) ?? "") : "",

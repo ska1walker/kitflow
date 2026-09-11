@@ -246,10 +246,17 @@ function Fertig({ ergebnis }: { ergebnis: Extract<Ergebnis, { stand: "fertig" }>
               Bitte gib die Nummer bei allen Rückfragen an. Mit dem Richtpreis kannst du einen
               Sponsor ansprechen. Es wurden noch keine Größen abgefragt und niemand angeschrieben.
             </p>
-            <p className="mt-3 rounded-xl bg-amber-50 px-3.5 py-3 text-sm text-ink-700">
-              Den Mailversand gibt es noch nicht. Kopier dir diese Seite, die Links stehen sonst
-              nirgends.
-            </p>
+            {ergebnis.mailAn ? (
+              <p className="mt-3 rounded-xl bg-pitch-50 px-3.5 py-3 text-sm text-ink-700">
+                Die Mail mit allen Links ist an {ergebnis.mailAn} unterwegs. Unten stehen sie
+                trotzdem, falls sie nicht ankommt.
+              </p>
+            ) : (
+              <p className="mt-3 rounded-xl bg-amber-50 px-3.5 py-3 text-sm text-ink-700">
+                Es ist keine Mail rausgegangen. Kopier dir diese Seite, die Links stehen sonst
+                nirgends.
+              </p>
+              )}
 
             <div className="mt-4 flex flex-col gap-2">
               <a
@@ -292,10 +299,17 @@ function Fertig({ ergebnis }: { ergebnis: Extract<Ergebnis, { stand: "fertig" }>
             deine {ergebnis.personen.length} Spielerinnen und Spieler. Wenn alle eingetragen haben,
             prüfst du die Liste, danach geht die Anfrage an beide Händler.
           </p>
-          <p className="mt-3 rounded-xl bg-amber-50 px-3.5 py-3 text-sm text-ink-700">
-            Den Mailversand gibt es noch nicht. Kopier dir diese Seite, die Links stehen sonst
-            nirgends.
-          </p>
+          {ergebnis.mailAn ? (
+            <p className="mt-3 rounded-xl bg-pitch-50 px-3.5 py-3 text-sm text-ink-700">
+              Die Mail mit allen Links ist an {ergebnis.mailAn} unterwegs. Unten stehen sie
+              trotzdem, falls sie nicht ankommt.
+            </p>
+          ) : (
+            <p className="mt-3 rounded-xl bg-amber-50 px-3.5 py-3 text-sm text-ink-700">
+              Es ist keine Mail rausgegangen. Kopier dir diese Seite, die Links stehen sonst
+              nirgends.
+            </p>
+          )}
 
           <div className="mt-4 flex flex-col gap-2">
             <a href={ergebnis.trainerStatus} className="text-sm font-semibold text-pitch-700 underline">

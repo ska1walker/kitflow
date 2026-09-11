@@ -17,6 +17,7 @@ import {
 } from "@/lib/bedarf";
 import { AUSSTATTUNGSARTEN, BEFLOCKUNGEN } from "@/lib/mannschaften";
 import { GROESSEN_FELD, groessenWerte } from "@/lib/groessen";
+import { absolut, sendeM1 } from "@/lib/mail";
 import type { ArtikelFuer, Groessenart } from "@/lib/typen";
 
 export type Ergebnis =
@@ -190,5 +191,22 @@ export async function bedarfMelden(_bisher: Ergebnis, formular: FormData): Promi
     };
   }
 
-  return { stand: "fertig", ergebnis };
+  // M1 an den Trainer (docs/mails.md). Schlaegt der Versand fehl, bleibt der
+  // Vorgang gueltig: die Danke-Seite zeigt die Links dann weiter selbst an.
+  const mailAn = await sendeM1(email, {
+    vorgang: ergebnis.vorgang,
+    vorname,
+    mannschaft: teams.join(", "),
+    artikel: ergebnis.artikelText,
+    groessenFrist,
+    statusLink: absolut(ergebnis.trainerStatus) ?? "",
+    bestaetigenLink: absolut(ergebnis.bestaetigen) ?? undefined,
+    ergaenzenLink: absolut(ergebnis.ergaenzen) ?? undefined,
+    personen: ergebnis.personen.map((p) => ({
+      name: p.name,
+      groessen: absolut(p.groessen) ?? "",
+    })),
+  });
+
+  return { stand: "fertig", ergebnis: { ...ergebnis, mailAn: mailAn ?? undefined } };
 }

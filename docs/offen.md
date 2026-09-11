@@ -15,6 +15,13 @@ Stand 10.09.2026
 - Fristen und Erinnerungen über Vercel Cron oder weiter Make (AUS-W)
 - Händler-XLSX in kitflow erzeugen oder Make
 
+## Mail
+- M1 an den Trainer ist gebaut (Resend über REST, `src/lib/mail.ts`), in beiden Zuschnitten: Voranfrage und vollständig.
+- Nötige Variablen: `RESEND_API_KEY`, `KITFLOW_BASIS` (sonst `VERCEL_URL`), optional `MAIL_ABSENDER`, `MAIL_ANTWORT` und `MAIL_NUR_AN` als Testbremse.
+- Die Domain hubsport.club muss in Resend verifiziert sein, sonst lehnt Resend ab und es geht still keine Mail raus (der Fehler steht im Log).
+- Noch offen: M2 bis M7, der Anhang Merkblatt_Zahlwege.pdf und die Erinnerungen (brauchen einen Zeitgeber).
+- Die Händler-Mail M4 bleibt bis zu Kais ausdrücklicher Freigabe ungebaut.
+
 ## Vor Phase 2
 - Mit den Händlern: Rechnung auf Sponsor oder Mannschaft möglich, Vorkasserechnung, Bestätigung per Link
 - Beleg-Tabelle mit Schatzmeister bzw. Steuerberater abstimmen (ich bin kein Steuerberater)
