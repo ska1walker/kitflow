@@ -196,6 +196,7 @@ export const BEISPIEL_VORGANG: Vorgang = {
 
 /** Auf wen der Beispiel-Vorgang je Stufe wartet. */
 const WARTET_AUF: Record<StufeNr, string> = {
+  0: "Sponsor",
   1: "Mannschaft",
   2: "Händler",
   3: "dich",

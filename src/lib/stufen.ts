@@ -18,6 +18,13 @@ import {
 import type { Stufe, StufeNr } from "./typen";
 
 export const STUFEN: Stufe[] = [
+  {
+    nr: 0,
+    intern: "Voranfrage",
+    kurz: "Voranfrage",
+    titel: "Richtangebot für den Sponsor",
+    icon: IconDokument,
+  },
   { nr: 1, intern: "Größen laufen", kurz: "Größen", titel: "Größen werden gesammelt", icon: IconRuler },
   { nr: 2, intern: "Anfrage raus", kurz: "Anfrage", titel: "Angebote angefragt", icon: IconSend },
   { nr: 3, intern: "Angebote da", kurz: "Angebote", titel: "Beide Angebote sind da", icon: IconDokument },
@@ -32,8 +39,14 @@ export const STUFEN: Stufe[] = [
 /** Die letzte Stufe der Schrittleiste. Stufe 9 (Abgebrochen) liegt daneben. */
 export const LETZTE_STUFE: StufeNr = 8;
 
+/** Die erste Stufe der Schrittleiste. Stufe 0 (Voranfrage) liegt davor. */
+export const ERSTE_STUFE: StufeNr = 1;
+
+/** Gesucht wird ueber die Nummer, nicht ueber den Index: Stufe 0 gibt es. */
 export function stufe(nr: StufeNr): Stufe {
-  return STUFEN[nr - 1];
+  const treffer = STUFEN.find((s) => s.nr === nr);
+  if (!treffer) throw new Error(`Unbekannte Stufe: ${nr}`);
+  return treffer;
 }
 
 /** Uebersetzt den Namen einer HubSpot-Stufe in unsere Stufennummer. */

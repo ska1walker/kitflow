@@ -6,7 +6,7 @@
  * docs/konzept.md – Trainer und Spieler per du.
  */
 
-import { LETZTE_STUFE } from "./stufen";
+import { ERSTE_STUFE, LETZTE_STUFE } from "./stufen";
 import type { Ansicht, NaechsterSchritt, Vorgang } from "./typen";
 
 function gewaehlterHaendler(v: Vorgang): string {
@@ -23,6 +23,10 @@ export function statusText(v: Vorgang, ansicht: Ansicht): string {
   const sponsor = v.sponsor ? `Sponsor ${v.sponsor}` : "der Sponsor";
 
   switch (v.stufe) {
+    case 0:
+      return spieler
+        ? "Für deine Mannschaft wird gerade ein Richtpreis eingeholt. Größen kommen später."
+        : "Die Voranfrage steht. Mit dem Richtpreis kannst du einen Sponsor ansprechen; die genauen Größen kommen danach.";
     case 1:
       return spieler
         ? "Deine Größen sind drin. Bis zur Frist kannst du sie noch ändern."
@@ -68,6 +72,14 @@ export function naechsterSchritt(v: Vorgang, ansicht: Ansicht): NaechsterSchritt
   const nichtsZuTun = "Für dich gibt es gerade nichts zu tun.";
 
   switch (v.stufe) {
+    case 0:
+      return spieler
+        ? { wer: "Trainer", was: nichtsZuTun }
+        : {
+            wer: "Du",
+            was: "Sobald der Richtpreis da ist und die Finanzierung klar wird, vervollständigst du die Angaben. Erst dann werden Größen abgefragt.",
+            du: true,
+          };
     case 1:
       return spieler
         ? {
@@ -121,6 +133,7 @@ export function naechsterSchritt(v: Vorgang, ansicht: Ansicht): NaechsterSchritt
 /** Die Zeile unter der Schrittleiste. */
 export function fortschrittText(stufe: Vorgang["stufe"]): string {
   if (stufe > LETZTE_STUFE) return "Abgebrochen";
+  if (stufe < ERSTE_STUFE) return `Vor Schritt 1 von ${LETZTE_STUFE}`;
   if (stufe < LETZTE_STUFE) return `Schritt ${stufe} von ${LETZTE_STUFE}`;
   return `Alle ${LETZTE_STUFE} Schritte erledigt`;
 }

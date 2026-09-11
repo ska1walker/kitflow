@@ -59,6 +59,7 @@ const DEAL_FELDER = [
   "ausstattungsart",
   "mannschaft",
   "mannschaftscode",
+  "personen_geschaetzt",
   "dealstage",
   "amount",
   "lieferant_gewaehlt",
@@ -342,6 +343,8 @@ function haendlerAus(deal: HsObjekt): Haendler[] {
  */
 function wartetAuf(stufe: StufeNr, deal: HsObjekt): string {
   switch (stufe) {
+    case 0:
+      return "Sponsor";
     case 1:
       return "Mannschaft";
     case 2:
@@ -525,7 +528,13 @@ export async function ladeVorgang(nummer?: string, personId?: string): Promise<V
     nummer: text(deal, "vorgangsnummer") ?? deal.id,
     titel: `${text(deal, "mannschaft") ?? "Mannschaft"} · ${text(deal, "ausstattungsart") ?? "Ausstattung"}`,
     untertitel: [
-      kontakte.length > 0 ? `${kontakte.length} Personen` : undefined,
+      // In der Voranfrage haengt noch kein Kontakt am Deal; dann zaehlt die
+      // Schaetzung des Trainers, ausdruecklich als solche gekennzeichnet.
+      kontakte.length > 0
+        ? `${kontakte.length} Personen`
+        : zahl(deal, "personen_geschaetzt") > 0
+          ? `geschätzt ${zahl(deal, "personen_geschaetzt")} Personen`
+          : undefined,
       sponsor ? `Sponsor ${sponsor}` : undefined,
       lieferant,
     ]

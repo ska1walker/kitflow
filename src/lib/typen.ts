@@ -11,11 +11,16 @@ import type { ComponentType, SVGProps } from "react";
 /**
  * Stufe 1 bis 8 ist der normale Weg, 9 ist der Abbruch. Die Schrittleiste
  * zeigt nur 1 bis 8; ein abgebrochener Vorgang bekommt eine eigene Anzeige.
+ *
+ * Stufe 0 (Voranfrage) liegt davor: der Trainer hat grob gemeldet, um ein
+ * Richtangebot fuer den Sponsor zu bekommen. Sie ist bewusst die Null und
+ * nicht eine neue Eins, damit die Nummern 1 bis 9 in Code und Papieren
+ * bleiben, wo sie sind (docs/konzept.md).
  */
-export type StufeNr = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
+export type StufeNr = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
 
 /** Die Stufen, die der Regler im Entwurf durchspielt. */
-export const STUFEN_NRN: StufeNr[] = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+export const STUFEN_NRN: StufeNr[] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
 
 /** Wer die Seite gerade sieht. Rollen nach docs/konzept.md. */
 export type Ansicht = "trainer" | "spieler" | "sparte";
