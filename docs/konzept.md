@@ -6,7 +6,8 @@ Stand 10.09.2026. Quelle: Bauplan v3.3 (https://claude.ai/code/artifact/898b2710
 
 - Neuer Trikotsatz: Der Verein ist verantwortlich. Ideal findet der Trainer einen Sponsor, sonst sucht die Fußballsparte, im schlechtesten Fall zahlt das Spartenbudget – nur mit Freigabe der Spartenleitung.
 - Weitere Ausstattung (Trainingsanzüge usw.): Die Mannschaft finanziert selbst, oft übernimmt ein Sponsor ganz oder teilweise.
-- Es gibt immer erst ein Angebot. Dafür eine saubere Anfrage mit exakten Artikeln, Größen, Mengen und Beflockung.
+- Bestellt wird nie ohne verbindliches Angebot. Dafür eine saubere Anfrage mit exakten Artikeln, Größen, Mengen und Beflockung.
+- Davor darf eine **Voranfrage** stehen: Artikelbezeichnung, Stückzahl und ein Größenbereich reichen für einen Richtpreis. Ohne diese Zahl kann ein Trainer keinen Sponsor ansprechen, und ohne Sponsor lohnt es nicht, eine ganze Mannschaft nach Größen zu fragen. Ein Richtpreis ist unverbindlich und ersetzt kein Angebot.
 - Jede Anfrage geht an beide Händler: Intersport Uelzen (Jens Bormann) und 11teamsports (Michael Hillebrecht). Beide beflocken selbst.
 - Größen liegen in HubSpot. Der Trainer bekommt die Liste zum Prüfen, bevor die Anfrage rausgeht.
 - Größe gilt als veraltet nach 4 Monaten (Jugend, team ist ein Jahrgang) bzw. 12 Monaten (Erwachsene).
@@ -28,7 +29,8 @@ Stand 10.09.2026. Quelle: Bauplan v3.3 (https://claude.ai/code/artifact/898b2710
 
 | Nr | intern | auf der Statusseite | Übergang durch |
 |---|---|---|---|
-| 1 | Größen laufen | Größen werden gesammelt | Bedarfsmeldung F1 |
+| 0 | Voranfrage | Richtangebot für den Sponsor | Bedarfsmeldung F1, einfacher Modus |
+| 1 | Größen laufen | Größen werden gesammelt | F1 vollständig oder Angaben ergänzt (F1b) |
 | 2 | Anfrage raus | Angebote angefragt | Liste bestätigt (F3), Prüfungen bestanden |
 | 3 | Angebote da | Beide Angebote sind da | beide Angebote eingelesen oder 5 Tage nach dem ersten |
 | 4 | Finanzierung | Finanzierung läuft | Angebot gewählt |
@@ -39,6 +41,25 @@ Stand 10.09.2026. Quelle: Bauplan v3.3 (https://claude.ai/code/artifact/898b2710
 | 9 | Abgebrochen | Abgebrochen | durch Spartenleitung oder keine Spieler gefunden |
 
 Jede Stufe hat auf der Statusseite: Satz „Aktueller Stand“, „Als Nächstes: wer tut was“, Verlauf mit Datum und Uhrzeit (neueste zuerst). Interne Einträge (Erinnerungen, Sponsor-Mahnung, Buchung) sieht nur der Trainer bzw. die Spartenleitung.
+
+## Voranfrage (Stufe 0)
+
+Der einfache Modus von F1. Der Trainer meldet nur, was er ohne Rückfragen weiß: für wie viele
+Personen, welche Artikel, Stück je Person und je Artikel ein Größenbereich. Daraus entsteht ein Deal
+auf Stufe 0 mit `personen_geschaetzt`, je Artikel eine Position mit `groesse_von`/`groesse_bis` und
+ein Produkt mit Platzhalter-Artikelnummer (`VOR-…`, `aktiv = false`).
+
+Der Händler bekommt dabei **nur das Blatt Summen** – Stück je Artikel und Größenbereich, keine Zeile
+je Person, keine Namen. Die Anfrage sagt ausdrücklich: Richtpreis, unverbindlich, die genaue Liste
+folgt. Es wird niemand aus der Mannschaft angeschrieben; Kontakte hängen noch nicht am Deal.
+
+Weiter geht es über F1b (`/e/{vorgang}`, eigener signierter Link): dort kommen Artikelnummer, Farbe,
+Für wen, Beflockung, Größenfrist, Lieferadresse und die Zahlungsregel dazu. Danach steht der Vorgang
+auf Stufe 1 und läuft wie jeder andere. Findet sich zu der Mannschaft dann kein Kontakt, endet er auf
+Stufe 9.
+
+Es gibt keinen Zeitgeber: ein Vorgang bleibt auf Stufe 0 liegen, bis der Trainer F1b öffnet oder die
+Spartenleitung abbricht. Welche Frist hier gilt, ist noch offen (docs/offen.md).
 
 ## Deckungsprüfung – wann „Bestellbar“
 

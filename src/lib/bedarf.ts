@@ -3,14 +3,23 @@ import "server-only";
 /**
  * F1 · Bedarf melden (docs/formulare.md).
  *
- * Legt aus der Meldung eines Trainers einen vollständigen Vorgang an: Deal auf
- * Stufe 1, Produkte für die Artikel, je Artikel eine Position ohne Person, und
- * die Kontakte der Mannschaft daran.
+ * Legt aus der Meldung eines Trainers einen Vorgang an: Deal, Produkte für die
+ * Artikel und je Artikel eine Position ohne Person.
  *
  * Die Positionen ohne `spieler_hsid` sind die Artikelliste des Vorgangs. F2
  * liest daraus, welche Größen zu fragen sind; F3 klappt sie später zu Person
  * mal Artikel auf. So bleibt alles in HubSpot sichtbar und bearbeitbar, statt
  * in einem Textfeld zu verschwinden.
+ *
+ * Zwei Modi (docs/konzept.md):
+ *
+ * - `vollstaendig` ist der alte Weg: alles auf einmal, Deal auf Stufe 1, die
+ *   Kontakte der Mannschaft hängen dran, die Größenabfrage läuft sofort.
+ * - `voranfrage` ist der einfache Weg: nur Artikelbezeichnung, Stück je Person
+ *   und ein Größenbereich, dazu die geschätzte Personenzahl. Damit lässt sich
+ *   ein Richtpreis für einen Sponsor holen, bevor überhaupt Größen gesammelt
+ *   werden. Der Deal steht auf Stufe 0 und bekommt noch keine Kontakte: es gibt
+ *   nichts zu fragen. Das holt F1b nach (src/lib/ergaenzen.ts).
  */
 
 import {
@@ -21,23 +30,32 @@ import {
   type HsListe,
   type HsObjekt,
 } from "./hubspot";
-import { groessenLink, statusLink, bestaetigenLink } from "./links";
+import { groessenLink, statusLink, bestaetigenLink, ergaenzenLink } from "./links";
 import { TEAMS } from "./mannschaften";
 import type { ArtikelFuer, Groessenart } from "./typen";
+
+/** Welcher der beiden Wege von F1 gegangen wird. */
+export type Modus = "voranfrage" | "vollstaendig";
 
 export type ArtikelEingabe = {
   hersteller: string;
   bezeichnung: string;
+  /** Leer im Modus `voranfrage`: die Nummer kennt der Trainer oft noch nicht. */
   herstellernummer: string;
   farbe: string;
   groessenart: Groessenart;
+  /** Stück je Person, in beiden Modi. */
   stueck: number;
   fuer: ArtikelFuer;
   beflockung: string;
   beflockungAbweichend: string;
+  /** Nur im Modus `voranfrage`: der Größenbereich statt einzelner Größen. */
+  groesseVon: string;
+  groesseBis: string;
 };
 
 export type BedarfEingabe = {
+  modus: Modus;
   vorname: string;
   nachname: string;
   email: string;
@@ -46,6 +64,8 @@ export type BedarfEingabe = {
   mannschaftscode: string;
   ausstattungsart: string;
   artikel: ArtikelEingabe[];
+  /** Geschätzte Kadergröße, nur im Modus `voranfrage`. */
+  personenZahl: number;
   groessenFrist: string;
   lieferadresse: string;
   sponsor: string;
@@ -56,10 +76,13 @@ export type PersonLink = { name: string; groessen: string; status: string };
 
 export type BedarfErgebnis = {
   vorgang: string;
-  /** Leer, wenn zur Mannschaft niemand gefunden wurde. */
+  modus: Modus;
+  /** Leer, wenn zur Mannschaft niemand gefunden wurde oder noch keiner gesucht. */
   personen: PersonLink[];
   trainerStatus: string;
   bestaetigen: string;
+  /** Nur im Modus `voranfrage` gefüllt: der Weg zu den fehlenden Angaben. */
+  ergaenzen: string;
   /** Kein Kontakt mit dieser Mannschaft: der Vorgang steht auf Abgebrochen. */
   ohnePersonen: boolean;
 };
@@ -106,38 +129,66 @@ async function naechsteNummer(): Promise<string> {
   return `${praefix}${String(hoechste + 1).padStart(3, "0")}`;
 }
 
-/** Ein Produkt zur Herstellernummer, sonst neu angelegt. */
-async function produktFinden(artikel: ArtikelEingabe): Promise<string | null> {
-  const treffer = await hubspot<HsListe<HsObjekt>>({
-    pfad: "/crm/v3/objects/products/search",
-    koerper: {
-      filterGroups: [
-        { filters: [{ propertyName: "hs_sku", operator: "EQ", value: artikel.herstellernummer }] },
-      ],
-      properties: ["hs_sku"],
-      limit: 1,
-    },
-  });
-  const vorhanden = treffer?.results[0];
-  if (vorhanden) return vorhanden.id;
+/**
+ * Der Schluessel, unter dem ein Produkt wiedergefunden wird.
+ *
+ * Ohne Herstellernummer – im Modus `voranfrage` – waere `hs_sku` leer, und
+ * jedes leere Feld wuerde auf jedes andere passen. Deshalb ein Platzhalter mit
+ * der Vorgangsnummer darin: er kollidiert nie und ist als Platzhalter lesbar.
+ * F1b ersetzt ihn spaeter durch die echte Nummer (src/lib/ergaenzen.ts).
+ */
+export function platzhalterSku(vorgang: string, index: number): string {
+  return `VOR-${vorgang}-${index + 1}`;
+}
+
+/** Der Text, der als Standardbeflockung am Produkt steht. */
+export function beflockungText(artikel: {
+  beflockung: string;
+  beflockungAbweichend: string;
+}): string {
+  if (artikel.beflockung === "Abweichend") return artikel.beflockungAbweichend;
+  if (artikel.beflockung === "Ohne") return "ohne Beflockung";
+  return "Standard";
+}
+
+/**
+ * Ein Produkt zur Herstellernummer, sonst neu angelegt. Ein Produkt mit
+ * Platzhalter-Nummer gilt als noch nicht fertig und steht auf `aktiv = false`;
+ * Pruefung 1 vor der Anfrage verlangt ein aktives Produkt (docs/konzept.md).
+ */
+async function produktFinden(
+  artikel: ArtikelEingabe,
+  vorgang: string,
+  index: number,
+): Promise<string | null> {
+  const echt = artikel.herstellernummer.trim();
+  const sku = echt || platzhalterSku(vorgang, index);
+
+  if (echt) {
+    const treffer = await hubspot<HsListe<HsObjekt>>({
+      pfad: "/crm/v3/objects/products/search",
+      koerper: {
+        filterGroups: [{ filters: [{ propertyName: "hs_sku", operator: "EQ", value: echt }] }],
+        properties: ["hs_sku"],
+        limit: 1,
+      },
+    });
+    const vorhanden = treffer?.results[0];
+    if (vorhanden) return vorhanden.id;
+  }
 
   const angelegt = await hubspot<HsObjekt>({
     pfad: "/crm/v3/objects/products",
     koerper: {
       properties: {
         name: `${artikel.hersteller} ${artikel.bezeichnung}`.trim(),
-        hs_sku: artikel.herstellernummer,
+        hs_sku: sku,
         hersteller: artikel.hersteller,
         farbe: artikel.farbe,
         groessenart: artikel.groessenart,
         fuer: artikel.fuer,
-        beflockung_standard:
-          artikel.beflockung === "Abweichend"
-            ? artikel.beflockungAbweichend
-            : artikel.beflockung === "Ohne"
-              ? "ohne Beflockung"
-              : "Standard",
-        aktiv: "true",
+        beflockung_standard: beflockungText(artikel),
+        aktiv: echt ? "true" : "false",
       },
     },
   });
@@ -145,7 +196,7 @@ async function produktFinden(artikel: ArtikelEingabe): Promise<string | null> {
 }
 
 /** Die Kontakte, deren `team` eine der gewaehlten Mannschaften ist. */
-async function kontakteDerMannschaft(teams: string[]): Promise<HsObjekt[]> {
+export async function kontakteDerMannschaft(teams: string[]): Promise<HsObjekt[]> {
   const treffer = await hubspot<HsListe<HsObjekt>>({
     pfad: "/crm/v3/objects/contacts/search",
     koerper: {
@@ -159,7 +210,7 @@ async function kontakteDerMannschaft(teams: string[]): Promise<HsObjekt[]> {
   return treffer?.results ?? [];
 }
 
-async function verknuepfen(vonTyp: string, vonId: string, zuTyp: string, zuId: string) {
+export async function verknuepfen(vonTyp: string, vonId: string, zuTyp: string, zuId: string) {
   await hubspot({
     pfad: `/crm/v4/objects/${vonTyp}/${vonId}/associations/default/${zuTyp}/${zuId}`,
     methode: "PUT",
@@ -180,13 +231,18 @@ export async function meldeBedarf(eingabe: BedarfEingabe): Promise<BedarfErgebni
     pfad: "/crm/v3/pipelines/deals",
   });
   const pipeline = pipelines?.results.find((p) => p.label === PIPELINE_NAME);
+  const stufe0 = pipeline?.stages.find((s) => s.label === "Voranfrage");
   const stufe1 = pipeline?.stages.find((s) => s.label === "Größen laufen");
   const stufe9 = pipeline?.stages.find((s) => s.label === "Abgebrochen");
-  if (!pipeline || !stufe1 || !stufe9) return null;
+  if (!pipeline || !stufe0 || !stufe1 || !stufe9) return null;
 
+  const voranfrage = eingabe.modus === "voranfrage";
   const nummer = await naechsteNummer();
-  const kontakte = await kontakteDerMannschaft(eingabe.teams);
-  const ohnePersonen = kontakte.length === 0;
+
+  // Im Modus `voranfrage` wird noch niemand gefragt, also auch niemand gesucht.
+  // Die Kontakte holt F1b, wenn die Groessenabfrage wirklich startet.
+  const kontakte = voranfrage ? [] : await kontakteDerMannschaft(eingabe.teams);
+  const ohnePersonen = !voranfrage && kontakte.length === 0;
 
   const deal = await hubspot<HsObjekt>({
     pfad: "/crm/v3/objects/deals",
@@ -195,13 +251,15 @@ export async function meldeBedarf(eingabe: BedarfEingabe): Promise<BedarfErgebni
         dealname: `${eingabe.teams.join(", ")} · ${eingabe.ausstattungsart}`,
         pipeline: pipeline.id,
         // Ohne Spieler gibt es nichts anzufragen: der Vorgang endet sofort
-        // (docs/formulare.md, M7).
-        dealstage: ohnePersonen ? stufe9.id : stufe1.id,
+        // (docs/formulare.md, M7). Eine Voranfrage lebt dagegen von der
+        // geschaetzten Personenzahl und bricht hier nicht ab.
+        dealstage: voranfrage ? stufe0.id : ohnePersonen ? stufe9.id : stufe1.id,
         vorgangsnummer: nummer,
         ausstattungsart: eingabe.ausstattungsart,
         mannschaft: eingabe.teams.join(";"),
         mannschaftscode: eingabe.mannschaftscode,
         trainer_email: eingabe.email,
+        personen_geschaetzt: voranfrage ? String(eingabe.personenZahl) : "",
         groessen_frist: eingabe.groessenFrist,
         lieferadresse: eingabe.lieferadresse,
         hinweis_haendler: eingabe.hinweise,
@@ -211,8 +269,8 @@ export async function meldeBedarf(eingabe: BedarfEingabe): Promise<BedarfErgebni
   if (!deal) return null;
 
   // Artikel als Positionen ohne Person: das ist die Artikelliste des Vorgangs.
-  for (const artikel of eingabe.artikel) {
-    const produktId = await produktFinden(artikel);
+  for (const [i, artikel] of eingabe.artikel.entries()) {
+    const produktId = await produktFinden(artikel, nummer, i);
     if (!produktId) continue;
 
     const position = await hubspot<HsObjekt>({
@@ -222,6 +280,8 @@ export async function meldeBedarf(eingabe: BedarfEingabe): Promise<BedarfErgebni
           hs_product_id: produktId,
           quantity: String(artikel.stueck),
           sponsor: eingabe.sponsor,
+          groesse_von: artikel.groesseVon,
+          groesse_bis: artikel.groesseBis,
         },
       },
     });
@@ -234,9 +294,11 @@ export async function meldeBedarf(eingabe: BedarfEingabe): Promise<BedarfErgebni
 
   return {
     vorgang: nummer,
+    modus: eingabe.modus,
     ohnePersonen,
     trainerStatus: statusLink(nummer) ?? "",
-    bestaetigen: bestaetigenLink(nummer) ?? "",
+    bestaetigen: voranfrage ? "" : (bestaetigenLink(nummer) ?? ""),
+    ergaenzen: voranfrage ? (ergaenzenLink(nummer) ?? "") : "",
     personen: kontakte.map((k) => ({
       name: `${k.properties.firstname ?? ""} ${k.properties.lastname ?? ""}`.trim() || k.id,
       groessen: groessenLink(nummer, k.id) ?? "",

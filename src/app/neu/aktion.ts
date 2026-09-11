@@ -8,9 +8,15 @@
  * hat ein verstecktes Feld als Honigtopf. Wer es ausfüllt, ist kein Mensch.
  */
 
-import { meldeBedarf, gueltigeTeams, type ArtikelEingabe, type BedarfErgebnis } from "@/lib/bedarf";
+import {
+  meldeBedarf,
+  gueltigeTeams,
+  type ArtikelEingabe,
+  type BedarfErgebnis,
+  type Modus,
+} from "@/lib/bedarf";
 import { AUSSTATTUNGSARTEN, BEFLOCKUNGEN } from "@/lib/mannschaften";
-import { GROESSEN_FELD } from "@/lib/groessen";
+import { GROESSEN_FELD, groessenWerte } from "@/lib/groessen";
 import type { ArtikelFuer, Groessenart } from "@/lib/typen";
 
 export type Ergebnis =
@@ -22,9 +28,16 @@ function pflicht(formular: FormData, feld: string): string {
   return String(formular.get(feld) ?? "").trim();
 }
 
-/** Die Artikelzeilen kommen als artikel-0-hersteller, artikel-1-hersteller, … */
-function artikelLesen(formular: FormData): ArtikelEingabe[] | string {
+/**
+ * Die Artikelzeilen kommen als artikel-0-hersteller, artikel-1-hersteller, …
+ *
+ * Im Modus `voranfrage` fehlen Artikelnummer, Farbe, Für wen und Beflockung
+ * absichtlich; dafür kommt der Größenbereich dazu. Alles andere wird in beiden
+ * Modi gleich streng geprüft.
+ */
+function artikelLesen(formular: FormData, modus: Modus): ArtikelEingabe[] | string {
   const artikel: ArtikelEingabe[] = [];
+  const voranfrage = modus === "voranfrage";
 
   for (let i = 0; i < 40; i++) {
     const bezeichnung = String(formular.get(`artikel-${i}-bezeichnung`) ?? "").trim();
@@ -32,7 +45,7 @@ function artikelLesen(formular: FormData): ArtikelEingabe[] | string {
     if (!bezeichnung && !nummer) continue;
 
     if (!bezeichnung) return `Artikel ${i + 1}: die Bezeichnung fehlt.`;
-    if (!nummer) return `Artikel ${i + 1}: die Artikelnummer des Herstellers fehlt.`;
+    if (!nummer && !voranfrage) return `Artikel ${i + 1}: die Artikelnummer des Herstellers fehlt.`;
 
     const art = String(formular.get(`artikel-${i}-groessenart`) ?? "");
     if (!(art in GROESSEN_FELD)) return `Artikel ${i + 1}: die Größenart fehlt.`;
@@ -50,6 +63,9 @@ function artikelLesen(formular: FormData): ArtikelEingabe[] | string {
       return `Artikel ${i + 1}: bitte beschreiben, wie abweichend beflockt werden soll.`;
     }
 
+    const bereich = bereichLesen(formular, i, art as Groessenart, voranfrage);
+    if (typeof bereich === "string") return bereich;
+
     artikel.push({
       hersteller: String(formular.get(`artikel-${i}-hersteller`) ?? "").trim(),
       bezeichnung,
@@ -60,10 +76,37 @@ function artikelLesen(formular: FormData): ArtikelEingabe[] | string {
       fuer: (["alle", "feldspieler", "torwart"].includes(fuer) ? fuer : "alle") as ArtikelFuer,
       beflockung,
       beflockungAbweichend: abweichend,
+      ...bereich,
     });
   }
 
   return artikel.length > 0 ? artikel : "Bitte mindestens einen Artikel angeben.";
+}
+
+/**
+ * Der Größenbereich einer Artikelzeile. Beide Grenzen müssen aus der Liste zur
+ * Größenart stammen, und „von“ darf nicht über „bis“ liegen – sonst steht im
+ * Angebot eine Menge, die niemand nachrechnen kann.
+ */
+function bereichLesen(
+  formular: FormData,
+  i: number,
+  art: Groessenart,
+  voranfrage: boolean,
+): { groesseVon: string; groesseBis: string } | string {
+  const werte = groessenWerte(art);
+  if (!voranfrage || werte.length === 0) return { groesseVon: "", groesseBis: "" };
+
+  const von = String(formular.get(`artikel-${i}-groesse-von`) ?? "").trim();
+  const bis = String(formular.get(`artikel-${i}-groesse-bis`) ?? "").trim();
+  if (!von || !bis) return `Artikel ${i + 1}: bitte den Größenbereich von und bis angeben.`;
+  if (!werte.includes(von) || !werte.includes(bis)) {
+    return `Artikel ${i + 1}: der Größenbereich passt nicht zur Größenart.`;
+  }
+  if (werte.indexOf(von) > werte.indexOf(bis)) {
+    return `Artikel ${i + 1}: der Größenbereich läuft rückwärts.`;
+  }
+  return { groesseVon: von, groesseBis: bis };
 }
 
 export async function bedarfMelden(_bisher: Ergebnis, formular: FormData): Promise<Ergebnis> {
@@ -71,6 +114,10 @@ export async function bedarfMelden(_bisher: Ergebnis, formular: FormData): Promi
   if (String(formular.get("webseite") ?? "") !== "") {
     return { stand: "fehler", text: "Das hat nicht geklappt." };
   }
+
+  // Fehlt der Modus oder steht Unsinn drin, gilt der strengere Weg. So kann
+  // ein manipuliertes Formular die Pflichtfelder nicht abwaehlen.
+  const modus: Modus = formular.get("modus") === "voranfrage" ? "voranfrage" : "vollstaendig";
 
   const vorname = pflicht(formular, "vorname");
   const nachname = pflicht(formular, "nachname");
@@ -91,22 +138,36 @@ export async function bedarfMelden(_bisher: Ergebnis, formular: FormData): Promi
     return { stand: "fehler", text: "Bitte wählen, was gebraucht wird." };
   }
 
-  const artikel = artikelLesen(formular);
+  const artikel = artikelLesen(formular, modus);
   if (typeof artikel === "string") return { stand: "fehler", text: artikel };
 
-  const groessenFrist = pflicht(formular, "groessen_frist");
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(groessenFrist)) {
-    return { stand: "fehler", text: "Bitte eine Frist für die Größen angeben." };
-  }
+  // Die Voranfrage braucht statt Fristen und Lieferadresse nur eine Zahl: fuer
+  // wie viele Personen. Alles Weitere holt F1b nach (docs/formulare.md).
+  let personenZahl = 0;
+  let groessenFrist = "";
+  let lieferadresse = "";
 
-  const lieferadresse = pflicht(formular, "lieferadresse");
-  if (!lieferadresse) return { stand: "fehler", text: "Bitte die Lieferadresse angeben." };
+  if (modus === "voranfrage") {
+    personenZahl = Number(formular.get("personen") ?? 0);
+    if (!Number.isInteger(personenZahl) || personenZahl < 1 || personenZahl > 60) {
+      return { stand: "fehler", text: "Bitte angeben, für wie viele Personen – zwischen 1 und 60." };
+    }
+  } else {
+    groessenFrist = pflicht(formular, "groessen_frist");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(groessenFrist)) {
+      return { stand: "fehler", text: "Bitte eine Frist für die Größen angeben." };
+    }
 
-  if (formular.get("zahlungsregel") !== "ja") {
-    return { stand: "fehler", text: "Bitte die Zahlungsregel bestätigen." };
+    lieferadresse = pflicht(formular, "lieferadresse");
+    if (!lieferadresse) return { stand: "fehler", text: "Bitte die Lieferadresse angeben." };
+
+    if (formular.get("zahlungsregel") !== "ja") {
+      return { stand: "fehler", text: "Bitte die Zahlungsregel bestätigen." };
+    }
   }
 
   const ergebnis = await meldeBedarf({
+    modus,
     vorname,
     nachname,
     email,
@@ -115,6 +176,7 @@ export async function bedarfMelden(_bisher: Ergebnis, formular: FormData): Promi
     mannschaftscode: pflicht(formular, "mannschaftscode"),
     ausstattungsart,
     artikel,
+    personenZahl,
     groessenFrist,
     lieferadresse,
     sponsor: pflicht(formular, "sponsor"),

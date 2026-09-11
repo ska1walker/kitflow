@@ -50,6 +50,19 @@ Entwurf: prototyp/statusseite.html. Drei Ansichten:
 
 ## F1 · Bedarf melden (Trainer, öffentlicher Link)
 
+**Zwei Modi.** Ganz oben wählt der Trainer, wie weit er ist. Die Vorauswahl ist der einfache Modus –
+er ist der häufigere Fall, weil vor dem Sponsor noch nichts feststeht. Der Modus steht als verstecktes
+Feld `modus` im Formular; die Server Action fällt bei fehlendem oder unbekanntem Wert auf den strengen
+Modus zurück, damit ein manipuliertes Formular keine Pflichtfelder abwählen kann.
+
+- **Erst ein Richtangebot** (`voranfrage`): Deine Daten, Mannschaft, Was braucht ihr, „Für wie viele
+  Personen?“ (Zahl 1–60), je Artikel nur Hersteller, Artikelbezeichnung, Größenart, Größen von/bis
+  (Auswahl aus den Werten der Größenart) und Stück je Person; dazu Sponsor und Hinweise. Keine
+  Artikelnummer, keine Farbe, kein Für wen, keine Beflockung, keine Frist, keine Lieferadresse, keine
+  Zahlungsregel. Ergebnis: Deal auf Stufe 0, Produkte mit Platzhalter-Nummer, keine Kontakte am Deal.
+  Danke-Seite zeigt den Status-Link und den Link auf F1b.
+- **Komplett melden** (`vollstaendig`): unverändert der Ablauf unten, Deal auf Stufe 1.
+
 Einleitung: „Hier meldest du als Trainerin oder Trainer neuen Ausstattungsbedarf für deine Mannschaft an. Danach bekommen deine Spielerinnen und Spieler einen persönlichen Link für ihre Größen. Du prüfst die fertige Liste, erst dann geht eine Anfrage an beide Händler (Intersport Uelzen und 11teamsports). Die Angebote bekommst du in Kopie.“
 Hinweis: „Diese Meldung ist noch keine Bestellung. Bestellt wird erst, wenn die Finanzierung steht und das Geld da ist.“
 
@@ -68,6 +81,24 @@ Hinweis: „Diese Meldung ist noch keine Bestellung. Bestellt wird erst, wenn di
 7. Danke-Seite: „Du bekommst gleich eine E-Mail mit der Vorgangsnummer, den persönlichen Größenlinks für deine Mannschaft und einem fertigen Text für die Elterngruppe. Wenn alle eingetragen haben, bekommst du die Liste zum Prüfen.“ Dazu Link auf die Statusseite.
 
 Danach: Deal anlegen (Stufe 1), Kontakte der Mannschaft über `team` finden, Größenlinks erzeugen, Mail M1 mit Baustein M1a und Merkblatt Zahlwege. Keine Spieler gefunden: M7 und Stufe 9.
+
+## F1b · Angaben vervollständigen (Trainer, signierter Link `/e/{vorgang}`)
+
+Der zweite Halt des einfachen Wegs, Zweck `ergaenzen`. Erreichbar nur, solange der Vorgang auf Stufe 0
+steht; danach antwortet die Seite wie bei einem falschen Token.
+
+Kopf: Vorgangsnummer, Mannschaft, Ausstattungsart und die geschätzte Personenzahl.
+
+1. Artikel, in der Reihenfolge der Meldung. Bezeichnung, Größenbereich und Stück je Person stehen fest
+   und sind nicht änderbar – wer etwas anderes braucht, meldet neu. Gefragt wird je Artikel:
+   Artikelnummer des Herstellers (Pflicht), Farbe, Für wen, Beflockung samt Freitext bei „Abweichend“.
+2. Fristen und Lieferung: Größenfrist (Pflicht), Lieferadresse (Pflicht), Sponsor, Hinweise.
+3. Pflicht-Checkbox Zahlungsregel, wortgleich mit F1.
+
+Danach: Produkt bekommt die echte Artikelnummer und `aktiv = true`. Gibt es zu der Nummer schon ein
+Produkt, hängt die Position darauf um und der Platzhalter wird stillgelegt statt gelöscht. Deal
+bekommt Frist, Lieferadresse und Hinweis, die Kontakte der Mannschaft kommen über `team` dazu, Stufe
+wird 1. Kein Kontakt gefunden: Stufe 9, wie in F1.
 
 ## F2 · Größen (Spieler bzw. Eltern; Trainer)
 

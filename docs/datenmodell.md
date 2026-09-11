@@ -36,6 +36,7 @@ Stand 10.09.2026. HubSpot ist die einzige Datenbasis. Neue Eigenschaften in der 
 | ausstattungsart | Auswahl: Trikotsatz / Weitere Ausstattung | F1 |
 | mannschaft | Mehrfachauswahl, Werte wie Kontakt-team | F1 |
 | mannschaftscode | Text, z. B. JG2014-2015 | F1 |
+| personen_geschaetzt | Zahl, geschätzte Kadergröße; nur im einfachen Modus | F1 (Voranfrage) |
 | trainer_email, groessen_frist, lieferadresse | Text / Datum / Text | F1 |
 | ausgeschlossene_spieler | Text, Record-IDs | F2 (Trainer) |
 | torwarte | Text, Record-IDs; wer die Torwartartikel bekommt | F2 (Trainer) |
@@ -69,7 +70,13 @@ Noch leer. Erste echte Artikel aus Kais Anfrage:
 
 ## Positionen (Line Items) = Person × Artikel, am Deal
 
-Produkt, Menge; angelegt: `groesse`, `rueckennummer`, `spieler_hsid`, `spieler_name`, `sponsor`.
+Produkt, Menge; angelegt: `groesse`, `rueckennummer`, `spieler_hsid`, `spieler_name`, `sponsor`,
+`groesse_von`, `groesse_bis`.
+
+`quantity` heißt **Stück je Person**, in beiden Modi von F1. Die Gesamtmenge für einen Händler ist
+`personen_geschaetzt × quantity` (Voranfrage) bzw. ergibt sich aus den Positionen je Person (ab F3);
+sie wird gerechnet, nie gespeichert. `groesse` ist die Größe **einer** Person; der Größenbereich der
+Voranfrage steht getrennt in `groesse_von` und `groesse_bis` und gilt für die ganze Position.
 
 **Eine Position ohne `spieler_hsid` ist die Artikelliste des Vorgangs.** F1 legt je gemeldetem Artikel eine solche Zeile an, F2 liest daraus, welche Größen zu fragen sind, und F3 klappt sie später zu Person mal Artikel auf. So bleibt die Artikelliste in HubSpot sichtbar und bearbeitbar, statt in einem Textfeld zu verschwinden.
 
