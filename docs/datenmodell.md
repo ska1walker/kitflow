@@ -38,6 +38,9 @@ Stand 10.09.2026. HubSpot ist die einzige Datenbasis. Neue Eigenschaften in der 
 | mannschaftscode | Text, z. B. JG2014-2015 | F1 |
 | trainer_email, groessen_frist, lieferadresse | Text / Datum / Text | F1 |
 | ausgeschlossene_spieler | Text, Record-IDs | F2 (Trainer) |
+| torwarte | Text, Record-IDs; wer die Torwartartikel bekommt | F2 (Trainer) |
+| liste_bestaetigt_am | Datum | F3 |
+| hinweis_haendler | Text; geht in die Anfrage | F3 |
 | angebot_intersport_*, angebot_11teamsports_* | Betrag, eingegangen am, gültig bis, Lieferzeit, Abweichung | Angebot eingelesen |
 | lieferant_gewaehlt, amount | Auswahl / Betrag | Spartenleitung |
 | kaskadenstufe, stufe_frist | Zahl 1–3 / Datum, nur Trikotsatz | Spartenleitung, Fristen |
@@ -67,6 +70,8 @@ Noch leer. Erste echte Artikel aus Kais Anfrage:
 ## Positionen (Line Items) = Person × Artikel, am Deal
 
 Produkt, Menge; angelegt: `groesse`, `rueckennummer`, `spieler_hsid`, `spieler_name`, `sponsor`.
+
+**Eine Position ohne `spieler_hsid` ist die Artikelliste des Vorgangs.** F1 legt je gemeldetem Artikel eine solche Zeile an, F2 liest daraus, welche Größen zu fragen sind, und F3 klappt sie später zu Person mal Artikel auf. So bleibt die Artikelliste in HubSpot sichtbar und bearbeitbar, statt in einem Textfeld zu verschwinden.
 
 `spieler_hsid` ist der Schlüssel, an dem die App hängt: sie zählt darüber Feldspieler und Torwart
 (wer eine Torwart-Position hat, ist Torwart) und sucht darüber die Ausstattung der Person, die den

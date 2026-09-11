@@ -115,6 +115,17 @@ const DEAL_FELDER = [
   feld("ausgeschlossene_spieler", "Ausgeschlossene Spieler", "string", "textarea", {
     description: "Record-IDs, vom Trainer gesetzt",
   }),
+  // Gegenstueck zu ausgeschlossene_spieler: wer diese Runde Torwart ist und
+  // deshalb die Torwartartikel bekommt (docs/formulare.md, F2 als Trainer).
+  feld("torwarte", "Torwarte", "string", "textarea", {
+    description: "Record-IDs, vom Trainer gesetzt",
+  }),
+  feld("liste_bestaetigt_am", "Liste bestätigt am", "date", "date", {
+    description: "F3, Bestaetigung des Trainers",
+  }),
+  feld("hinweis_haendler", "Hinweis an die Händler", "string", "textarea", {
+    description: "F3, geht in die Anfrage",
+  }),
 
   feld("angebot_intersport_betrag", "Angebot Intersport Betrag", "number", "number"),
   feld("angebot_intersport_am", "Angebot Intersport eingegangen am", "date", "date"),

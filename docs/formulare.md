@@ -4,6 +4,42 @@ Stand 10.09.2026. Ersetzt die Tally-Entwürfe F1 kdoMYe, F2 Zj7qVo, F3 eqJkAe (n
 
 Zugang über signierte Links: `/v/{vorgang}?t=…` (Status), `/g/{vorgang}/{hsid}?t=…` (Größen), `/b/{vorgang}?t=…` (Liste bestätigen). Token prüft Vorgang, Rolle, Kontakt und dass die Pipeline-Stufe passt; sonst freundliche Meldung statt Formular.
 
+### Stand der Umsetzung (`src/lib/links.ts`)
+
+- Signiert wird `HMAC-SHA256` über Zweck und die Teile, die in der URL stehen, mit `\n` getrennt; Schlüssel aus `LINK_SECRET`, mindestens 32 Zeichen. Fehlt er, funktioniert kein Link — die Anwendung fällt nicht offen auf.
+- Die Personen-ID steht mit unter der Signatur. Sonst ließe sie sich in der Adresszeile austauschen und man sähe die Größen eines anderen Kindes.
+- Der Zweck steht mit darunter, damit ein Status-Link nicht als Bestätigungs-Link durchgeht.
+- Verglichen wird in konstanter Zeit (`timingSafeEqual`).
+- **Kein Ablaufdatum.** Ob eine Seite noch etwas darf, entscheidet die Stufe des Vorgangs, nicht die Uhr. Ein Link, den Eltern in einer Gruppe weiterreichen, soll nicht mitten in der Frist sterben.
+- Die Rolle steht nicht in der URL: `/v/{vorgang}` ist die Trainer-Ansicht, `/v/{vorgang}/{hsid}` die Spieler-Ansicht derselben Person. Der Umschalter fällt dort weg.
+- Vor dem Rendern wird der Vorgang für Spieler gekürzt (`fuerSpieler`): fremde Namen und interne Verlaufseinträge werden entfernt, nicht nur ausgeblendet. Ausgeblendet hieße, sie stünden trotzdem im Quelltext.
+- Ein abgelehnter Link bekommt immer dieselbe Antwort, auch wenn es den Vorgang gar nicht gibt. Wer raten will, soll daraus nichts lernen.
+- Links baut `npm run link -- <vorgangsnummer> [personen-id]`, bis die Mails sie selbst verschicken.
+- Gebaut sind `/v` (Status, zwei Rollen), `/g` (F2) und `/b` (F3). `/` ist ein Schaufenster mit Beispieldaten und fasst HubSpot nicht an.
+- Jede Server Action prüft das Token selbst. Eine Action ist eine eigene Adresse und lässt sich ohne die Seite aufrufen; sich darauf zu verlassen, dass die Seite schon geprüft hat, wäre keine Prüfung.
+
+### Stand von F1
+
+**Gebaut unter `/neu`,** die einzige Seite ohne Token. Sie liest nichts aus HubSpot, sie legt nur an; es gibt dort also nichts zu sehen, was jemandem gehört. Gegen Bots hat sie ein verstecktes Feld.
+
+Angelegt werden: der Deal auf Stufe 1 mit der nächsten freien Vorgangsnummer des Jahres, je Artikel ein Produkt (vorhandene werden über `hs_sku` wiederverwendet), je Artikel **eine Position ohne `spieler_hsid`** — das ist die Artikelliste des Vorgangs, aus der F2 die Größenarten liest und die F3 später zu Person mal Artikel aufklappt — und die Verknüpfung zu allen Kontakten, deren `team` eine der gewählten Mannschaften ist.
+
+Findet sich zu keiner gewählten Mannschaft ein Kontakt, steht der Vorgang sofort auf Stufe 9 und die Seite sagt, dass die Mannschaft in HubSpot gepflegt werden muss (docs/formulare.md, M7).
+
+Es fehlt Mail M1. Solange sie fehlt, zeigt die Danke-Seite alle Links im Klartext, damit sie nicht verloren gehen. Ebenfalls offen: die Auswahl aus dem Artikelstamm statt freier Felder, und der Wunschtermin für die Lieferung, für den es keine Eigenschaft gibt.
+
+Die Vorgangsnummer kommt aus einer Suche über die bestehenden Nummern. Zwei Meldungen in derselben Sekunde bekämen dieselbe; bei einer Handvoll Vorgängen im Jahr ist das kein reales Risiko.
+
+### Stand von F2 und F3
+
+**F2 fertig.** Gefragt werden nur die Größenarten der Artikel dieses Vorgangs, jede einmal. Geändert werden darf nur auf Stufe 1. Geschrieben wird nur, was vorher als Frage rausging und in der HubSpot-Werteliste steht. Die Veraltungsregel (4 Monate Jugend, 12 Erwachsene) ist umgesetzt; ohne Bestätigungsdatum gilt eine Größe als veraltet. Es fehlt Mail M3.
+
+**F2 als Trainer** liegt unter `/b/{vorgang}/{person}` mit eigenem Zweck `trainer`; die Links auf die einzelnen Zeilen erzeugt F3 selbst. Größen sind hier optional, weil der Trainer meist nur eine Nummer nachträgt; das Bestätigungsdatum wird nur gesetzt, wenn er wirklich eine Größe angefasst hat. Die Rückennummer muss zwischen 1 und 99 liegen und in der Mannschaft eindeutig sein — geprüft wird beides serverseitig, nicht nur im Browser. „Bekommt diesmal nichts“ und „spielt Torwart“ hängen am Deal (`ausgeschlossene_spieler`, `torwarte`), nicht am Kontakt: beides gilt nur für diesen Vorgang. Wer ausgeschlossen ist, kommt über seinen eigenen Größen-Link nicht mehr hinein und fällt aus der Liste; der Trainer erreicht ihn weiter und kann den Ausschluss zurücknehmen.
+
+**F3 bis zur Bestätigung.** Tabelle mit Größen und Rückennummern, fehlend oder veraltet gelb, Nummer fehlend oder doppelt rot. Die sechs Prüfungen laufen und nennen im Klartext, was fehlt. Eine gefallene Prüfung verhindert das Bestätigen, auch mit gesetztem Häkchen. Prüfung 4 (Vereinslogo als Datei) und 5 (Summen gegen die Positionen) bleiben **offen** statt bestanden: das Logo kennt das Datenmodell nicht, und die Positionen entstehen erst danach. Offene Prüfungen blockieren nicht — sonst könnte niemand je bestätigen — stehen aber sichtbar da.
+
+Die Bestätigung schreibt `liste_bestaetigt_am`, `lieferadresse` und `hinweis_haendler`. **Die Stufe bleibt auf 1.** „Anfrage raus“ heißt, dass eine Anfrage rausgegangen ist; solange kitflow keine Mail verschickt, wäre dieser Stand eine Behauptung. Es fehlen also: Positionen am Deal anlegen, Händler-XLSX, M4 an beide Händler, M5 an den Trainer, M6 bei nicht bestandener Prüfung, Stufenwechsel. Alles davon hängt am Mailversand über Resend und an der Entscheidung XLSX in kitflow oder in Make (docs/offen.md).
+
 ## Statusseite `/v/{vorgang}`
 
 Entwurf: prototyp/statusseite.html. Drei Ansichten:

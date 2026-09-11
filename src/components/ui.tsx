@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, ChangeEvent, ReactNode } from "react";
+import type { ButtonHTMLAttributes, ReactNode, SelectHTMLAttributes } from "react";
 import { IconChevronDown } from "./icons";
 
 /**
@@ -45,26 +45,22 @@ export function Card({ children, className = "" }: { children: ReactNode; classN
   );
 }
 
-/** Gebrandetes Select: nativer select ohne OS-Pfeil, eigener Chevron. */
+/**
+ * Gebrandetes Select: nativer select ohne OS-Pfeil, eigener Chevron.
+ *
+ * Nimmt die Eigenschaften eines echten `select`, damit es sowohl kontrolliert
+ * (value und onChange) als auch im Formular (name und defaultValue) taugt.
+ * `className` liegt am Rahmen, damit die Breite den Chevron mitnimmt.
+ */
 export function SelectFeld({
-  value,
-  onChange,
   children,
   className = "",
-  "aria-label": ariaLabel,
-}: {
-  value: string;
-  onChange: (e: ChangeEvent<HTMLSelectElement>) => void;
-  children: ReactNode;
-  className?: string;
-  "aria-label"?: string;
-}) {
+  ...props
+}: SelectHTMLAttributes<HTMLSelectElement>) {
   return (
     <div className={`relative ${className}`}>
       <select
-        value={value}
-        onChange={onChange}
-        aria-label={ariaLabel}
+        {...props}
         className="w-full cursor-pointer appearance-none rounded-lg border border-ink-200 bg-white py-2 pr-9 pl-3 text-sm text-ink-800 focus:border-pitch-400 focus:ring-2 focus:ring-pitch-100 focus:outline-none"
       >
         {children}

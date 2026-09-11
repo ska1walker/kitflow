@@ -127,15 +127,21 @@ function Leiste({
 export function Statusseite({
   vorgang,
   zeilen,
+  festeAnsicht,
 }: {
   vorgang: Vorgang;
   zeilen: VorgangsZeile[];
+  /**
+   * Gesetzt, wenn die Rolle am signierten Link haengt. Dann faellt der
+   * Umschalter weg: wer den Link hat, sieht genau eine Ansicht.
+   */
+  festeAnsicht?: Ansicht;
 }) {
   const beispiel = vorgang.quelle === "beispiel";
 
   // Rolle und Stand liegen im Entwurfs-Store, damit ein Reload sie behaelt.
   const gespeichert = useSyncExternalStore(abonnieren, aktuellerEntwurf, standardEntwurf);
-  const ansicht = gespeichert.ansicht;
+  const ansicht = festeAnsicht ?? gespeichert.ansicht;
   // Nur im Beispielmodus steuert der Regler die Stufe; sonst gilt der Deal.
   const stand: StufeNr = beispiel ? gespeichert.stand : vorgang.stufe;
 
@@ -186,13 +192,15 @@ export function Statusseite({
 
       <main className="pt-5 pb-14">
         <div className={`mx-auto flex flex-col gap-4 px-4 ${breit ? "max-w-6xl" : "max-w-3xl"}`}>
-          <Leiste
-            ansicht={ansicht}
-            stand={stand}
-            beispiel={beispiel}
-            onAnsicht={setAnsicht}
-            onStand={setStand}
-          />
+          {festeAnsicht === undefined && (
+            <Leiste
+              ansicht={ansicht}
+              stand={stand}
+              beispiel={beispiel}
+              onAnsicht={setAnsicht}
+              onStand={setStand}
+            />
+          )}
 
           {breit ? (
             <SpartenAnsicht

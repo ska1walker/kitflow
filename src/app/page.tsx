@@ -1,20 +1,16 @@
 import { Statusseite } from "@/components/statusseite";
-import { ladeVorgang, ladeZeilen } from "@/lib/vorgaenge";
+import { BEISPIEL_VORGANG, beispielZeilen } from "@/lib/beispieldaten";
 import { standardEntwurf } from "@/lib/entwurf";
 
 /**
- * Statusseite eines Ausstattungs-Vorgangs mit den Ansichten Trainer, Spieler
- * und Spartenleitung.
+ * Schaufenster der Statusseite mit den Ansichten Trainer, Spieler und
+ * Spartenleitung, zum Durchklicken der neun Stufen.
  *
- * Die Daten kommen aus HubSpot, solange Token und Pipeline stehen; sonst aus
- * den Beispieldaten. Die Rolle hängt vorerst am Umschalter, später am
- * signierten Link (docs/konzept.md).
+ * Diese Route fasst HubSpot bewusst nicht an. Sie hat keinen Token, also darf
+ * hier auch nichts Echtes stehen: keine Namen, keine Größen, keine Beträge.
+ * Echte Vorgänge liegen unter `/v/{vorgang}` hinter einem signierten Link
+ * (docs/formulare.md).
  */
-export default async function StatusseiteRoute() {
-  const [vorgang, zeilen] = await Promise.all([
-    ladeVorgang(),
-    ladeZeilen(standardEntwurf().stand),
-  ]);
-
-  return <Statusseite vorgang={vorgang} zeilen={zeilen} />;
+export default function SchaufensterRoute() {
+  return <Statusseite vorgang={BEISPIEL_VORGANG} zeilen={beispielZeilen(standardEntwurf().stand)} />;
 }

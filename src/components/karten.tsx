@@ -42,23 +42,27 @@ export function GroessenKarte({
   stand: StufeNr;
   onDemo: (text: string) => void;
 }) {
+  // Stufe 1 ist die Sammelphase mit den Knoepfen. Ob die Liste vollstaendig
+  // ist, sagt aber immer der Zaehlstand, nie die Stufe: ein Vorgang kann
+  // weiterlaufen, obwohl noch eine Groesse fehlt.
   const laeuft = stand === 1;
-  const eingetragen = laeuft ? vorgang.groessenEingetragen : vorgang.groessenGesamt;
+  const eingetragen = vorgang.groessenEingetragen;
   const anteil = vorgang.groessenGesamt > 0 ? (eingetragen / vorgang.groessenGesamt) * 100 : 0;
   const fehlen = Math.max(0, vorgang.groessenGesamt - eingetragen);
+  const vollstaendig = fehlen === 0 && vorgang.groessenGesamt > 0;
 
   return (
     <Card className="p-5">
       <KartenKopf
         titel="Größen"
         rechts={
-          laeuft ? (
-            <Badge tone="amber">läuft</Badge>
-          ) : (
+          vollstaendig ? (
             <Badge tone="pitch">
               <IconCheck width={14} height={14} />
               komplett
             </Badge>
+          ) : (
+            <Badge tone="amber">läuft</Badge>
           )
         }
       />
@@ -112,10 +116,10 @@ export function GroessenKarte({
       ) : (
         <>
           <p className="text-sm text-ink-600">
-            {vorgang.groessenBestaetigtAm
-              ? `Liste am ${vorgang.groessenBestaetigtAm} von dir bestätigt. `
-              : "Liste von dir bestätigt. "}
+            {vorgang.groessenBestaetigtAm && `Liste am ${vorgang.groessenBestaetigtAm} bestätigt. `}
             {vorgang.feldspielerAnzahl} Feldspieler, {vorgang.torwartAnzahl} Torwart.
+            {fehlen > 0 &&
+              ` Für ${fehlen} ${fehlen === 1 ? "Person" : "Personen"} fehlt noch eine Größe.`}
           </p>
           <div className="mt-3.5 flex flex-wrap gap-2">
             <Button
@@ -295,7 +299,7 @@ export function ArtikelKarte({ vorgang, stand }: { vorgang: Vorgang; stand: Stuf
       ))}
       {stand >= 4 && vorgang.groessenBestaetigtAm && (
         <p className="mt-3.5 text-xs text-ink-400">
-          Größen: {vorgang.groessenGesamt} von {vorgang.groessenGesamt}, Liste am{" "}
+          Größen: {vorgang.groessenEingetragen} von {vorgang.groessenGesamt}, Liste am{" "}
           {vorgang.groessenBestaetigtAm} bestätigt.
         </p>
       )}
