@@ -446,7 +446,8 @@ export async function ladeZeilen(entwurfsStufe: StufeNr): Promise<VorgangsZeile[
     .map((deal) => {
       const name = stufen.get(deal.properties.dealstage ?? "");
       const stufe = name ? stufeAusName(name) : null;
-      return stufe ? zurZeile(deal, stufe) : null;
+      // Ausdruecklich gegen null pruefen: Stufe 0 (Voranfrage) ist unwahr.
+      return stufe !== null ? zurZeile(deal, stufe) : null;
     })
     .filter((z): z is VorgangsZeile => z !== null);
 
@@ -481,7 +482,8 @@ export async function ladeVorgang(nummer?: string, personId?: string): Promise<V
 
   const stufenName = stufen.get(deal.properties.dealstage ?? "");
   const stufe = stufenName ? stufeAusName(stufenName) : null;
-  if (!stufe) return BEISPIEL_VORGANG;
+  // Stufe 0 (Voranfrage) ist unwahr, aber gueltig: gegen null pruefen.
+  if (stufe === null) return BEISPIEL_VORGANG;
 
   const [positionsIds, kontaktIds] = await Promise.all([
     assoziierteIds("deals", deal.id, "line_items"),
@@ -630,7 +632,8 @@ export async function ladeGroessenAbfrage(
 
   const stufenName = stufen.get(deal.properties.dealstage ?? "");
   const stufe = stufenName ? stufeAusName(stufenName) : null;
-  if (!stufe) return null;
+  // Stufe 0 (Voranfrage) ist unwahr, aber gueltig: gegen null pruefen.
+  if (stufe === null) return null;
 
   // Der Token bindet die Person schon an den Vorgang. Die Verknuepfung wird
   // trotzdem geprueft: wer inzwischen aus der Mannschaft raus ist, soll mit
@@ -784,7 +787,8 @@ export async function ladeListe(nummer: string): Promise<Liste | null> {
 
   const stufenName = stufen.get(deal.properties.dealstage ?? "");
   const stufe = stufenName ? stufeAusName(stufenName) : null;
-  if (!stufe) return null;
+  // Stufe 0 (Voranfrage) ist unwahr, aber gueltig: gegen null pruefen.
+  if (stufe === null) return null;
 
   const [kontaktIds, positionsIds] = await Promise.all([
     assoziierteIds("deals", deal.id, "contacts"),
