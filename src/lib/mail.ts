@@ -1,5 +1,7 @@
 import "server-only";
 
+import { alsHtml, alsText, type Rahmen } from "./mail-rahmen";
+
 /**
  * Mailversand über Resend (docs/mails.md).
  *
@@ -40,14 +42,14 @@ export function mailAktiv(): boolean {
   return Boolean(process.env.RESEND_API_KEY) && basis() !== null;
 }
 
-type Mail = { an: string; betreff: string; text: string };
+type Mail = { an: string; betreff: string; text: string; html: string };
 
 /**
  * Verschickt eine Mail. Zurück kommt die Adresse, an die sie ging, oder `null`
  * – der Aufrufer soll daraus nie einen Abbruch machen: ein Vorgang ist auch
  * ohne Mail gültig, die Links stehen auf der Seite.
  */
-export async function sendeMail({ an, betreff, text }: Mail): Promise<string | null> {
+export async function sendeMail({ an, betreff, text, html }: Mail): Promise<string | null> {
   if (!mailAktiv()) return null;
 
   const umleitung = process.env.MAIL_NUR_AN;
@@ -66,6 +68,10 @@ export async function sendeMail({ an, betreff, text }: Mail): Promise<string | n
         to: [empfaenger],
         subject: betreff,
         text: umleitung && umleitung !== an ? `[Testumleitung, eigentlich an ${an}]\n\n${text}` : text,
+        html:
+          umleitung && umleitung !== an
+            ? `<p style="font:13px sans-serif;color:#a1a1aa;">Testumleitung, eigentlich an ${an}</p>${html}`
+            : html,
       }),
     });
 
@@ -84,24 +90,20 @@ export async function sendeMail({ an, betreff, text }: Mail): Promise<string | n
   }
 }
 
-/** „Hallo Kai," oder schlicht „Hallo,". Ein leerer Name darf nicht auffallen. */
+/** „Hallo Kai" oder schlicht „Hallo". Ein leerer Name darf nicht auffallen. */
 function anrede(vorname: string): string {
   return vorname.trim() ? `Hallo ${vorname.trim()},` : "Hallo,";
 }
 
-const GRUSS = `Sportliche Grüße
-Kai Böhm
-Spartenleiter Fußball · Eintracht Munster`;
-
-const ZAHLUNG = `Wichtig zur Bezahlung
-Bestellt wird erst, wenn die Finanzierung steht und das Geld da ist. Zahlt der Verein, muss das Geld auf dem Vereinskonto sein. Legt die Mannschaft aus, überweist sie vorab direkt an den Händler.`;
+const ZAHLUNG =
+  "Bestellt wird erst, wenn die Finanzierung steht und das Geld da ist. Zahlt der Verein, muss das Geld auf dem Vereinskonto sein. Legt die Mannschaft aus, überweist sie vorab direkt an den Händler.";
 
 export type M1Daten = {
   vorgang: string;
   /** Leer, wenn der Vorname nicht bekannt ist – er steht in keiner Eigenschaft. */
   vorname: string;
   mannschaft: string;
-  artikel: string[];
+  artikel: { name: string; detail: string }[];
   /** Nur im vollständigen Modus: Frist und die Links für die Mannschaft. */
   groessenFrist?: string;
   personen?: { name: string; groessen: string }[];
@@ -111,73 +113,87 @@ export type M1Daten = {
 };
 
 /** M1 für eine Voranfrage: es ist noch niemand angeschrieben worden. */
-function m1Voranfrage(d: M1Daten): { betreff: string; text: string } {
+function m1Voranfrage(d: M1Daten): { betreff: string; rahmen: Rahmen } {
   return {
     betreff: `${d.vorgang} · Voranfrage für ${d.mannschaft} steht`,
-    text: `${anrede(d.vorname)}
-
-danke für deine Meldung. Dein Vorgang hat die Nummer ${d.vorgang}. Bitte gib sie bei allen Rückfragen an.
-
-Was angefragt wird
-${d.artikel.map((a) => `- ${a}`).join("\n")}
-
-Das ist eine Voranfrage. Sie liefert einen Richtpreis, mit dem du einen Sponsor ansprechen kannst. Es wurden noch keine Größen abgefragt und niemand aus deiner Mannschaft angeschrieben. Ein Richtpreis ist unverbindlich.
-
-So geht es weiter
-1. Sprich mit dem Sponsor.
-2. Steht die Finanzierung, öffne diesen Link und ergänze Artikelnummer, Beflockung, Frist und Lieferadresse:
-   ${d.ergaenzenLink ?? "(Link fehlt)"}
-3. Danach bekommt deine Mannschaft die persönlichen Größenlinks.
-
-Sagt der Sponsor ab, kannst du die Voranfrage auf deiner Statusseite abbrechen.
-
-Deine Statusseite
-${d.statusLink}
-
-${ZAHLUNG}
-
-${GRUSS}`,
+    rahmen: {
+      eyebrow: `Vorgang ${d.vorgang}`,
+      titel: "Deine Voranfrage steht",
+      vorschau: `Richtpreis für ${d.mannschaft}. Größen kommen später.`,
+      bloecke: [
+        { art: "absatz", text: `${anrede(d.vorname)} danke für deine Meldung. Bitte gib die Nummer ${d.vorgang} bei allen Rückfragen an.` },
+        { art: "titel", text: "Was angefragt wird" },
+        { art: "artikel", zeilen: d.artikel },
+        {
+          art: "hinweis",
+          text: "Das ist eine Voranfrage. Sie liefert einen Richtpreis, mit dem du einen Sponsor ansprechen kannst. Es wurden noch keine Größen abgefragt und niemand aus deiner Mannschaft angeschrieben. Ein Richtpreis ist unverbindlich.",
+        },
+        { art: "titel", text: "So geht es weiter" },
+        {
+          art: "schritte",
+          punkte: [
+            "Sprich mit dem Sponsor.",
+            "Steht die Finanzierung, ergänzt du Artikelnummer, Beflockung, Frist und Lieferadresse.",
+            "Danach bekommt deine Mannschaft die persönlichen Größenlinks.",
+          ],
+        },
+        { art: "knopf", text: "Angaben vervollständigen", href: d.ergaenzenLink ?? d.statusLink },
+        {
+          art: "absatz",
+          text: "Sagt der Sponsor ab, kannst du die Voranfrage auf deiner Statusseite abbrechen.",
+        },
+        { art: "links", zeilen: [{ name: "Deine Statusseite", href: d.statusLink }] },
+        { art: "titel", text: "Wichtig zur Bezahlung" },
+        { art: "absatz", text: ZAHLUNG },
+      ],
+    },
   };
 }
 
 /** M1 für den vollständigen Weg: die Größenabfrage läuft ab sofort. */
-function m1Vollstaendig(d: M1Daten): { betreff: string; text: string } {
-  const zeilen = (d.personen ?? []).map((p) => `${p.name}: ${p.groessen}`).join("\n");
+function m1Vollstaendig(d: M1Daten): { betreff: string; rahmen: Rahmen } {
+  const frist = d.groessenFrist ?? "zur Frist";
 
   return {
     betreff: `${d.vorgang} · Größenabfrage für ${d.mannschaft} läuft`,
-    text: `${anrede(d.vorname)}
-
-deine Angaben sind vollständig. Dein Vorgang hat die Nummer ${d.vorgang}. Bitte gib sie bei allen Rückfragen an.
-
-Was angefragt wird
-${d.artikel.map((a) => `- ${a}`).join("\n")}
-
-So geht es weiter
-1. Unten steht ein fertiger Text für die Elterngruppe, die persönlichen Links sind schon drin.
-2. Größen bitte bis ${d.groessenFrist ?? "zur Frist"} eintragen.
-3. Wenn alle eingetragen haben, prüfst du die Liste. Erst nach deiner Bestätigung geht die Anfrage an Intersport Uelzen und 11teamsports.
-4. Die Angebote kommen in Kopie an dich.
-
-Text für die Elterngruppe
----
-Hallo zusammen,
-für ${d.mannschaft} wird neue Ausstattung angefragt: ${d.artikel.join(", ")}.
-Bitte tragt bis ${d.groessenFrist ?? "zur Frist"} über den persönlichen Link die aktuelle Größe eures Kindes ein. Das dauert eine Minute. Beflockte Sachen können nicht umgetauscht werden, im Zweifel lieber eine Nummer größer.
-
-${zeilen}
-
-Danke!
-${d.vorname.trim() || "Euer Trainer"}
----
-
-Deine eigenen Links
-Statusseite: ${d.statusLink}
-Liste prüfen und bestätigen: ${d.bestaetigenLink ?? "(Link fehlt)"}
-
-${ZAHLUNG}
-
-${GRUSS}`,
+    rahmen: {
+      eyebrow: `Vorgang ${d.vorgang}`,
+      titel: "Die Größenabfrage läuft",
+      vorschau: `${d.mannschaft}: Größen bitte bis ${frist} eintragen.`,
+      bloecke: [
+        { art: "absatz", text: `${anrede(d.vorname)} deine Angaben sind vollständig. Bitte gib die Nummer ${d.vorgang} bei allen Rückfragen an.` },
+        { art: "titel", text: "Was angefragt wird" },
+        { art: "artikel", zeilen: d.artikel },
+        { art: "titel", text: "So geht es weiter" },
+        {
+          art: "schritte",
+          punkte: [
+            "Schick den Text unten in die Elterngruppe, die persönlichen Links stehen schon drin.",
+            `Größen bitte bis ${frist} eintragen.`,
+            "Wenn alle eingetragen haben, prüfst du die Liste. Erst nach deiner Bestätigung geht die Anfrage an Intersport Uelzen und 11teamsports.",
+            "Die Angebote kommen in Kopie an dich.",
+          ],
+        },
+        { art: "knopf", text: "Liste prüfen und bestätigen", href: d.bestaetigenLink ?? d.statusLink },
+        { art: "titel", text: "Text für die Elterngruppe" },
+        {
+          art: "zitat",
+          zeilen: [
+            "Hallo zusammen,",
+            `für ${d.mannschaft} wird neue Ausstattung angefragt: ${d.artikel.map((a) => a.name).join(", ")}.`,
+            `Bitte tragt bis ${frist} über den persönlichen Link die aktuelle Größe eures Kindes ein. Das dauert eine Minute. Beflockte Sachen können nicht umgetauscht werden, im Zweifel lieber eine Nummer größer.`,
+            "",
+            ...(d.personen ?? []).map((p) => `${p.name}: ${p.groessen}`),
+            "",
+            "Danke!",
+            d.vorname.trim() || "Euer Trainer",
+          ],
+        },
+        { art: "links", zeilen: [{ name: "Deine Statusseite", href: d.statusLink }] },
+        { art: "titel", text: "Wichtig zur Bezahlung" },
+        { art: "absatz", text: ZAHLUNG },
+      ],
+    },
   };
 }
 
@@ -187,6 +203,6 @@ ${GRUSS}`,
  */
 export async function sendeM1(an: string, daten: M1Daten): Promise<string | null> {
   const voranfrage = Boolean(daten.ergaenzenLink);
-  const { betreff, text } = voranfrage ? m1Voranfrage(daten) : m1Vollstaendig(daten);
-  return sendeMail({ an, betreff, text });
+  const { betreff, rahmen } = voranfrage ? m1Voranfrage(daten) : m1Vollstaendig(daten);
+  return sendeMail({ an, betreff, text: alsText(rahmen), html: alsHtml(rahmen) });
 }

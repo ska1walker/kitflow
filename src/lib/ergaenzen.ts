@@ -329,10 +329,10 @@ export async function ergaenzeVorgang(
     vorgang: nummer,
     modus: "vollstaendig",
     ohnePersonen,
-    artikelText: voranfrage.artikel.map((a) => {
-      const name = [a.hersteller, a.bezeichnung].filter(Boolean).join(" ");
-      return `${name}, ${a.stueck} Stück je Person`;
-    }),
+    artikelText: voranfrage.artikel.map((a) => ({
+      name: [a.hersteller, a.bezeichnung].filter(Boolean).join(" "),
+      detail: `${a.groessenartLabel} · ${a.stueck} Stück je Person`,
+    })),
     trainerStatus: statusLink(nummer) ?? "",
     bestaetigen: bestaetigenLink(nummer) ?? "",
     ergaenzen: "",
