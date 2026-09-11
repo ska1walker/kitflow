@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { abschicken } from "./formular";
 import { Badge, Button, Card, SelectFeld } from "./ui";
 import { IconCheck } from "./icons";
 import { bedarfMelden, type Ergebnis } from "@/app/neu/aktion";
@@ -91,6 +92,7 @@ function ArtikelBlock({
         <Feld label="Artikelbezeichnung">
           <input
             name={`artikel-${i}-bezeichnung`}
+            required
             className={EINGABE}
             placeholder="hmlCORE XK Poly T-Shirt"
           />
@@ -102,7 +104,12 @@ function ArtikelBlock({
           label="Artikelnummer des Herstellers"
           hinweis="Die Händler brauchen für ein vergleichbares Angebot die genaue Artikelnummer des Herstellers. Du findest sie im Katalog oder Onlineshop des Herstellers beim jeweiligen Artikel."
         >
-          <input name={`artikel-${i}-herstellernummer`} className={EINGABE} placeholder="211943" />
+          <input
+            name={`artikel-${i}-herstellernummer`}
+            required
+            className={EINGABE}
+            placeholder="211943"
+          />
         </Feld>
       )}
 
@@ -190,7 +197,12 @@ function ArtikelBlock({
       {!voranfrage &&
         (beflockung === "Abweichend" ? (
           <Feld label="Wie soll abweichend beflockt werden?">
-            <textarea name={`artikel-${i}-beflockung-text`} rows={2} className={EINGABE} />
+            <textarea
+              name={`artikel-${i}-beflockung-text`}
+              rows={2}
+              required
+              className={EINGABE}
+            />
           </Feld>
         ) : (
           <p className="text-xs text-ink-500">
@@ -343,7 +355,7 @@ export function BedarfFormular() {
   if (ergebnis.stand === "fertig") return <Fertig ergebnis={ergebnis.ergebnis} />;
 
   return (
-    <form action={absenden} className="flex flex-col gap-4">
+    <form onSubmit={abschicken(absenden)} className="flex flex-col gap-4">
       <input type="hidden" name="modus" value={modus} />
 
       <Card className="p-6">

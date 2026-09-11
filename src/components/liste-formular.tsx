@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
+import { abschicken } from "./formular";
 import { Badge, Button, Card } from "./ui";
 import { IconCheck, IconStop } from "./icons";
 import { listeBestaetigen, type Ergebnis } from "@/app/b/[vorgang]/aktion";
@@ -173,7 +174,7 @@ export function ListeFormular({ liste, token }: { liste: Liste; token: string })
       </Card>
 
       <Card className="p-5">
-        <form action={absenden} className="flex flex-col gap-4">
+        <form onSubmit={abschicken(absenden)} className="flex flex-col gap-4">
           <label className="flex flex-col gap-1.5">
             <span className="text-sm font-semibold text-ink-900">
               Lieferadresse{" "}

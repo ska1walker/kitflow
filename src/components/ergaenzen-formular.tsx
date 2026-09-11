@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { abschicken } from "./formular";
 import { Badge, Button, Card, SelectFeld } from "./ui";
 import { IconCheck } from "./icons";
 import { angabenErgaenzen, type Ergebnis } from "@/app/e/[vorgang]/aktion";
@@ -108,7 +109,7 @@ function ArtikelBlock({ artikel }: { artikel: VoranfrageArtikel }) {
 
       {beflockung === "Abweichend" ? (
         <Feld label="Wie soll abweichend beflockt werden?">
-          <textarea name={`pos-${id}-beflockung-text`} rows={2} className={EINGABE} />
+          <textarea name={`pos-${id}-beflockung-text`} rows={2} required className={EINGABE} />
         </Feld>
       ) : (
         <p className="text-xs text-ink-500">
@@ -211,7 +212,7 @@ export function ErgaenzenFormular({
   if (ergebnis.stand === "fertig") return <Fertig ergebnis={ergebnis.ergebnis} />;
 
   return (
-    <form action={absenden} className="flex flex-col gap-4">
+    <form onSubmit={abschicken(absenden)} className="flex flex-col gap-4">
       <Card className="p-6">
         <span className="eyebrow text-pitch-600">Voranfrage {voranfrage.vorgang}</span>
         <h1 className="font-display mt-1.5 text-2xl font-extrabold tracking-tight text-ink-900">

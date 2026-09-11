@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
+import { abschicken } from "./formular";
 import { Badge, Button, Card, SelectFeld } from "./ui";
 import { IconCheck } from "./icons";
 import { groessenSpeichern, type Ergebnis } from "@/app/g/[vorgang]/[person]/aktion";
@@ -73,7 +74,7 @@ export function GroessenFormular({
         oder vorher bei einem Teamkollegen anprobieren.
       </p>
 
-      <form action={absenden} className="mt-5 flex flex-col gap-4">
+      <form onSubmit={abschicken(absenden)} className="mt-5 flex flex-col gap-4">
         {abfrage.fragen.map((frage) => (
           <label key={frage.feld} className="flex flex-col gap-1.5">
             <span className="flex items-center gap-2 text-sm font-semibold text-ink-900">
