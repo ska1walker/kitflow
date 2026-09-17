@@ -1,0 +1,200 @@
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { sendeM1, sendeMail, type M1Daten } from "./mail";
+
+/**
+ * Eine Mail wird als Liste von Blöcken beschrieben, nicht als HTML. Daraus
+ * entstehen beide Fassungen — die gestaltete und die reine Textfassung — und
+ * der Sinn der Übung ist, dass sie nicht auseinanderlaufen können.
+ *
+ * Das ist eine Behauptung, solange sie niemand prüft. Diese Tests nehmen die
+ * Mail so, wie sie rausginge: über `sendeM1`, mit einem Resend aus Pappe.
+ *
+ * Wie Gmail oder Outlook das HTML zeichnen, steht hier nicht — das ist von
+ * einem Test aus nicht zu beantworten und bleibt ein echter Versand.
+ */
+
+let gesendet: ReturnType<typeof vi.fn>;
+
+/** Was tatsächlich bei Resend ankäme. */
+function brief() {
+  const [, o] = gesendet.mock.calls[0];
+  return JSON.parse(String((o as RequestInit).body)) as {
+    to: string[];
+    subject: string;
+    text: string;
+    html: string;
+  };
+}
+
+function daten(mehr: Partial<M1Daten> = {}): M1Daten {
+  return {
+    vorgang: "AUS-2026-001",
+    vorname: "Kai",
+    mannschaft: "Ü40 Team 3",
+    artikel: [{ name: "adidas Trainingsjacke", detail: "1 Stück je Person" }],
+    groessenFrist: "30.09.",
+    statusLink: "https://zz.example.invalid/v/AUS-2026-001?t=abc",
+    bestaetigenLink: "https://zz.example.invalid/b/AUS-2026-001?t=def",
+    personen: [{ name: "ZZ Eins", groessen: "https://zz.example.invalid/g/AUS-2026-001/111?t=ghi" }],
+    ...mehr,
+  };
+}
+
+beforeEach(() => {
+  process.env.RESEND_API_KEY = "zz-test";
+  process.env.KITFLOW_BASIS = "https://zz.example.invalid";
+  delete process.env.MAIL_NUR_AN;
+  gesendet = vi.fn(async () => Response.json({ id: "1" }));
+  vi.stubGlobal("fetch", gesendet);
+  vi.spyOn(console, "error").mockImplementation(() => {});
+});
+
+afterEach(() => {
+  delete process.env.RESEND_API_KEY;
+  delete process.env.KITFLOW_BASIS;
+  delete process.env.MAIL_NUR_AN;
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
+
+describe("Beide Fassungen tragen dieselbe Substanz", () => {
+  test("was im HTML steht, steht auch im Text", async () => {
+    await sendeM1("zz@example.invalid", daten());
+    const { text, html } = brief();
+
+    for (const inhalt of [
+      "AUS-2026-001",
+      "adidas Trainingsjacke",
+      "30.09.",
+      "ZZ Eins",
+      "Ü40 Team 3",
+    ]) {
+      expect(html, `im HTML: ${inhalt}`).toContain(inhalt);
+      expect(text, `im Text: ${inhalt}`).toContain(inhalt);
+    }
+  });
+
+  test("die Links stehen vollständig in der Textfassung", async () => {
+    await sendeM1("zz@example.invalid", daten());
+    const { text } = brief();
+
+    // Abgeschnitten wäre schlimmer als gar nicht da: niemand merkt es.
+    expect(text).toContain("https://zz.example.invalid/v/AUS-2026-001?t=abc");
+    expect(text).toContain("https://zz.example.invalid/g/AUS-2026-001/111?t=ghi");
+  });
+
+  test("die Textfassung ist Text, kein halbes HTML", async () => {
+    await sendeM1("zz@example.invalid", daten());
+    expect(brief().text).not.toMatch(/<\/?(table|td|p|div|h2)\b/);
+  });
+});
+
+describe("Fremder Text wird nicht zu Markup", () => {
+  test("ein Artikelname aus dem offenen Formular bleibt harmlos", async () => {
+    // /neu steht ohne Token offen; der Name kommt von dort.
+    await sendeM1("zz@example.invalid", {
+      ...daten(),
+      artikel: [{ name: '<script>alert(1)</script>', detail: 'Farbe "rot" & blau' }],
+    });
+    const { html, text } = brief();
+
+    expect(html).not.toContain("<script>");
+    expect(html).toContain("&lt;script&gt;");
+    expect(html).toContain("&amp;");
+    // Im Text bleibt er, wie er war – dort ist er ungefährlich.
+    expect(text).toContain("<script>alert(1)</script>");
+  });
+});
+
+describe("Die drei Zuschnitte von M1", () => {
+  test("vollständig: Größen-Links und ein Text für die Elterngruppe", async () => {
+    await sendeM1("zz@example.invalid", daten());
+    const { subject, text } = brief();
+
+    expect(subject).toContain("AUS-2026-001");
+    expect(text).toContain("Elterngruppe");
+    expect(text).toContain("Intersport Uelzen");
+    expect(text).toContain("Bestellt wird erst");
+  });
+
+  test("Voranfrage: niemand ist angeschrieben worden", async () => {
+    await sendeM1("zz@example.invalid", {
+      ...daten(),
+      ergaenzenLink: "https://zz.example.invalid/e/AUS-2026-001?t=jkl",
+      personen: [],
+      bestaetigenLink: undefined,
+    });
+    const { text } = brief();
+
+    expect(text).toContain("Angaben vervollständigen");
+    // Keine Größen-Links, es wurde ja noch niemand gefragt.
+    expect(text).not.toContain("/g/AUS-2026-001");
+  });
+
+  test("Größencheck: keine Artikelliste und kein Wort zur Bezahlung", async () => {
+    await sendeM1("zz@example.invalid", { ...daten(), nurGroessen: true, artikel: [] });
+    const { text } = brief();
+
+    expect(text).toContain("bestellt nichts");
+    // Ein Größencheck geht an keinen Händler.
+    expect(text).not.toContain("Intersport Uelzen");
+    expect(text).not.toContain("Bestellt wird erst");
+  });
+});
+
+describe("Hausregeln", () => {
+  test("keine Emojis, in keiner Fassung", async () => {
+    await sendeM1("zz@example.invalid", daten());
+    const { text, html, subject } = brief();
+    const emoji = /\p{Extended_Pictographic}/u;
+
+    for (const [name, wert] of [["Betreff", subject], ["Text", text], ["HTML", html]] as const) {
+      expect(emoji.test(wert), `${name} enthält ein Emoji`).toBe(false);
+    }
+  });
+
+  test("der Schlüssel steht in keiner Meldung", async () => {
+    const meldungen: string[] = [];
+    vi.mocked(console.error).mockImplementation((...a: unknown[]) => {
+      meldungen.push(a.map(String).join(" "));
+    });
+    gesendet.mockResolvedValue(new Response("Domain not verified", { status: 403 }));
+
+    expect(await sendeM1("zz@example.invalid", daten())).toBeNull();
+    // Die Antwort von Resend gehört ins Log – sie sagt meist, was fehlt.
+    expect(meldungen.join("\n")).toContain("Domain not verified");
+    expect(meldungen.join("\n")).not.toContain("zz-test");
+  });
+});
+
+describe("Die Testbremse", () => {
+  test("MAIL_NUR_AN leitet um und sagt es dazu", async () => {
+    process.env.MAIL_NUR_AN = "kai@example.invalid";
+    const an = await sendeMail({
+      an: "eltern@example.invalid",
+      betreff: "ZZ",
+      text: "Hallo",
+      html: "<p>Hallo</p>",
+    });
+
+    expect(an).toBe("kai@example.invalid");
+    const b = brief();
+    expect(b.to).toEqual(["kai@example.invalid"]);
+    // Sonst hält man die Mail für eine echte an die Eltern.
+    expect(b.text).toContain("eigentlich an eltern@example.invalid");
+    expect(b.html).toContain("eigentlich an eltern@example.invalid");
+  });
+});
+
+describe("Ohne Schlüssel oder Adresse", () => {
+  test.for([
+    ["kein Schlüssel", "RESEND_API_KEY"],
+    ["keine Basis-Adresse", "KITFLOW_BASIS"],
+  ] as const)("%s: es geht nichts raus, und das ist kein Fehler", async ([, weg]) => {
+    delete process.env[weg];
+    delete process.env.VERCEL_URL;
+
+    expect(await sendeM1("zz@example.invalid", daten())).toBeNull();
+    expect(gesendet).not.toHaveBeenCalled();
+  });
+});
