@@ -21,5 +21,5 @@ export default async function SpielerStatus(props: PageProps<"/v/[vorgang]/[pers
 
   // Erst kuerzen, dann rendern: was gar nicht erst mitgeschickt wird, kann im
   // Quelltext auch nicht stehen.
-  return <Statusseite vorgang={fuerSpieler(vorgang)} zeilen={[]} festeAnsicht="spieler" />;
+  return <Statusseite vorgang={fuerSpieler(vorgang)} zeilen={[]} ansicht="spieler" />;
 }

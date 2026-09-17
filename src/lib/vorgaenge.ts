@@ -20,13 +20,16 @@ import "server-only";
  * und die Oberflaeche laesst den Abschnitt weg.
  */
 
-import { BEISPIEL_VORGANG, beispielZeilen } from "./beispieldaten";
+import { BEISPIEL_VORGANG } from "./beispieldaten";
 import {
   assoziierteIds,
   batchLesen,
   hubspot,
   hubspotAktiv,
+  kurzDatum,
   pipelineStufen,
+  text,
+  zahl,
   type HsListe,
   type HsObjekt,
 } from "./hubspot";
@@ -51,7 +54,6 @@ import type {
   PersonGroesse,
   StufeNr,
   Vorgang,
-  VorgangsZeile,
 } from "./typen";
 
 /** Deal-Eigenschaften der Gruppe „Ausstattung“, die die Statusseite braucht. */
@@ -135,27 +137,6 @@ const HAENDLER_SPALTEN = [
   { name: "Intersport Uelzen", feld: "angebot_intersport_am" },
 ];
 
-function text(o: HsObjekt, feld: string): string | undefined {
-  const wert = o.properties[feld];
-  return wert === null || wert === undefined || wert === "" ? undefined : wert;
-}
-
-function zahl(o: HsObjekt, feld: string): number {
-  const wert = Number(o.properties[feld]);
-  return Number.isFinite(wert) ? wert : 0;
-}
-
-/**
- * „2026-09-10“ wird zu „10.09.“. Datums-Eigenschaften stehen bei HubSpot auf
- * Mitternacht UTC; wir zerlegen die Zeichenkette, statt sie in eine lokale Zeit
- * zu rechnen, sonst rutscht der Tag je nach Serverzeitzone.
- */
-function kurzDatum(wert: string | undefined): string | undefined {
-  if (!wert) return undefined;
-  const treffer = /^(\d{4})-(\d{2})-(\d{2})/.exec(wert);
-  return treffer ? `${treffer[3]}.${treffer[2]}.` : undefined;
-}
-
 const BERLIN = "Europe/Berlin";
 
 /** Zeitstempel wie `hs_lastmodifieddate` in deutscher Ortszeit. */
@@ -178,13 +159,6 @@ function standText(wert: string | undefined): string {
   return `Stand: ${datum}, ${uhr} Uhr`;
 }
 
-/** Ganze Tage zwischen einem Zeitpunkt und jetzt. */
-function tageSeit(wert: string | undefined): number | null {
-  if (!wert) return null;
-  const zeitpunkt = new Date(wert);
-  if (Number.isNaN(zeitpunkt.getTime())) return null;
-  return Math.floor((Date.now() - zeitpunkt.getTime()) / 86_400_000);
-}
 
 /** Jugendmannschaft? Entscheidet ueber Namen in der Oberflaeche und ueber die
  * Frist, ab der eine Groesse als veraltet gilt. */
@@ -346,60 +320,7 @@ function haendlerAus(deal: HsObjekt): Haendler[] {
   }));
 }
 
-/**
- * Auf wen der Vorgang gerade wartet. Abgeleitet aus der Stufe, damit die
- * Uebersicht der Spartenleitung ohne zusaetzliche Eigenschaft auskommt.
- */
-function wartetAuf(stufe: StufeNr, deal: HsObjekt): string {
-  switch (stufe) {
-    case 0:
-      return "Sponsor";
-    case 1:
-      return "Mannschaft";
-    case 2:
-      return "Händler";
-    case 3:
-    case 5:
-      return "dich";
-    case 4:
-      return zahl(deal, "zusage_sponsor") > 0 ? "Sponsor" : "Finanzierung";
-    case 6:
-      return text(deal, "lieferant_gewaehlt") ?? "Händler";
-    case 7:
-      return "Trainer";
-    default:
-      return "–";
-  }
-}
 
-/** Die Frist, die auf der aktuellen Stufe gilt. */
-function fristVon(stufe: StufeNr, deal: HsObjekt): string | undefined {
-  const roh = stufe === 1 ? text(deal, "groessen_frist") : text(deal, "stufe_frist");
-  const datum = kurzDatum(roh);
-  return datum ? `Frist ${datum}` : undefined;
-}
-
-/** Ein Deal wird zur Zeile in der Uebersicht. */
-function zurZeile(deal: HsObjekt, stufe: StufeNr): VorgangsZeile {
-  const art = text(deal, "ausstattungsart") ?? "Ausstattung";
-  const tage = tageSeit(text(deal, "hs_lastmodifieddate"));
-  const frist = fristVon(stufe, deal);
-  const fristRoh = stufe === 1 ? text(deal, "groessen_frist") : text(deal, "stufe_frist");
-  const ueberfaellig = (tageSeit(fristRoh) ?? -1) > 0;
-
-  return {
-    nummer: text(deal, "vorgangsnummer") ?? deal.id,
-    mannschaft: text(deal, "mannschaft") ?? text(deal, "mannschaftscode") ?? "Ohne Mannschaft",
-    gegenstand: art,
-    stufe,
-    wartetAuf: wartetAuf(stufe, deal),
-    seit: tage === null ? "" : tage === 0 ? "heute" : `${tage} Tage`,
-    frist,
-    warnung: ueberfaellig && frist ? `${frist} überschritten` : undefined,
-    du: stufe === 3 || stufe === 5,
-    verlinkt: true,
-  };
-}
 
 /**
  * Streicht aus einem Vorgang alles, was ein Spieler nicht sehen darf, bevor er
@@ -419,7 +340,7 @@ export function fuerSpieler(vorgang: Vorgang): Vorgang {
 }
 
 /** Die Suche nach Deals der Ausstattungs-Pipeline. */
-function dealSuche(nummer: string | undefined, limit: number) {
+export function dealSuche(nummer: string | undefined, limit: number) {
   return {
     filterGroups: [
       {
@@ -432,37 +353,6 @@ function dealSuche(nummer: string | undefined, limit: number) {
     sorts: [{ propertyName: "hs_lastmodifieddate", direction: "DESCENDING" }],
     limit,
   };
-}
-
-/**
- * Alle Vorgaenge der Sparte. `entwurfsStufe` steuert im Beispielmodus den
- * ersten Eintrag, damit Uebersicht und Detailansicht zusammenpassen; mit
- * echten Daten hat sie keine Wirkung.
- */
-export async function ladeZeilen(entwurfsStufe: StufeNr): Promise<VorgangsZeile[]> {
-  if (!hubspotAktiv()) return beispielZeilen(entwurfsStufe);
-
-  const stufen = await pipelineStufen();
-  if (!stufen) return beispielZeilen(entwurfsStufe);
-
-  const treffer = await hubspot<HsListe<HsObjekt>>({
-    pfad: "/crm/v3/objects/deals/search",
-    koerper: dealSuche(undefined, 100),
-  });
-  if (!treffer) return beispielZeilen(entwurfsStufe);
-
-  const zeilen = treffer.results
-    .map((deal) => {
-      const name = stufen.get(deal.properties.dealstage ?? "");
-      const stufe = name ? stufeAusName(name) : null;
-      // Ausdruecklich gegen null pruefen: Stufe 0 (Voranfrage) ist unwahr.
-      return stufe !== null ? zurZeile(deal, stufe) : null;
-    })
-    .filter((z): z is VorgangsZeile => z !== null);
-
-  // Noch kein einziger Vorgang angelegt: lieber der Beispiel-Vorgang als eine
-  // leere Seite, die wie ein Fehler aussieht.
-  return zeilen.length > 0 ? zeilen : beispielZeilen(entwurfsStufe);
 }
 
 /**

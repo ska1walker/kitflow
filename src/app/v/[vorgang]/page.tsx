@@ -31,6 +31,6 @@ export default async function TrainerStatus(props: PageProps<"/v/[vorgang]">) {
     vorgang.stufe === 0 ? { ergaenzen: ergaenzenLink(nummer) ?? "", token: t } : undefined;
 
   return (
-    <Statusseite vorgang={vorgang} zeilen={[]} festeAnsicht="trainer" voranfrage={voranfrage} />
+    <Statusseite vorgang={vorgang} zeilen={[]} ansicht="trainer" voranfrage={voranfrage} />
   );
 }

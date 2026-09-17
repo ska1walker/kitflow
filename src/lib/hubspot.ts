@@ -165,3 +165,30 @@ export async function batchLesen(
 
   return alle;
 }
+
+/* ------------------------------------------------------------------ *
+ * Eigenschaften eines Objekts lesen
+ * ------------------------------------------------------------------ */
+
+/** Eine Eigenschaft als Text. Leer, null und fehlend sind dasselbe: undefined. */
+export function text(o: HsObjekt, feld: string): string | undefined {
+  const wert = o.properties[feld];
+  return wert === null || wert === undefined || wert === "" ? undefined : wert;
+}
+
+/** Eine Eigenschaft als Zahl. Was sich nicht rechnen laesst, ist 0. */
+export function zahl(o: HsObjekt, feld: string): number {
+  const wert = Number(o.properties[feld]);
+  return Number.isFinite(wert) ? wert : 0;
+}
+
+/**
+ * „2026-09-10“ wird zu „10.09.“. Datums-Eigenschaften stehen bei HubSpot auf
+ * Mitternacht UTC; wir zerlegen die Zeichenkette, statt sie in eine lokale Zeit
+ * zu rechnen, sonst rutscht der Tag je nach Serverzeitzone.
+ */
+export function kurzDatum(wert: string | undefined): string | undefined {
+  if (!wert) return undefined;
+  const treffer = /^(\d{4})-(\d{2})-(\d{2})/.exec(wert);
+  return treffer ? `${treffer[3]}.${treffer[2]}.` : undefined;
+}

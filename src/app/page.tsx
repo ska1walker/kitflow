@@ -1,6 +1,4 @@
-import { Statusseite } from "@/components/statusseite";
-import { BEISPIEL_VORGANG, beispielZeilen } from "@/lib/beispieldaten";
-import { standardEntwurf } from "@/lib/entwurf";
+import { Schaufenster } from "@/components/schaufenster";
 
 /**
  * Schaufenster der Statusseite mit den Ansichten Trainer, Spieler und
@@ -12,5 +10,5 @@ import { standardEntwurf } from "@/lib/entwurf";
  * (docs/formulare.md).
  */
 export default function SchaufensterRoute() {
-  return <Statusseite vorgang={BEISPIEL_VORGANG} zeilen={beispielZeilen(standardEntwurf().stand)} />;
+  return <Schaufenster />;
 }
