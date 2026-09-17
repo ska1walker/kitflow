@@ -1,6 +1,6 @@
 # Offen
 
-Stand 10.09.2026
+Stand 17.09.2026
 
 ## Kai
 - Resend: Konto mit Domain hubsport.club (Region eu-west-1), API-Key für kitflow und Make
@@ -8,10 +8,12 @@ Stand 10.09.2026
 - Vercel-Projekt, Subdomain für kitflow (DNS bei Kai)
 - 10–15 Standardartikel von Jens Bormann und Michael Hillebrecht; bei Intersport eigene Artikelnummern erfragen
 - Standard-Beflockung mit beiden Händlern bestätigen
-- Login für die Spartenleitung festlegen (wer außer Kai: Sebastian?)
+- Login für die Spartenleitung festlegen (wer außer Kai: Sebastian?) → als `SPARTE_EMAILS`, eine Liste wie `ADMIN_EMAILS` bei coachbase
+- **Supabase-Projekt für kitflow, Region EU.** Von der Entwicklungsumgebung aus ist genau eines sichtbar (`wcnnetngzcyidnteiril`, eu-central-1, **inaktiv**) — und das ist weder das Coachbase-Projekt noch erkennbar für kitflow gedacht. Welches Konto kitflow bekommt, entscheidet Kai. Gebraucht werden danach `NEXT_PUBLIC_SUPABASE_URL` und `SUPABASE_SERVICE_ROLE_KEY`, und die Migration `supabase/migrations/001_vorgaenge.sql` muss einmal im SQL-Editor laufen (docs/datenbank.md).
 
 ## Entscheidungen
 - ~~kitflow schreibt HubSpot direkt oder über Make-Webhooks~~ – entschieden: direkt, `src/lib/hubspot.ts` ist der einzige Weg nach außen
+- ~~Vorgänge bleiben in HubSpot oder bekommen eine eigene Datenbank~~ – entschieden: eigene Datenbank (Supabase), der Deal bleibt als **dünner Spiegel** im CRM. Der Spiegel wird nie zurückgelesen. **Folge: eine Stufe, die in HubSpot von Hand verschoben wird, kommt nicht mehr bei kitflow an** — dafür bekommt `/sparte` einen Stufenwechsel. Schicht und Schema stehen (docs/datenbank.md), angeschlossen ist noch nichts.
 - Fristen und Erinnerungen über Vercel Cron oder weiter Make (AUS-W)
 - Händler-XLSX in kitflow erzeugen oder Make
 
