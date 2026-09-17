@@ -96,12 +96,20 @@ describe("Wie gefragt wird", () => {
     expect(aufrufe.map((a) => a.methode)).toEqual(["GET", "POST"]);
   });
 
-  test("„schon da ist auch gut“ steht im Prefer", async () => {
+  test("„schon da ist auch gut“ nennt auch die Spalten", async () => {
     const { aufrufe } = stelleDb({ "POST vorgang_person": { koerper: [] } });
 
-    await schreibe("vorgang_person", { vorgang_id: "v1" }, { ignoriereDoppelte: true });
+    await schreibe(
+      "vorgang_person",
+      { vorgang_id: "v1" },
+      { ignoriereDoppelte: "vorgang_id,hs_kontakt_id" },
+    );
 
     expect(aufrufe[0].prefer).toContain("resolution=ignore-duplicates");
+    // Gemessen an PostgREST 13: ohne `on_conflict` schaut es nur auf den
+    // Primärschlüssel und antwortet auf die zweite Zeile mit 409. Das Prefer
+    // allein sieht aus, als täte es etwas.
+    expect(aufrufe[0].suche.on_conflict).toBe("vorgang_id,hs_kontakt_id");
   });
 });
 

@@ -181,6 +181,7 @@ describe("Einen Vorgang anlegen", () => {
     });
 
     const vorgang = await legeVorgangAn(neu);
+    expect(aufrufe[3].suche.on_conflict).toBe("vorgang_id,hs_kontakt_id");
 
     expect(vorgang?.nummer).toBe(NUMMER);
     expect(aufrufe.map((a) => a.pfad)).toEqual([
@@ -342,6 +343,8 @@ describe("Personen am Vorgang", () => {
 
     expect(await haengePersonAn("v1", "36737235175")).toBe(true);
     expect(aufrufe[0].prefer).toContain("resolution=ignore-duplicates");
+    // Ohne die Spalten laesst PostgREST den zweiten Nachtrag mit 409 auflaufen.
+    expect(aufrufe[0].suche.on_conflict).toBe("vorgang_id,hs_kontakt_id");
   });
 
   test("Torwart und Rückennummer gelten je Vorgang", async () => {

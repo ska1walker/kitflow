@@ -206,6 +206,13 @@ function ausVorgang(roh: VorgangRoh): VorgangSatz | undefined {
 /** Vorgang samt Artikeln und Personen in einem Aufruf. */
 const MIT_KINDERN = "*,vorgang_artikel(*),vorgang_person(*)";
 
+/**
+ * Die Eindeutigkeit in `vorgang_person`, wie die Migration sie legt. PostgREST
+ * braucht die Spalten ausdrücklich, sonst schaut es nur auf den
+ * Primärschlüssel und antwortet auf den zweiten Nachtrag mit 409.
+ */
+const EINDEUTIG_PERSON = "vorgang_id,hs_kontakt_id";
+
 /* ------------------------------------------------------------------ *
  * Lesen
  * ------------------------------------------------------------------ */
@@ -350,7 +357,7 @@ export async function legeVorgangAn(neu: NeuerVorgang): Promise<VorgangSatz | nu
     const zeilen = await schreibe(
       "vorgang_person",
       personen.map((kontaktId) => ({ vorgang_id: roh.id, hs_kontakt_id: kontaktId })),
-      { ignoriereDoppelte: true },
+      { ignoriereDoppelte: EINDEUTIG_PERSON },
     );
     if (zeilen === null) return await zuruecknehmen(roh.id);
   }
@@ -455,7 +462,7 @@ export async function haengePersonAn(vorgangId: string, kontaktId: string): Prom
   const zeilen = await schreibe(
     "vorgang_person",
     { vorgang_id: vorgangId, hs_kontakt_id: kontaktId },
-    { ignoriereDoppelte: true },
+    { ignoriereDoppelte: EINDEUTIG_PERSON },
   );
   return zeilen !== null;
 }

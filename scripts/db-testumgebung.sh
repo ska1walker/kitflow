@@ -1,0 +1,103 @@
+#!/usr/bin/env bash
+# Stellt Supabase so weit nach, dass die Datenschicht wirklich geprueft werden
+# kann: PostgreSQL mit den Rollen anon/authenticated/service_role, PostgREST
+# davor, und die Schluessel als echte HS256-JWTs mit der Rolle im Anspruch.
+#
+#   bash scripts/db-testumgebung.sh      # aufsetzen und starten
+#   npm run test:db                      # die Pruefungen dagegen
+#
+# Das Skript installiert nichts. Fehlt etwas, sagt es, was zu tun ist.
+set -euo pipefail
+
+ARBEIT="${TMPDIR:-/tmp}/kitflow-db-test"
+GEHEIM="ein-geheimnis-mit-mindestens-32-zeichen!!"
+DB="kitflow_test"
+
+fehlt() { echo "FEHLT: $1"; echo "   $2"; exit 1; }
+
+command -v psql >/dev/null || fehlt "psql" "apt-get install -y postgresql-16"
+[ -d /usr/lib/postgresql ] || fehlt "PostgreSQL-Server" "apt-get install -y postgresql-16"
+mkdir -p "$ARBEIT"
+
+if [ ! -x "$ARBEIT/postgrest" ]; then
+  echo "PostgREST fehlt, wird geholt ..."
+  curl -sSL -o "$ARBEIT/pgrst.tar.xz" \
+    "https://github.com/PostgREST/postgrest/releases/download/v13.0.4/postgrest-v13.0.4-linux-static-x86-64.tar.xz"
+  tar xf "$ARBEIT/pgrst.tar.xz" -C "$ARBEIT"
+fi
+
+pg_ctlcluster 16 main start 2>/dev/null || true
+
+echo "Datenbank $DB neu aufsetzen ..."
+su postgres -c "psql -q -c 'drop database if exists $DB' -c 'create database $DB'"
+su postgres -c "psql -q -d $DB" <<'SQL'
+-- Die Rollen und Voreinstellungen, die Supabase in jedem Projekt anlegt.
+do $$ begin
+  if not exists (select 1 from pg_roles where rolname='anon') then create role anon nologin; end if;
+  if not exists (select 1 from pg_roles where rolname='authenticated') then create role authenticated nologin; end if;
+  if not exists (select 1 from pg_roles where rolname='service_role') then create role service_role nologin bypassrls; end if;
+  if not exists (select 1 from pg_roles where rolname='authenticator') then
+    create role authenticator noinherit login password 'pgrst-test';
+  end if;
+end $$;
+grant usage on schema public to anon, authenticated, service_role;
+alter default privileges in schema public grant all on tables to anon, authenticated, service_role;
+alter default privileges in schema public grant all on functions to anon, authenticated, service_role;
+grant anon, authenticated, service_role to authenticator;
+SQL
+
+echo "Migration anwenden ..."
+for datei in supabase/migrations/*.sql; do
+  kopie="$ARBEIT/$(basename "$datei")"
+  cp "$datei" "$kopie"; chmod 644 "$kopie"
+  su postgres -c "psql -q -v ON_ERROR_STOP=1 -d $DB -f $kopie"
+done
+
+cat > "$ARBEIT/pgrst.conf" <<CONF
+db-uri = "postgres://authenticator:pgrst-test@127.0.0.1:5432/$DB"
+db-schemas = "public"
+db-anon-role = "anon"
+jwt-secret = "$GEHEIM"
+server-port = 3333
+CONF
+
+# Supabase serviert PostgREST unter /rest/v1; PostgREST selbst unter /. Der
+# Adapter schneidet nur das Praefix ab, damit der echte Pfad aus db.ts laeuft.
+cat > "$ARBEIT/adapter.mjs" <<'JS'
+import { createServer, request } from "node:http";
+createServer((ein, aus) => {
+  const pfad = ein.url.replace(/^\/rest\/v1/, "") || "/";
+  const weiter = request(
+    { host: "127.0.0.1", port: 3333, path: pfad, method: ein.method,
+      headers: { ...ein.headers, host: "127.0.0.1:3333" } },
+    (antwort) => { aus.writeHead(antwort.statusCode, antwort.headers); antwort.pipe(aus); },
+  );
+  weiter.on("error", (f) => { aus.writeHead(502); aus.end(String(f)); });
+  ein.pipe(weiter);
+}).listen(3344);
+JS
+
+pkill -f "$ARBEIT/postgrest" 2>/dev/null || true
+pkill -f "$ARBEIT/adapter.mjs" 2>/dev/null || true
+nohup "$ARBEIT/postgrest" "$ARBEIT/pgrst.conf" > "$ARBEIT/pgrst.log" 2>&1 &
+nohup node "$ARBEIT/adapter.mjs" > "$ARBEIT/adapter.log" 2>&1 &
+
+ende=$(( $(date +%s) + 30 ))
+until curl -s -o /dev/null "http://127.0.0.1:3344/rest/v1/" || [ "$(date +%s)" -ge "$ende" ]; do sleep 1; done
+
+# Ein Supabase-Dienstschluessel IST ein HS256-JWT mit role=service_role.
+DIENST=$(GEHEIM="$GEHEIM" node -e '
+  const c = require("node:crypto");
+  const b = (o) => Buffer.from(JSON.stringify(o)).toString("base64url");
+  const kopf = b({ alg: "HS256", typ: "JWT" });
+  const last = b({ role: "service_role", iss: "supabase", iat: 1758000000, exp: 2000000000 });
+  const sig = c.createHmac("sha256", process.env.GEHEIM).update(kopf + "." + last).digest("base64url");
+  console.log(kopf + "." + last + "." + sig);
+')
+
+echo
+echo "Bereit. Fuer die Pruefungen:"
+echo "  export DIENST='$DIENST'"
+echo "  npm run test:db"
+echo
+echo "Logs: $ARBEIT/pgrst.log"

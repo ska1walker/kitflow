@@ -54,6 +54,11 @@ npm test            # vitest run
 npm run build
 ```
 
+Dazu, von Hand und nicht in der Prüfung: `npm run test:db` fährt die Datenschicht gegen ein
+echtes PostgREST auf einem echten Postgres, aufgesetzt von `scripts/db-testumgebung.sh`
+(docs/datenbank.md). Ein Papp-Netz spiegelt die eigene Annahme zurück — dort kam ein Fehler
+heraus, den die 54 Tests gegen die Attrappe nie gefunden hätten.
+
 `npm test` prüft reine Logik und geht **nie** ins Netz: keine HubSpot, kein Schlüssel, keine
 Testobjekte. Was nur gegen die echte HubSpot zu prüfen ist, wird von Hand gegen einen
 Wegwerf-Vorgang gefahren und danach archiviert — mit dem Archivieren nachgelesen.

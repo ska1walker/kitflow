@@ -195,18 +195,25 @@ export async function leseEine<T>(
 }
 
 /**
- * Zeilen anlegen. `konflikt` schaltet auf „schon da ist auch gut“ um – das
- * braucht der Nachzügler, der zweimal nachgetragen wird.
+ * Zeilen anlegen.
+ *
+ * `ignoriereDoppelte` nennt die Spalten, auf denen die Eindeutigkeit liegt –
+ * und zwar als Text, nicht als Ja/Nein. Der Grund ist gemessen: PostgREST
+ * wendet `resolution=ignore-duplicates` **nur auf den Primärschlüssel** an,
+ * solange nicht `on_conflict` dabeisteht. Ohne die Spalten antwortet es 409,
+ * und das Prefer allein sieht aus, als täte es etwas. Wer die Spalten nicht
+ * nennen kann, will kein Ignorieren.
  */
 export async function schreibe<T>(
   tabelle: string,
   zeilen: Record<string, unknown> | Record<string, unknown>[],
-  optionen: { ignoriereDoppelte?: boolean } = {},
+  optionen: { ignoriereDoppelte?: string } = {},
 ): Promise<T[] | null> {
   return db<T[]>({
     pfad: tabelle,
     methode: "POST",
     koerper: zeilen,
+    suche: optionen.ignoriereDoppelte ? { on_conflict: optionen.ignoriereDoppelte } : undefined,
     prefer: optionen.ignoriereDoppelte ? ["resolution=ignore-duplicates"] : undefined,
   });
 }

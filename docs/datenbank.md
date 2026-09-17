@@ -98,5 +98,36 @@ PostgreSQL 16 mit den Supabase-Rollen `anon`, `authenticated` und `service_role`
   SQL gegen dieses Schema gefahren. Jeder Spaltenname, jeder Typ, jede Bedingung hielt. Ohne
   das wäre nur belegt, dass die Schicht zu meinem eigenen Papp-PostgREST passt.
 
-PostgREST selbst ist damit **nicht** geprüft — nur das Schema und die Rümpfe. Das
-Zusammenspiel entscheidet sich beim ersten Lauf gegen das echte Projekt.
+### Gegen ein echtes PostgREST
+
+Danach kam PostgREST 13.0.4 dazu — als Binärdatei aus dem GitHub-Release, davor ein Adapter,
+der das Supabase-Präfix `/rest/v1` abschneidet, und Schlüssel, die echte HS256-JWTs mit
+`role: service_role` sind. Genau das ist ein Supabase-Dienstschlüssel. Damit läuft die
+**unveränderte** Datenschicht gegen einen echten Stapel:
+
+```
+bash scripts/db-testumgebung.sh   # setzt auf und startet
+export DIENST='...'               # das Skript druckt den Schlüssel
+npm run test:db                   # 14 Prüfungen gegen echtes PostgREST
+```
+
+Diese Prüfungen laufen **nicht** in `npm test` und nicht in der PR-Prüfung: die müssen ohne
+Netz und ohne Dienste grün sein.
+
+**Dabei kam ein echter Fehler heraus, den das Papp-PostgREST nicht finden konnte** — es hat
+meine eigene Annahme zurückgespiegelt:
+
+> `Prefer: resolution=ignore-duplicates` wirkt bei PostgREST **nur auf den Primärschlüssel**.
+> Liegt die Eindeutigkeit auf anderen Spalten — hier `(vorgang_id, hs_kontakt_id)` — muss
+> `on_conflict=vorgang_id,hs_kontakt_id` an die Adresse. Ohne das antwortet PostgREST mit 409.
+
+Folge im Betrieb wäre gewesen: ein Nachzügler, der schon am Vorgang hängt, hätte die Karte
+scheitern lassen — und beim Anlegen eines Vorgangs hätte eine doppelte Kontakt-ID den
+**ganzen Vorgang zurückgenommen**. `schreibe()` verlangt deshalb jetzt die Spalten als Text
+statt eines Ja/Nein: wer sie nicht nennen kann, will kein Ignorieren.
+
+Mitgeprüft und in Ordnung: die eingebetteten Kinder `vorgang_artikel(*),vorgang_person(*)` in
+einem Aufruf, das Array `mannschaften`, `is.null` und `is.false`, `order`, `limit`, DELETE,
+die Rücknahme eines halben Vorgangs bei verletzter Bedingung (23514), und die Nummernfunktion
+über `rpc/`. **anon bekommt auch hier 401 „permission denied“** — RLS greift durch den echten
+Stapel, nicht nur in psql.
