@@ -1,13 +1,15 @@
 import "server-only";
 
 /**
- * Laedt Vorgaenge aus HubSpot und faellt auf Beispieldaten zurueck.
+ * Laedt Vorgaenge aus HubSpot.
  *
  * HubSpot ist die einzige Datenbasis (CLAUDE.md); kitflow hat keine eigene
- * Datenbank. Solange die Anmeldung fehlt, die Pipeline „Ausstattung“ nicht
- * angelegt ist oder noch kein Vorgang existiert, zeigt die Seite den
- * Beispiel-Vorgang und kennzeichnet ihn als solchen. Die Oberflaeche merkt vom
- * Wechsel nichts: sie bekommt in beiden Faellen denselben Typ.
+ * Datenbank. Antwortet HubSpot nicht, sagt `ladeVorgang` das auch — frueher
+ * kam dann der Beispiel-Vorgang zurueck, den beide Aufrufer ohnehin sofort
+ * verwarfen. Uebrig blieb „Dieser Link funktioniert nicht", und eine Stoerung
+ * sah fuer den Trainer aus wie ein toter Link.
+ *
+ * Die Beispieldaten leben jetzt nur noch im Schaufenster unter `/`.
  *
  * Zuordnung nach docs/datenmodell.md:
  *   Deal        -> Vorgang
@@ -20,7 +22,6 @@ import "server-only";
  * und die Oberflaeche laesst den Abschnitt weg.
  */
 
-import { BEISPIEL_VORGANG } from "./beispieldaten";
 import {
   assoziierteIds,
   batchLesen,
@@ -397,24 +398,38 @@ export function dealSuche(nummer: string | undefined, limit: number) {
  * Groessen gezeigt werden duerfen. Spaeter kommt sie aus dem signierten Link
  * (docs/konzept.md).
  */
-export async function ladeVorgang(nummer?: string, personId?: string): Promise<Vorgang> {
-  if (!hubspotAktiv()) return BEISPIEL_VORGANG;
+export type VorgangsErgebnis =
+  | { stand: "da"; vorgang: Vorgang }
+  /** Den Vorgang gibt es nicht, oder die Nummer passt nicht zum Link. */
+  | { stand: "unbekannt" }
+  /** HubSpot antwortet nicht. Das hat nichts mit dem Link zu tun. */
+  | { stand: "gestoert" };
+
+export async function ladeVorgang(
+  nummer?: string,
+  personId?: string,
+): Promise<VorgangsErgebnis> {
+  if (!hubspotAktiv()) return { stand: "gestoert" };
 
   const stufen = await pipelineStufen();
-  if (!stufen) return BEISPIEL_VORGANG;
+  if (!stufen) return { stand: "gestoert" };
 
   const treffer = await hubspot<HsListe<HsObjekt>>({
     pfad: "/crm/v3/objects/deals/search",
     koerper: dealSuche(nummer, 1),
   });
+  // Kein Ergebnis heisst „HubSpot hat nicht geantwortet", eine leere Liste
+  // heisst „diesen Vorgang gibt es nicht". Frueher war beides dasselbe, und
+  // eine Stoerung sah fuer den Trainer aus wie ein toter Link.
+  if (!treffer) return { stand: "gestoert" };
 
-  const deal = treffer?.results[0];
-  if (!deal) return BEISPIEL_VORGANG;
+  const deal = treffer.results[0];
+  if (!deal || text(deal, "vorgangsnummer") !== nummer) return { stand: "unbekannt" };
 
   const stufenName = stufen.get(deal.properties.dealstage ?? "");
   const stufe = stufenName ? stufeAusName(stufenName) : null;
   // Stufe 0 (Voranfrage) ist unwahr, aber gueltig: gegen null pruefen.
-  if (stufe === null) return BEISPIEL_VORGANG;
+  if (stufe === null) return { stand: "unbekannt" };
 
   const [positionsIds, kontaktIds] = await Promise.all([
     assoziierteIds("deals", deal.id, "line_items"),
@@ -457,7 +472,7 @@ export async function ladeVorgang(nummer?: string, personId?: string): Promise<V
     .sort()
     .at(-1);
 
-  return {
+  const vorgang: Vorgang = {
     nummer: text(deal, "vorgangsnummer") ?? deal.id,
     titel: `${text(deal, "mannschaft") ?? "Mannschaft"} · ${text(deal, "ausstattungsart") ?? "Ausstattung"}`,
     untertitel: [
@@ -510,6 +525,8 @@ export async function ladeVorgang(nummer?: string, personId?: string): Promise<V
 
     quelle: "hubspot",
   };
+
+  return { stand: "da", vorgang };
 }
 
 /* ------------------------------------------------------------------ *

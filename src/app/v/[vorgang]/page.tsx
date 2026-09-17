@@ -1,4 +1,5 @@
 import { KeinZugang } from "@/components/kein-zugang";
+import { Stoerung } from "@/components/stoerung";
 import { Statusseite } from "@/components/statusseite";
 import { ergaenzenLink, pruefe } from "@/lib/links";
 import { ladeVorgang, nachtragbarePersonen } from "@/lib/vorgaenge";
@@ -17,12 +18,15 @@ export default async function TrainerStatus(props: PageProps<"/v/[vorgang]">) {
 
   if (typeof t !== "string" || !pruefe(t, "status", nummer)) return <KeinZugang />;
 
-  const vorgang = await ladeVorgang(nummer);
+  const ergebnis = await ladeVorgang(nummer);
 
-  // ladeVorgang faellt auf den Beispiel-Vorgang zurueck, wenn HubSpot nichts
-  // liefert. Unter einem echten Link waere das eine Luege: dann lieber die
-  // gleiche Antwort wie bei einem falschen Token.
-  if (vorgang.quelle !== "hubspot" || vorgang.nummer !== nummer) return <KeinZugang />;
+  // „Gibt es nicht" bekommt dieselbe Antwort wie ein falsches Token: wer raet,
+  // soll daraus nichts lernen. Eine Stoerung dagegen liegt nicht am Link und
+  // wird auch so benannt — sie ist erst nach geprueftem Token erreichbar und
+  // verraet deshalb nichts.
+  if (ergebnis.stand === "gestoert") return <Stoerung />;
+  if (ergebnis.stand !== "da") return <KeinZugang />;
+  const vorgang = ergebnis.vorgang;
 
   // Auf Stufe 0 braucht der Trainer einen Weg weiter und einen zurueck. Der
   // Ergaenzungslink wird hier serverseitig signiert, damit er nicht aus einer
