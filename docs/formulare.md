@@ -32,15 +32,29 @@ Die Vorgangsnummer kommt aus einer Suche über die bestehenden Nummern. Zwei Mel
 
 ### Stand von F2 und F3
 
-**F2 fertig.** Gefragt werden nur die Größenarten der Artikel dieses Vorgangs, jede einmal. Dazu, **nur wenn der Vorgang `initialen_noetig` trägt**, ein Pflichtfeld Initialen: höchstens drei Zeichen, nur Buchstaben und Ziffern. Beide Grenzen stehen so in der HubSpot-Eigenschaft `initialen`; kitflow prüft sie vorher, damit der Spieler erfährt, was falsch ist, statt „hat nicht geklappt“ zu lesen. Die Initialen hängen am Vorgang, nicht an einer Größenart – eine Person hat genau ein Paar, egal wie viele Artikel beflockt werden. Geändert werden darf nur auf Stufe 1. Geschrieben wird nur, was vorher als Frage rausging und in der HubSpot-Werteliste steht. Die Veraltungsregel (4 Monate Jugend, 12 Erwachsene) ist umgesetzt; ohne Bestätigungsdatum gilt eine Größe als veraltet. Es fehlt Mail M3.
+**F2 fertig.** Gefragt werden nur die Größenarten der Artikel dieses Vorgangs, jede einmal; bei einem Vorgang ohne Artikel („Nur Größen erfassen“) die Arten aus `groessenarten` am Deal. Beide Wege laufen durch **einen** Helfer `gefragteArten(deal, artikel)` in `src/lib/vorgaenge.ts` — F2 und F3 müssen hier zum selben Ergebnis kommen, sonst fragt das Formular etwas anderes, als die Liste anzeigt. Dazu, **nur wenn der Vorgang `initialen_noetig` trägt**, ein Pflichtfeld Initialen: höchstens drei Zeichen, nur Buchstaben und Ziffern. Beide Grenzen stehen so in der HubSpot-Eigenschaft `initialen`; kitflow prüft sie vorher, damit der Spieler erfährt, was falsch ist, statt „hat nicht geklappt“ zu lesen. Die Initialen hängen am Vorgang, nicht an einer Größenart – eine Person hat genau ein Paar, egal wie viele Artikel beflockt werden. Geändert werden darf nur auf Stufe 1. Geschrieben wird nur, was vorher als Frage rausging und in der HubSpot-Werteliste steht. Die Veraltungsregel (4 Monate Jugend, 12 Erwachsene) ist umgesetzt; ohne Bestätigungsdatum gilt eine Größe als veraltet. Es fehlt Mail M3.
 
 **F2 als Trainer** liegt unter `/b/{vorgang}/{person}` mit eigenem Zweck `trainer`; die Links auf die einzelnen Zeilen erzeugt F3 selbst. Größen sind hier optional, weil der Trainer meist nur eine Nummer nachträgt; das Bestätigungsdatum wird nur gesetzt, wenn er wirklich eine Größe angefasst hat. Die Rückennummer muss zwischen 1 und 99 liegen und in der Mannschaft eindeutig sein — geprüft wird beides serverseitig, nicht nur im Browser. „Bekommt diesmal nichts“ und „spielt Torwart“ hängen am Deal (`ausgeschlossene_spieler`, `torwarte`), nicht am Kontakt: beides gilt nur für diesen Vorgang. Wer ausgeschlossen ist, kommt über seinen eigenen Größen-Link nicht mehr hinein und fällt aus der Liste; der Trainer erreicht ihn weiter und kann den Ausschluss zurücknehmen.
 
 **F3 bis zur Bestätigung.** Tabelle mit Größen und Rückennummern, fehlend oder veraltet gelb, Nummer fehlend oder doppelt rot. Die sechs Prüfungen laufen und nennen im Klartext, was fehlt. Eine gefallene Prüfung verhindert das Bestätigen, auch mit gesetztem Häkchen. Prüfung 4 (Vereinslogo als Datei) und 5 (Summen gegen die Positionen) bleiben **offen** statt bestanden: das Logo kennt das Datenmodell nicht, und die Positionen entstehen erst danach. Offene Prüfungen blockieren nicht — sonst könnte niemand je bestätigen — stehen aber sichtbar da.
 
+Bei „Nur Größen erfassen“ bleibt **nur Prüfung 2** (jede Person hat eine aktuelle Größe). Die anderen gelten der Anfrage an die Händler; „Es hängt kein Artikel am Vorgang“ wäre dort ein erfundener Mangel. Lieferadresse und Händlerhinweis fallen aus dem Formular.
+
 Die Bestätigung schreibt `liste_bestaetigt_am`, `lieferadresse` und `hinweis_haendler`. **Die Stufe bleibt auf 1.** „Anfrage raus“ heißt, dass eine Anfrage rausgegangen ist; solange kitflow keine Mail verschickt, wäre dieser Stand eine Behauptung. Es fehlen also: Positionen am Deal anlegen, Händler-XLSX, M4 an beide Händler, M5 an den Trainer, M6 bei nicht bestandener Prüfung, Stufenwechsel. Alles davon hängt am Mailversand über Resend und an der Entscheidung XLSX in kitflow oder in Make (docs/offen.md).
 
 ## Statusseite `/v/{vorgang}`
+
+**Person nachtragen.** Verknüpft wird in F1 genau einmal, beim Absenden; wer danach zur Mannschaft
+kommt, fehlte am Vorgang und musste in HubSpot von Hand angehängt werden. Auf **Stufe 1** zeigt die
+Trainer-Statusseite deshalb eine Karte mit denen, die zur Mannschaft des Vorgangs gehören und noch
+nicht dranhängen (`kontakteDerMannschaft` minus `assoziierteIds`) — keine freie Namenssuche. Die
+Server Action prüft denselben `status`-Token wie der Abbruch, die Stufe **und** dass die gewählte ID
+wirklich in dieser Auswahl steckt; eine untergeschobene ID kommt nicht durch, auch nicht die eines
+Kontakts aus einer fremden Mannschaft. Zurück kommt der frische Größen-Link als Pfad, den die Karte
+aus der Adresse der Seite absolut macht — `KITFLOW_BASIS` ist für Mails da und darf fehlen.
+
+Zu wissen: der HubSpot-Suchindex hinkt Schreibvorgängen bis zu einer Minute nach. Wer gerade erst
+`team` bekommen hat, steht so lange nicht in der Auswahl. Die Karte sagt das.
 
 Entwurf: prototyp/statusseite.html. Drei Ansichten:
 

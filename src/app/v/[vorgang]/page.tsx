@@ -1,7 +1,7 @@
 import { KeinZugang } from "@/components/kein-zugang";
 import { Statusseite } from "@/components/statusseite";
 import { ergaenzenLink, pruefe } from "@/lib/links";
-import { ladeVorgang } from "@/lib/vorgaenge";
+import { ladeVorgang, nachtragbarePersonen } from "@/lib/vorgaenge";
 
 /**
  * Statusseite für den Trainer, erreichbar nur über den signierten Link aus
@@ -30,7 +30,17 @@ export default async function TrainerStatus(props: PageProps<"/v/[vorgang]">) {
   const voranfrage =
     vorgang.stufe === 0 ? { ergaenzen: ergaenzenLink(nummer) ?? "", token: t } : undefined;
 
+  // Nachruecken geht nur, solange Groessen gesammelt werden. `nachtragbarePersonen`
+  // prueft die Stufe selbst und gibt sonst null zurueck – die Karte entfaellt dann.
+  const nachtrag = vorgang.stufe === 1 ? await nachtragbarePersonen(nummer) : null;
+
   return (
-    <Statusseite vorgang={vorgang} zeilen={[]} ansicht="trainer" voranfrage={voranfrage} />
+    <Statusseite
+      vorgang={vorgang}
+      zeilen={[]}
+      ansicht="trainer"
+      voranfrage={voranfrage}
+      nachtrag={nachtrag ? { token: t, personen: nachtrag.personen } : undefined}
+    />
   );
 }

@@ -49,6 +49,7 @@ export function Statusseite({
   zeilen,
   ansicht,
   voranfrage,
+  nachtrag,
   leiste,
   onOeffnen,
 }: {
@@ -58,6 +59,8 @@ export function Statusseite({
   ansicht: Ansicht;
   /** Nur am Trainer-Link gesetzt (docs/formulare.md, F1b). */
   voranfrage?: { ergaenzen: string; token: string };
+  /** Nur am Trainer-Link und nur auf Stufe 1 (docs/formulare.md). */
+  nachtrag?: { token: string; personen: { id: string; name: string }[] };
   /** Steuerleiste des Schaufensters. Bei echten Vorgaengen leer. */
   leiste?: ReactNode;
   /**
@@ -101,6 +104,7 @@ export function Statusseite({
               ansicht={ansicht}
               onDemo={zeigeHinweis}
               voranfrage={voranfrage}
+              nachtrag={nachtrag}
             />
           )}
         </div>

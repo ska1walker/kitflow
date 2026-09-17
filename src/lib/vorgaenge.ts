@@ -41,6 +41,7 @@ import {
   istJugend as istJugendMannschaft,
   istVeraltet,
 } from "./groessen";
+import { kontakteDerMannschaft, verknuepfen } from "./bedarf";
 import { trainerLink } from "./links";
 import { offen, pruefung, type Pruefung } from "./pruefungen";
 import { stufeAusName } from "./stufen";
@@ -1039,4 +1040,94 @@ export async function speichereTrainerAngaben(
   });
 
   return { ok: dealOk !== null };
+}
+
+/* ------------------------------------------------------------------ *
+ * Person nachtragen (docs/formulare.md)
+ * ------------------------------------------------------------------ */
+
+export type Nachtrag = {
+  dealId: string;
+  /** Wer zur Mannschaft gehoert, aber noch nicht am Vorgang haengt. */
+  personen: { id: string; name: string }[];
+};
+
+/**
+ * Wen der Trainer noch nachtragen kann.
+ *
+ * Verknuepft wird in F1 genau einmal, beim Absenden. Wer danach zur Mannschaft
+ * kommt, fehlt am Vorgang und bekommt keinen Groessen-Link – bisher half nur
+ * Handarbeit in HubSpot.
+ *
+ * Die Auswahl ist bewusst eng: es erscheint nur, wer ohnehin zu einer der
+ * Mannschaften dieses Vorgangs zaehlt. Eine freie Namenssuche waere ein
+ * Mitgliederverzeichnis, und die haette hier nichts zu suchen.
+ *
+ * `null` heisst: gibt es nicht, oder der Vorgang ist nicht auf Stufe 1. Nur
+ * dort werden Groessen gesammelt; spaeter waere ein Nachzuegler eine Zeile in
+ * einer schon bestaetigten Liste.
+ */
+export async function nachtragbarePersonen(nummer: string): Promise<Nachtrag | null> {
+  if (!hubspotAktiv()) return null;
+
+  const stufen = await pipelineStufen();
+  if (!stufen) return null;
+
+  const treffer = await hubspot<HsListe<HsObjekt>>({
+    pfad: "/crm/v3/objects/deals/search",
+    koerper: dealSuche(nummer, 1),
+  });
+  const deal = treffer?.results[0];
+  if (!deal || text(deal, "vorgangsnummer") !== nummer) return null;
+
+  const stufenName = stufen.get(deal.properties.dealstage ?? "");
+  if (!stufenName || stufeAusName(stufenName) !== 1) return null;
+
+  const teams = (text(deal, "mannschaft") ?? "")
+    .split(";")
+    .map((w) => w.trim())
+    .filter(Boolean);
+  if (teams.length === 0) return { dealId: deal.id, personen: [] };
+
+  const [kandidaten, schonDabei] = await Promise.all([
+    kontakteDerMannschaft(teams),
+    assoziierteIds("deals", deal.id, "contacts"),
+  ]);
+
+  const dabei = new Set(schonDabei);
+  const personen = kandidaten
+    .filter((k) => !dabei.has(k.id))
+    .map((k) => ({ id: k.id, name: personName(k) }))
+    .sort((a, b) => a.name.localeCompare(b.name, "de"));
+
+  return { dealId: deal.id, personen };
+}
+
+/**
+ * Haengt eine Person an den Vorgang.
+ *
+ * Geprueft wird gegen dieselbe Auswahl, die das Formular angezeigt hat: eine
+ * untergeschobene ID kommt so nicht durch, auch nicht die eines Kontakts aus
+ * einer fremden Mannschaft.
+ */
+export async function trageNach(
+  nummer: string,
+  personId: string,
+): Promise<{ ok: true; name: string } | { ok: false; fehler: string }> {
+  const nachtrag = await nachtragbarePersonen(nummer);
+  if (!nachtrag) {
+    return { ok: false, fehler: "In diesem Vorgang laufen gerade keine Größen." };
+  }
+
+  const person = nachtrag.personen.find((p) => p.id === personId);
+  if (!person) {
+    return { ok: false, fehler: "Diese Person gehört nicht zur Mannschaft dieses Vorgangs." };
+  }
+
+  const gesetzt = await verknuepfen("deals", nachtrag.dealId, "contacts", person.id);
+  if (!gesetzt) {
+    return { ok: false, fehler: "Das hat gerade nicht geklappt. Bitte versuch es später." };
+  }
+
+  return { ok: true, name: person.name };
 }

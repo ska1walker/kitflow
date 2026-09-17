@@ -216,11 +216,18 @@ export async function kontakteDerMannschaft(teams: string[]): Promise<HsObjekt[]
   return treffer?.results ?? [];
 }
 
-export async function verknuepfen(vonTyp: string, vonId: string, zuTyp: string, zuId: string) {
-  await hubspot({
+/** `false` heisst: HubSpot hat die Verknuepfung nicht bestaetigt. */
+export async function verknuepfen(
+  vonTyp: string,
+  vonId: string,
+  zuTyp: string,
+  zuId: string,
+): Promise<boolean> {
+  const antwort = await hubspot({
     pfad: `/crm/v4/objects/${vonTyp}/${vonId}/associations/default/${zuTyp}/${zuId}`,
     methode: "PUT",
   });
+  return antwort !== null;
 }
 
 /**

@@ -7,6 +7,7 @@ import { naechsterSchritt, statusText } from "@/lib/texte";
 import type { Ansicht, StufeNr, Vorgang } from "@/lib/typen";
 import { Schrittleiste } from "./schrittleiste";
 import { VoranfrageKarte } from "./voranfrage-karte";
+import { NachtragKarte } from "./nachtrag-karte";
 import {
   ArtikelKarte,
   GeldKarte,
@@ -119,12 +120,15 @@ export function VorgangAnsicht({
   ansicht,
   onDemo,
   voranfrage,
+  nachtrag,
 }: {
   vorgang: Vorgang;
   ansicht: Ansicht;
   onDemo: (text: string) => void;
   /** Nur am Trainer-Link gesetzt: die beiden Wege aus der Voranfrage heraus. */
   voranfrage?: { ergaenzen: string; token: string };
+  /** Nur am Trainer-Link und nur auf Stufe 1: wer noch nachruecken kann. */
+  nachtrag?: { token: string; personen: { id: string; name: string }[] };
 }) {
   // Bei einem Abbruch stehen die Karten auf dem Stand, den der Vorgang erreicht
   // hatte. Kopf und naechster Schritt sprechen weiter vom Abbruch selbst.
@@ -172,6 +176,14 @@ export function VorgangAnsicht({
           vorgang={vorgang.nummer}
           ergaenzen={voranfrage.ergaenzen}
           token={voranfrage.token}
+        />
+      )}
+
+      {nachtrag && (
+        <NachtragKarte
+          vorgang={vorgang.nummer}
+          token={nachtrag.token}
+          personen={nachtrag.personen}
         />
       )}
 

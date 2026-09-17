@@ -38,6 +38,14 @@ export function IconArrowRight(props: IconProps) {
   );
 }
 
+export function IconPlus(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M12 5v14M5 12h14" />
+    </Svg>
+  );
+}
+
 export function IconCheck(props: IconProps) {
   return (
     <Svg {...props}>
