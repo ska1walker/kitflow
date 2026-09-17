@@ -77,6 +77,8 @@ export type ErgaenzungArtikel = {
 export type ErgaenzungEingabe = {
   groessenFrist: string;
   lieferadresse: string;
+  /** Wie in F1: schaltet die Initialen-Abfrage in F2 frei. */
+  initialenNoetig: boolean;
   sponsor: string;
   hinweise: string;
   artikel: ErgaenzungArtikel[];
@@ -315,6 +317,7 @@ export async function ergaenzeVorgang(
         dealstage: ohnePersonen ? stufe9.id : stufe1.id,
         groessen_frist: eingabe.groessenFrist,
         lieferadresse: eingabe.lieferadresse,
+        initialen_noetig: eingabe.initialenNoetig ? "true" : "false",
         hinweis_haendler: eingabe.hinweise,
       },
     },

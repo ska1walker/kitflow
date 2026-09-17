@@ -38,6 +38,7 @@ Stand 10.09.2026. HubSpot ist die einzige Datenbasis. Neue Eigenschaften in der 
 | mannschaftscode | Text, z. B. JG2014-2015 | F1 |
 | personen_geschaetzt | Zahl, geschätzte Kadergröße; nur im einfachen Modus | F1 (Voranfrage) |
 | trainer_email, groessen_frist, lieferadresse | Text / Datum / Text | F1 |
+| initialen_noetig | Ja/Nein | F1 bzw. F1b – schaltet die Initialen-Abfrage in F2 frei |
 | ausgeschlossene_spieler | Text, Record-IDs | F2 (Trainer) |
 | torwarte | Text, Record-IDs; wer die Torwartartikel bekommt | F2 (Trainer) |
 | liste_bestaetigt_am | Datum | F3 |
@@ -96,7 +97,7 @@ Vorhandene Größen-Eigenschaften (Werte müssen exakt passen):
 | kurze_sporthose | derzeit nur S, M, L, XL, XXL, XXXL – um 116–176 und XS ergänzen |
 | schuhgroesse | 35–51 |
 | trikotnummer | Text |
-| initialen | Text |
+| initialen | Text, **höchstens 3 Zeichen, nur Buchstaben und Ziffern** (HubSpot prüft das selbst) |
 
 Neu: `groesse_zuletzt_bestaetigt_am`, `bekleidung_zuletzt_erhalten_am`.
 

@@ -5,6 +5,7 @@ import { abschicken } from "./formular";
 import { Badge, Button, Card, SelectFeld } from "./ui";
 import { IconCheck } from "./icons";
 import { trainerAngabenSpeichern, type Ergebnis } from "@/app/b/[vorgang]/[person]/aktion";
+import { INITIALEN_MAX } from "@/lib/typen";
 import type { TrainerAbfrage } from "@/lib/vorgaenge";
 
 const LEER: Ergebnis = { stand: "leer" };
@@ -106,6 +107,24 @@ export function TrainerFormular({
             </span>
           )}
         </label>
+
+        {abfrage.initialenNoetig && (
+          <label className="flex flex-col gap-1.5">
+            <span className="text-sm font-semibold text-ink-900">
+              Initialen{" "}
+              <span className="font-normal text-ink-500">
+                — höchstens {INITIALEN_MAX} Zeichen, leer lassen löscht sie
+              </span>
+            </span>
+            <input
+              name="initialen"
+              defaultValue={abfrage.initialen}
+              maxLength={INITIALEN_MAX}
+              autoComplete="off"
+              className="w-40 rounded-lg border border-ink-200 bg-white px-3 py-2 text-sm text-ink-800 focus:border-pitch-400 focus:ring-2 focus:ring-pitch-100 focus:outline-none"
+            />
+          </label>
+        )}
 
         <label className="flex items-start gap-2.5 text-sm text-ink-800">
           <input

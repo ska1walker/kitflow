@@ -128,6 +128,16 @@ const DEAL_FELDER = [
   feld("personen_geschaetzt", "Personen geschätzt", "number", "number", {
     description: "F1 einfacher Modus, Grundlage der Voranfrage",
   }),
+  // Braucht dieser Vorgang Initialen auf der Kleidung? Gesetzt in F1 bzw. F1b,
+  // gelesen von F2: ohne das Haekchen fragt niemand nach Initialen, und ein
+  // Ball soll auch nie danach fragen (docs/formulare.md).
+  feld("initialen_noetig", "Initialen nötig", "enumeration", "booleancheckbox", {
+    description: "F1, schaltet die Initialen-Abfrage in F2 frei",
+    options: [
+      { label: "Ja", value: "true", displayOrder: 0 },
+      { label: "Nein", value: "false", displayOrder: 1 },
+    ],
+  }),
   feld("liste_bestaetigt_am", "Liste bestätigt am", "date", "date", {
     description: "F3, Bestaetigung des Trainers",
   }),

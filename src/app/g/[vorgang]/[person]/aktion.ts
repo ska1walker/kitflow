@@ -54,11 +54,20 @@ export async function groessenSpeichern(
     };
   }
 
-  const ok = await speichereGroessen(abfrage, eingaben);
-  if (!ok) {
+  // Die Initialen stehen nicht in `fragen`: sie haengen am Vorgang, nicht an
+  // einer Groessenart. Gelesen werden sie nur, wenn der Vorgang sie braucht.
+  if (abfrage.initialenNoetig) {
+    const wert = formular.get("initialen");
+    eingaben.initialen = typeof wert === "string" ? wert : "";
+  }
+
+  const ergebnis = await speichereGroessen(abfrage, eingaben);
+  if (!ergebnis.ok) {
     return {
       stand: "fehler",
-      text: "Das hat gerade nicht geklappt. Bitte versuch es in einer Minute noch einmal.",
+      text:
+        ergebnis.fehler ??
+        "Das hat gerade nicht geklappt. Bitte versuch es in einer Minute noch einmal.",
     };
   }
 

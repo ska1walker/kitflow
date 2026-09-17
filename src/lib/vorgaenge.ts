@@ -41,6 +41,7 @@ import {
 import { trainerLink } from "./links";
 import { offen, pruefung, type Pruefung } from "./pruefungen";
 import { stufeAusName } from "./stufen";
+import { pruefeInitialen } from "./typen";
 import type {
   Artikel,
   ArtikelFuer,
@@ -71,6 +72,7 @@ const DEAL_FELDER = [
   "hinweis_haendler",
   "angebot_intersport_am",
   "angebot_11teamsports_am",
+  "initialen_noetig",
   "zusage_sponsor",
   "eingang_verein",
   "eingang_am",
@@ -123,6 +125,7 @@ const KONTAKT_FELDER = [
   "trainingshose",
   "schuhgroesse",
   "trikotnummer",
+  "initialen",
   "groesse_zuletzt_bestaetigt_am",
 ];
 
@@ -610,6 +613,10 @@ export type GroessenAbfrage = {
   frist?: string;
   jugend: boolean;
   fragen: GroessenFrage[];
+  /** Dieser Vorgang laesst Initialen aufdrucken (F1, `initialen_noetig`). */
+  initialenNoetig: boolean;
+  /** Die Initialen, die am Kontakt stehen. Leer, wenn noch keine da sind. */
+  initialen: string;
   /** Nur auf Stufe 1 darf geaendert werden (docs/formulare.md). */
   offen: boolean;
 };
@@ -696,6 +703,10 @@ export async function ladeGroessenAbfrage(
     frist: kurzDatum(text(deal, "groessen_frist")),
     jugend,
     fragen,
+    // Die Initialen haengen nicht an einer Groessenart: eine Person hat genau
+    // ein Paar, egal wie viele Artikel beflockt werden.
+    initialenNoetig: text(deal, "initialen_noetig") === "true",
+    initialen: text(kontakt, "initialen") ?? "",
     offen: stufe === 1,
   };
 }
@@ -710,17 +721,25 @@ export async function ladeGroessenAbfrage(
 export async function speichereGroessen(
   abfrage: GroessenAbfrage,
   eingaben: Record<string, string>,
-): Promise<boolean> {
+): Promise<{ ok: true } | { ok: false; fehler?: string }> {
   const werte: Record<string, string> = {};
 
   for (const frage of abfrage.fragen) {
     const wert = eingaben[frage.feld];
     if (!wert) continue;
-    if (!frage.werte.includes(wert)) return false;
+    if (!frage.werte.includes(wert)) return { ok: false };
     werte[frage.feld] = wert;
   }
 
-  if (Object.keys(werte).length === 0) return false;
+  if (Object.keys(werte).length === 0) return { ok: false };
+
+  // Initialen nur, wenn dieser Vorgang sie ueberhaupt aufdruckt. Sonst ist das
+  // Feld gar nicht im Formular gewesen und wird auch nicht uebernommen.
+  if (abfrage.initialenNoetig) {
+    const geprueft = pruefeInitialen(eingaben.initialen ?? "");
+    if ("fehler" in geprueft) return { ok: false, fehler: geprueft.fehler };
+    werte.initialen = geprueft.wert;
+  }
 
   werte.groesse_zuletzt_bestaetigt_am = new Date().toISOString().slice(0, 10);
 
@@ -730,7 +749,7 @@ export async function speichereGroessen(
     koerper: { properties: werte },
   });
 
-  return antwort !== null;
+  return antwort !== null ? { ok: true } : { ok: false };
 }
 
 /* ------------------------------------------------------------------ *
@@ -744,6 +763,8 @@ export type ListenZeile = {
   /** Groesse je Groessenart, leer wenn nicht eingetragen. */
   groessen: { art: Groessenart; label: string; wert: string }[];
   nummer: string;
+  /** Leer, wenn der Vorgang keine Initialen braucht oder noch keine da sind. */
+  initialen: string;
   veraltet: boolean;
   torwart: boolean;
   /** Der signierte Link, mit dem der Trainer diese Zeile aendert. */
@@ -756,6 +777,8 @@ export type Liste = {
   gegenstand: string;
   trikotsatz: boolean;
   jugend: boolean;
+  /** Steuert die Initialen-Spalte: ohne das Haekchen in F1 gibt es sie nicht. */
+  initialenNoetig: boolean;
   lieferadresse: string;
   hinweisHaendler: string;
   bestaetigtAm?: string;
@@ -819,6 +842,7 @@ export async function ladeListe(nummer: string): Promise<Liste | null> {
   const kontakte = kontakteRoh.filter((k) => !raus.has(k.id));
   const jugend = istJugend(deal);
   const trikotsatz = text(deal, "ausstattungsart") === "Trikotsatz";
+  const initialenNoetig = text(deal, "initialen_noetig") === "true";
 
   const arten = [...new Set(artikel.map((a) => a.groessenart))]
     .filter((a) => a !== "ohne")
@@ -832,6 +856,7 @@ export async function ladeListe(nummer: string): Promise<Liste | null> {
       return { art, label, wert: (feld ? text(k, feld) : undefined) ?? "" };
     }),
     nummer: text(k, "trikotnummer") ?? "",
+    initialen: initialenNoetig ? (text(k, "initialen") ?? "") : "",
     veraltet: istVeraltet(text(k, "groesse_zuletzt_bestaetigt_am"), jugend),
     torwart: torwarte.has(k.id),
     aendern: trainerLink(nummer, k.id) ?? "",
@@ -843,6 +868,7 @@ export async function ladeListe(nummer: string): Promise<Liste | null> {
     gegenstand: text(deal, "ausstattungsart") ?? "Ausstattung",
     trikotsatz,
     jugend,
+    initialenNoetig,
     lieferadresse: text(deal, "lieferadresse") ?? "",
     hinweisHaendler: text(deal, "hinweis_haendler") ?? "",
     bestaetigtAm: kurzDatum(text(deal, "liste_bestaetigt_am")),
@@ -1024,6 +1050,8 @@ function idsSchreiben(vorhanden: Set<string>, id: string, dabei: boolean): strin
 export type TrainerEingabe = {
   groessen: Record<string, string>;
   nummer: string;
+  /** Leer heisst hier „loeschen“, so wie bei der Rueckennummer. */
+  initialen: string;
   ausgeschlossen: boolean;
   torwart: boolean;
 };
@@ -1063,6 +1091,18 @@ export async function speichereTrainerAngaben(
     }
   }
   werte.trikotnummer = eingabe.nummer;
+
+  // Initialen sind fuer den Trainer optional – er traegt oft nur eine Nummer
+  // nach. Was drinsteht, muss aber passen; leer loescht, so wie die Nummer.
+  if (abfrage.initialenNoetig) {
+    if (eingabe.initialen.trim() === "") {
+      werte.initialen = "";
+    } else {
+      const geprueft = pruefeInitialen(eingabe.initialen);
+      if ("fehler" in geprueft) return { ok: false, fehler: geprueft.fehler };
+      werte.initialen = geprueft.wert;
+    }
+  }
 
   const kontaktOk = await hubspot<HsObjekt>({
     pfad: `/crm/v3/objects/contacts/${encodeURIComponent(abfrage.person)}`,

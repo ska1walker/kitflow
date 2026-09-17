@@ -108,6 +108,7 @@ export function ListeFormular({ liste, token }: { liste: Liste; token: string })
                 </th>
               ))}
               {liste.trikotsatz && <th className="pb-2">Nummer</th>}
+              {liste.initialenNoetig && <th className="pb-2">Initialen</th>}
               <th className="pb-2" />
             </tr>
           </thead>
@@ -141,6 +142,15 @@ export function ListeFormular({ liste, token }: { liste: Liste; token: string })
                       <Badge tone="red">{zeile.nummer} · doppelt</Badge>
                     ) : (
                       <span className="tnum">{zeile.nummer}</span>
+                    )}
+                  </td>
+                )}
+                {liste.initialenNoetig && (
+                  <td className="py-2 pr-3">
+                    {zeile.initialen === "" ? (
+                      <Badge tone="amber">fehlt</Badge>
+                    ) : (
+                      <span>{zeile.initialen}</span>
                     )}
                   </td>
                 )}

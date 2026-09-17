@@ -105,6 +105,7 @@ export async function angabenErgaenzen(
   const ergebnis = await ergaenzeVorgang(vorgang, {
     groessenFrist,
     lieferadresse,
+    initialenNoetig: formular.get("initialen_noetig") === "ja",
     sponsor: String(formular.get("sponsor") ?? "").trim(),
     hinweise: String(formular.get("hinweise") ?? "").trim(),
     artikel,

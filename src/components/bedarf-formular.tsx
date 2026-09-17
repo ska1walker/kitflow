@@ -528,6 +528,20 @@ export function BedarfFormular() {
             <Feld label="Lieferadresse">
               <textarea name="lieferadresse" rows={3} required className={EINGABE} />
             </Feld>
+            <label className="flex items-start gap-2.5 text-sm text-ink-800">
+              <input
+                type="checkbox"
+                name="initialen_noetig"
+                value="ja"
+                className="mt-0.5 h-4 w-4 flex-none accent-pitch-600"
+              />
+              <span>
+                Es werden Initialen aufgedruckt.
+                <span className="mt-0.5 block text-xs text-ink-500">
+                  Dann wird jede Person zusammen mit ihrer Größe nach ihren Initialen gefragt.
+                </span>
+              </span>
+            </label>
           </>
         )}
         <Feld label="Sponsor auf der Kleidung" hinweis="Optional, falls schon bekannt.">

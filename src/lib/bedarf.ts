@@ -68,6 +68,8 @@ export type BedarfEingabe = {
   personenZahl: number;
   groessenFrist: string;
   lieferadresse: string;
+  /** Werden Initialen aufgedruckt? Schaltet die Abfrage in F2 frei. */
+  initialenNoetig: boolean;
   sponsor: string;
   hinweise: string;
 };
@@ -266,6 +268,7 @@ export async function meldeBedarf(eingabe: BedarfEingabe): Promise<BedarfErgebni
         personen_geschaetzt: voranfrage ? String(eingabe.personenZahl) : "",
         groessen_frist: eingabe.groessenFrist,
         lieferadresse: eingabe.lieferadresse,
+        initialen_noetig: eingabe.initialenNoetig ? "true" : "false",
         hinweis_haendler: eingabe.hinweise,
       },
     },

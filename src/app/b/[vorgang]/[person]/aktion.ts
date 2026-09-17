@@ -41,6 +41,7 @@ export async function trainerAngabenSpeichern(
   const ergebnis = await speichereTrainerAngaben(abfrage, {
     groessen,
     nummer: String(formular.get("nummer") ?? "").trim(),
+    initialen: String(formular.get("initialen") ?? ""),
     ausgeschlossen: formular.get("ausgeschlossen") === "ja",
     torwart: formular.get("torwart") === "ja",
   });

@@ -158,3 +158,36 @@ export type Vorgang = {
 
   quelle: "hubspot" | "beispiel";
 };
+
+/* ------------------------------------------------------------------ *
+ * Initialen (docs/datenmodell.md)
+ * ------------------------------------------------------------------ */
+
+/**
+ * Beides kommt aus der HubSpot-Eigenschaft `initialen` selbst, nicht aus einer
+ * Annahme: sie laesst hoechstens drei Zeichen zu und weist Sonderzeichen ab
+ * („Enter 3 characters or fewer“ / „Enter only numbers and letters“). Wer hier
+ * grosszuegiger prueft, bekommt die Ablehnung erst von HubSpot – und der
+ * Spieler sieht dann „hat nicht geklappt“ statt zu erfahren, was falsch ist.
+ * Aendert sich die Regel in HubSpot, gehoeren diese beiden Zeilen nachgezogen.
+ */
+export const INITIALEN_MAX = 3;
+
+/** Buchstaben, Ziffern und Leerzeichen – „KB“, „KAB“, „K B“. Umlaute gehen. */
+const INITIALEN_MUSTER = /^[A-Za-zÄÖÜäöüß0-9 ]+$/;
+
+/**
+ * Prueft Initialen und gibt sie normiert zurueck, sonst eine Meldung im
+ * Klartext. Normiert heisst: Rand getrimmt, Doppelleerzeichen zusammengezogen.
+ */
+export function pruefeInitialen(roh: string): { wert: string } | { fehler: string } {
+  const wert = roh.trim().replace(/\s+/g, " ");
+  if (!wert) return { fehler: "Bitte die Initialen eintragen." };
+  if (wert.length > INITIALEN_MAX) {
+    return { fehler: `Höchstens ${INITIALEN_MAX} Zeichen – so viel passt auf den Aufdruck.` };
+  }
+  if (!INITIALEN_MUSTER.test(wert)) {
+    return { fehler: "Erlaubt sind nur Buchstaben und Ziffern, keine Sonderzeichen." };
+  }
+  return { wert };
+}

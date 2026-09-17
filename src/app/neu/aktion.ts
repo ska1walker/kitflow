@@ -147,6 +147,9 @@ export async function bedarfMelden(_bisher: Ergebnis, formular: FormData): Promi
   let personenZahl = 0;
   let groessenFrist = "";
   let lieferadresse = "";
+  // Nur im vollstaendigen Modus gefragt. Die Voranfrage kennt noch keine
+  // Beflockung, dort holt F1b das nach (docs/formulare.md).
+  let initialenNoetig = false;
 
   if (modus === "voranfrage") {
     personenZahl = Number(formular.get("personen") ?? 0);
@@ -165,6 +168,8 @@ export async function bedarfMelden(_bisher: Ergebnis, formular: FormData): Promi
     if (formular.get("zahlungsregel") !== "ja") {
       return { stand: "fehler", text: "Bitte die Zahlungsregel bestätigen." };
     }
+
+    initialenNoetig = formular.get("initialen_noetig") === "ja";
   }
 
   const ergebnis = await meldeBedarf({
@@ -180,6 +185,7 @@ export async function bedarfMelden(_bisher: Ergebnis, formular: FormData): Promi
     personenZahl,
     groessenFrist,
     lieferadresse,
+    initialenNoetig,
     sponsor: pflicht(formular, "sponsor"),
     hinweise: pflicht(formular, "hinweise"),
   });
