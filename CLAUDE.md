@@ -42,6 +42,29 @@ Umgebungsvariablen: `HUBSPOT_TOKEN`, `RESEND_API_KEY`, `LINK_SECRET`, `MAKE_WEBH
 - Aussagen zu Steuern immer mit dem Hinweis „ich bin kein Steuerberater“.
 - Bestellt wird erst, wenn das Geld da ist (Deckungsprüfung, docs/konzept.md). Eine Zusage allein macht nie bestellbar.
 
+## Befehle und Verifikation
+
+Vor „fertig" laufen dieselben vier Befehle, die auch der Workflow „Prüfung" fährt:
+
+```
+npm run typecheck   # next typegen && tsc --noEmit
+npm run lint        # eslint src scripts
+npm test            # vitest run
+npm run build
+```
+
+`npm test` prüft reine Logik und geht **nie** ins Netz: keine HubSpot, kein Schlüssel, keine
+Testobjekte. Was nur gegen die echte HubSpot zu prüfen ist, wird von Hand gegen einen
+Wegwerf-Vorgang gefahren und danach archiviert — mit dem Archivieren nachgelesen.
+
+Getestet wird zuerst, was wehtut, wenn es bricht: `links.ts` ist die einzige Zugangsgrenze der
+Anwendung, es gibt keinen Login. Ein Test, der auch bei kaputtem Code grün bliebe, ist
+wertlos; neue Tests werden deshalb einmal gegen eine absichtlich gebrochene Fassung gehalten.
+
+**Der Dev-Server hydriert in der Cloud-Umgebung nicht** (der HMR-Websocket kommt durch den
+Proxy nicht durch, kein Knopf reagiert). Im Browser wird gegen `npm run start` geprüft, was
+ohnehin näher an Vercel ist.
+
 ## Dokumente
 
 - docs/konzept.md – Ablauf, Rollen, Stufen, Regeln, Nummern, Händlerformat

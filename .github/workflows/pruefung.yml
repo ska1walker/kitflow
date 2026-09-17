@@ -1,6 +1,6 @@
 name: Prüfung
 
-# Dieselben drei Befehle, die vor „fertig“ auch lokal laufen. Wird einer rot,
+# Dieselben Befehle, die vor „fertig“ auch lokal laufen. Wird einer rot,
 # ist der Pull Request rot – niemand muss daran denken.
 
 on:
@@ -32,6 +32,10 @@ jobs:
       - run: npm run typecheck
 
       - run: npm run lint
+
+      # Reine Logik, kein Netz und kein Schluessel: Signaturen, Veraltungs- und
+      # Jugendregel, Initialen. Laeuft in Sekunden.
+      - run: npm test
 
       # Ohne HUBSPOT_TOKEN und ohne HUBSPOT_AUTH_VIA_PROXY laeuft der Build auf
       # den Beispieldaten. Er braucht kein Geheimnis und geht nicht ins Netz.
