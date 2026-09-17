@@ -41,6 +41,46 @@ type Abfrage = {
   methode?: "GET" | "POST" | "PATCH" | "PUT";
 };
 
+/**
+ * Wie oft ein Aufruf hoechstens versucht wird, und wie lange dazwischen
+ * gewartet wird, wenn HubSpot keine eigene Wartezeit nennt.
+ */
+const VERSUCHE = 3;
+const PAUSE_MS = 300;
+/** Laenger als das warten wir nicht, auch wenn HubSpot es verlangt. */
+const PAUSE_MAX_MS = 10_000;
+
+/**
+ * Darf dieser Aufruf wiederholt werden?
+ *
+ * Nur wenn er nichts veraendert. Ein wiederholtes POST auf /objects/deals legte
+ * sonst zwei Vorgaenge an – schlimmer als der Fehler, den es heilen soll.
+ * Suchen und Stapel-Lesen sind bei HubSpot POST, lesen aber nur.
+ */
+function darfWiederholen(pfad: string, methode: string): boolean {
+  if (methode === "GET") return true;
+  if (methode !== "POST") return false;
+  return pfad.includes("/search") || pfad.endsWith("/batch/read");
+}
+
+/** Vorruebergehend: Rate-Limit oder eine Stoerung auf HubSpots Seite. */
+function istVoruebergehend(status: number): boolean {
+  return status === 429 || status >= 500;
+}
+
+function pause(versuch: number, kopf: Headers | undefined): number {
+  // HubSpot nennt bei 429 oft selbst eine Wartezeit, in Sekunden.
+  const genannt = Number(kopf?.get("retry-after"));
+  if (Number.isFinite(genannt) && genannt > 0) {
+    return Math.min(genannt * 1000, PAUSE_MAX_MS);
+  }
+  return Math.min(PAUSE_MS * 3 ** (versuch - 1), PAUSE_MAX_MS);
+}
+
+function schlafe(ms: number): Promise<void> {
+  return new Promise((f) => setTimeout(f, ms));
+}
+
 /** Nexts Signal „diese Route muss dynamisch sein“, erkennbar am digest. */
 function istDynamikSignal(fehler: unknown): boolean {
   return (
@@ -54,6 +94,9 @@ function istDynamikSignal(fehler: unknown): boolean {
  * Ein Aufruf gegen die HubSpot-API. Wirft nie: Fehler werden gemeldet und mit
  * `null` beantwortet, damit ein Ausfall die Seite nicht zerlegt.
  *
+ * Rate-Limit und Stoerungen auf HubSpots Seite werden wiederholt – aber nur,
+ * wenn der Aufruf nichts veraendert (siehe `darfWiederholen`).
+ *
  * Fehlermeldungen enthalten bewusst weder Token noch Personendaten.
  */
 export async function hubspot<T>({ pfad, koerper, methode }: Abfrage): Promise<T | null> {
@@ -63,33 +106,51 @@ export async function hubspot<T>({ pfad, koerper, methode }: Abfrage): Promise<T
   const kopf: Record<string, string> = { "Content-Type": "application/json" };
   if (token) kopf.Authorization = `Bearer ${token}`;
 
-  try {
-    const antwort = await fetch(`${BASIS}${pfad}`, {
-      method: methode ?? (koerper ? "POST" : "GET"),
-      headers: kopf,
-      body: koerper ? JSON.stringify(koerper) : undefined,
-      // Der Stand eines Vorgangs aendert sich laufend, deshalb nicht cachen.
-      cache: "no-store",
-    });
+  const art = methode ?? (koerper ? "POST" : "GET");
+  const wiederholbar = darfWiederholen(pfad, art);
+  const hoechstens = wiederholbar ? VERSUCHE : 1;
 
-    if (!antwort.ok) {
+  for (let versuch = 1; versuch <= hoechstens; versuch++) {
+    const letzter = versuch === hoechstens;
+
+    try {
+      const antwort = await fetch(`${BASIS}${pfad}`, {
+        method: art,
+        headers: kopf,
+        body: koerper ? JSON.stringify(koerper) : undefined,
+        // Der Stand eines Vorgangs aendert sich laufend, deshalb nicht cachen.
+        cache: "no-store",
+      });
+
+      if (antwort.ok) return (await antwort.json()) as T;
+
+      if (istVoruebergehend(antwort.status) && !letzter) {
+        await schlafe(pause(versuch, antwort.headers));
+        continue;
+      }
+
       console.error(`HubSpot ${antwort.status} bei ${pfad}`);
       return null;
+    } catch (fehler) {
+      // Next meldet ueber einen geworfenen Fehler, dass die Route wegen
+      // `no-store` dynamisch werden muss. Der gehoert nicht uns: schlucken wir
+      // ihn, waere die Route faelschlich statisch.
+      if (istDynamikSignal(fehler)) throw fehler;
+
+      if (!letzter) {
+        await schlafe(pause(versuch, undefined));
+        continue;
+      }
+
+      console.error(
+        `HubSpot nicht erreichbar bei ${pfad}:`,
+        fehler instanceof Error ? fehler.message : "unbekannter Fehler",
+      );
+      return null;
     }
-
-    return (await antwort.json()) as T;
-  } catch (fehler) {
-    // Next meldet ueber einen geworfenen Fehler, dass die Route wegen
-    // `no-store` dynamisch werden muss. Der gehoert nicht uns: schlucken wir
-    // ihn, waere die Route faelschlich statisch.
-    if (istDynamikSignal(fehler)) throw fehler;
-
-    console.error(
-      `HubSpot nicht erreichbar bei ${pfad}:`,
-      fehler instanceof Error ? fehler.message : "unbekannter Fehler",
-    );
-    return null;
   }
+
+  return null;
 }
 
 export type HsObjekt = {

@@ -257,8 +257,15 @@ export async function kontaktPerEmail(email: string): Promise<Empfaenger | null>
   return kontakt ? alsEmpfaenger(kontakt) : null;
 }
 
-/** Die Kontakte, deren `team` eine der gewaehlten Mannschaften ist. */
-export async function kontakteDerMannschaft(teams: string[]): Promise<HsObjekt[]> {
+/**
+ * Die Kontakte, deren `team` eine der gewaehlten Mannschaften ist.
+ *
+ * `null` heisst „konnte nicht fragen", eine leere Liste heisst „da ist
+ * wirklich niemand". Der Unterschied ist wichtig: wer beides gleich behandelt,
+ * bricht bei einem Rate-Limit einen Vorgang ab und schreibt dem Trainer, seine
+ * Mannschaft stehe nicht in HubSpot.
+ */
+export async function kontakteDerMannschaft(teams: string[]): Promise<HsObjekt[] | null> {
   const treffer = await hubspot<HsListe<HsObjekt>>({
     pfad: "/crm/v3/objects/contacts/search",
     koerper: {
@@ -269,7 +276,7 @@ export async function kontakteDerMannschaft(teams: string[]): Promise<HsObjekt[]
       limit: 200,
     },
   });
-  return treffer?.results ?? [];
+  return treffer ? treffer.results : null;
 }
 
 /** `false` heisst: HubSpot hat die Verknuepfung nicht bestaetigt. */
@@ -314,11 +321,21 @@ export async function meldeBedarf(eingabe: BedarfEingabe): Promise<BedarfErgebni
   // Gilt der Vorgang einer einzelnen Person, steht sie schon fest: die Action
   // hat sie ueber ihre Adresse gefunden. Dann wird nicht nach Mannschaft
   // gesucht, sonst haenge der halbe Kader mit dran.
-  const kontakte: Empfaenger[] = voranfrage
-    ? []
-    : eingabe.person
-      ? [eingabe.person]
-      : (await kontakteDerMannschaft(eingabe.teams)).map(alsEmpfaenger);
+  let kontakte: Empfaenger[] = [];
+  if (!voranfrage) {
+    if (eingabe.person) {
+      kontakte = [eingabe.person];
+    } else {
+      const gefunden = await kontakteDerMannschaft(eingabe.teams);
+      // Scheitert die Suche, entsteht hier nichts. Frueher wurde daraus eine
+      // leere Liste, der Vorgang landete sofort auf Stufe 9 und der Trainer
+      // las, zu seiner Mannschaft sei niemand hinterlegt – bei einem
+      // Rate-Limit schlicht gelogen, und er haette die Geschaeftsstelle
+      // angerufen. Lieber gar kein Vorgang als ein falsch abgebrochener.
+      if (gefunden === null) return null;
+      kontakte = gefunden.map(alsEmpfaenger);
+    }
+  }
   const ohnePersonen = !voranfrage && kontakte.length === 0;
 
   // Die Mannschaft am Deal entscheidet spaeter ueber `istJugend`: ohne sie

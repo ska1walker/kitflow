@@ -1146,6 +1146,9 @@ export async function nachtragbarePersonen(nummer: string): Promise<Nachtrag | n
     kontakteDerMannschaft(teams),
     assoziierteIds("deals", deal.id, "contacts"),
   ]);
+  // Scheitert die Suche, zeigt die Karte lieber gar nichts, als „alle haengen
+  // schon am Vorgang" zu behaupten.
+  if (kandidaten === null) return null;
 
   const dabei = new Set(schonDabei);
   const personen = kandidaten

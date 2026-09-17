@@ -307,6 +307,9 @@ export async function ergaenzeVorgang(
   }
 
   const kontakte = await kontakteDerMannschaft(voranfrage.teams);
+  // Wie in F1: eine gescheiterte Suche ist keine leere Mannschaft. Hier haengt
+  // sogar mehr daran, weil der Vorgang schon existiert und die Stufe wechselt.
+  if (kontakte === null) return null;
   const ohnePersonen = kontakte.length === 0;
 
   const gesetzt = await hubspot<HsObjekt>({
