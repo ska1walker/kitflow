@@ -598,8 +598,14 @@ export type GroessenFrage = {
   /** Die HubSpot-Eigenschaft am Kontakt, zugleich der Feldname im Formular. */
   feld: string;
   werte: string[];
-  /** Aktueller Wert, leer wenn keiner da oder veraltet. */
+  /** Vorbelegung des Feldes. Leer, sobald die Groesse als veraltet gilt. */
   wert: string;
+  /**
+   * Was am Kontakt steht, unabhaengig vom Alter – auch wenn nicht vorbelegt
+   * wird. Ohne das saehe niemand, dass ueberhaupt schon eine Groesse da ist,
+   * und muesste raten, statt zu pruefen.
+   */
+  bisher: string;
   /** Es gab einen Wert, er ist aber zu alt zum Vorbelegen. */
   veraltet: boolean;
 };
@@ -613,6 +619,8 @@ export type GroessenAbfrage = {
   frist?: string;
   jugend: boolean;
   fragen: GroessenFrage[];
+  /** Wann die Groessen zuletzt bestaetigt wurden, kurz. Leer, wenn nie. */
+  bestaetigtAm?: string;
   /** Dieser Vorgang laesst Initialen aufdrucken (F1, `initialen_noetig`). */
   initialenNoetig: boolean;
   /** Die Initialen, die am Kontakt stehen. Leer, wenn noch keine da sind. */
@@ -689,7 +697,11 @@ export async function ladeGroessenAbfrage(
       label: GROESSEN_LABEL[art],
       feld: feld ?? art,
       werte: groessenWerte(art),
+      // Vorbelegt wird nur, was frisch genug ist: eine alte Groesse soll nicht
+      // mit einem Klick ungeprueft bestaetigt werden. Gezeigt wird sie
+      // trotzdem – „nicht vorauswaehlen“ heisst nicht „verschweigen“.
       wert: veraltet ? "" : wert,
+      bisher: wert,
       veraltet: veraltet && wert !== "",
     };
   });
@@ -705,6 +717,7 @@ export async function ladeGroessenAbfrage(
     fragen,
     // Die Initialen haengen nicht an einer Groessenart: eine Person hat genau
     // ein Paar, egal wie viele Artikel beflockt werden.
+    bestaetigtAm: kurzDatum(text(kontakt, "groesse_zuletzt_bestaetigt_am")),
     initialenNoetig: text(deal, "initialen_noetig") === "true",
     initialen: text(kontakt, "initialen") ?? "",
     offen: stufe === 1,

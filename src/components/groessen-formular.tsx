@@ -2,7 +2,8 @@
 
 import { useActionState } from "react";
 import { abschicken } from "./formular";
-import { Badge, Button, Card, SelectFeld } from "./ui";
+import { GroessenFeld } from "./groessen-feld";
+import { Button, Card } from "./ui";
 import { IconCheck } from "./icons";
 import { groessenSpeichern, type Ergebnis } from "@/app/g/[vorgang]/[person]/aktion";
 import { INITIALEN_MAX } from "@/lib/typen";
@@ -10,13 +11,6 @@ import type { GroessenAbfrage } from "@/lib/vorgaenge";
 
 const LEER: Ergebnis = { stand: "leer" };
 
-/**
- * F2 · Größen (docs/formulare.md).
- *
- * Die Texte sprechen Spieler und Eltern per du an. Der Hinweis auf die
- * Beflockung steht bewusst über den Feldern: beflockte Kleidung nimmt kein
- * Händler zurück, das soll man vor der Auswahl lesen, nicht danach.
- */
 export function GroessenFormular({
   abfrage,
   token,
@@ -66,8 +60,10 @@ export function GroessenFormular({
       </p>
 
       <p className="mt-4 text-sm text-ink-700">
-        Bitte trag die Größen ein, die jetzt passen. Wenn schon eine Größe vorausgewählt ist, stammt
-        sie aus der letzten Abfrage. Prüf sie kurz, Kinder wachsen schnell.
+        Bitte trag die Größen ein, die jetzt passen. Steht unter einem Feld schon eine Größe, haben
+        wir sie von der letzten Abfrage — mit „übernehmen“ ist sie eingetragen, sonst wähl einfach
+        eine andere.
+        {abfrage.jugend ? " Prüf das kurz, Kinder wachsen schnell." : ""}
       </p>
 
       <p className="mt-3 rounded-xl bg-amber-50 px-3.5 py-3 text-sm text-ink-700">
@@ -77,20 +73,12 @@ export function GroessenFormular({
 
       <form onSubmit={abschicken(absenden)} className="mt-5 flex flex-col gap-4">
         {abfrage.fragen.map((frage) => (
-          <label key={frage.feld} className="flex flex-col gap-1.5">
-            <span className="flex items-center gap-2 text-sm font-semibold text-ink-900">
-              {frage.label}
-              {frage.veraltet && <Badge tone="amber">bitte neu prüfen</Badge>}
-            </span>
-            <SelectFeld name={frage.feld} defaultValue={frage.wert} required>
-              <option value="">bitte wählen</option>
-              {frage.werte.map((wert) => (
-                <option key={wert} value={wert}>
-                  {wert}
-                </option>
-              ))}
-            </SelectFeld>
-          </label>
+          <GroessenFeld
+            key={frage.feld}
+            frage={frage}
+            bestaetigtAm={abfrage.bestaetigtAm}
+            pflicht
+          />
         ))}
 
         {abfrage.initialenNoetig && (
