@@ -107,6 +107,8 @@ export type M1Daten = {
   /** Nur im vollständigen Modus: Frist und die Links für die Mannschaft. */
   groessenFrist?: string;
   personen?: { name: string; groessen: string }[];
+  /** Der Vorgang bestellt nichts, er sammelt nur Groessen ein. */
+  nurGroessen?: boolean;
   statusLink: string;
   bestaetigenLink?: string;
   ergaenzenLink?: string;
@@ -153,6 +155,10 @@ function m1Voranfrage(d: M1Daten): { betreff: string; rahmen: Rahmen } {
 /** M1 für den vollständigen Weg: die Größenabfrage läuft ab sofort. */
 function m1Vollstaendig(d: M1Daten): { betreff: string; rahmen: Rahmen } {
   const frist = d.groessenFrist ?? "zur Frist";
+  // Ein Groessencheck hat keine Artikel und geht an keinen Haendler. Der Satz
+  // „erst nach deiner Bestaetigung geht die Anfrage raus“ waere dort eine
+  // Ankuendigung, die nie eintritt.
+  const nur = d.nurGroessen === true;
 
   return {
     betreff: `${d.vorgang} · Größenabfrage für ${d.mannschaft} läuft`,
@@ -162,16 +168,29 @@ function m1Vollstaendig(d: M1Daten): { betreff: string; rahmen: Rahmen } {
       vorschau: `${d.mannschaft}: Größen bitte bis ${frist} eintragen.`,
       bloecke: [
         { art: "absatz", text: `${anrede(d.vorname)} deine Angaben sind vollständig. Bitte gib die Nummer ${d.vorgang} bei allen Rückfragen an.` },
-        { art: "titel", text: "Was angefragt wird" },
-        { art: "artikel", zeilen: d.artikel },
+        ...(nur
+          ? ([
+              {
+                art: "absatz",
+                text: "Dieser Vorgang bestellt nichts: er sammelt nur die Größen ein, damit sie am Kontakt aktuell sind. Es geht keine Anfrage an einen Händler.",
+              },
+            ] as Rahmen["bloecke"])
+          : ([
+              { art: "titel", text: "Was angefragt wird" },
+              { art: "artikel", zeilen: d.artikel },
+            ] as Rahmen["bloecke"])),
         { art: "titel", text: "So geht es weiter" },
         {
           art: "schritte",
           punkte: [
             "Schick den Text unten in die Elterngruppe, die persönlichen Links stehen schon drin.",
             `Größen bitte bis ${frist} eintragen.`,
-            "Wenn alle eingetragen haben, prüfst du die Liste. Erst nach deiner Bestätigung geht die Anfrage an Intersport Uelzen und 11teamsports.",
-            "Die Angebote kommen in Kopie an dich.",
+            ...(nur
+              ? ["Wenn alle eingetragen haben, prüfst du die Liste. Danach ist der Vorgang fertig – bestellt wird nichts."]
+              : [
+                  "Wenn alle eingetragen haben, prüfst du die Liste. Erst nach deiner Bestätigung geht die Anfrage an Intersport Uelzen und 11teamsports.",
+                  "Die Angebote kommen in Kopie an dich.",
+                ]),
           ],
         },
         { art: "knopf", text: "Liste prüfen und bestätigen", href: d.bestaetigenLink ?? d.statusLink },
@@ -180,8 +199,12 @@ function m1Vollstaendig(d: M1Daten): { betreff: string; rahmen: Rahmen } {
           art: "zitat",
           zeilen: [
             "Hallo zusammen,",
-            `für ${d.mannschaft} wird neue Ausstattung angefragt: ${d.artikel.map((a) => a.name).join(", ")}.`,
-            `Bitte tragt bis ${frist} über den persönlichen Link die aktuelle Größe eures Kindes ein. Das dauert eine Minute. Beflockte Sachen können nicht umgetauscht werden, im Zweifel lieber eine Nummer größer.`,
+            nur
+              ? `für ${d.mannschaft} sammeln wir gerade die aktuellen Größen ein. Bestellt wird damit nichts.`
+              : `für ${d.mannschaft} wird neue Ausstattung angefragt: ${d.artikel.map((a) => a.name).join(", ")}.`,
+            nur
+              ? `Bitte tragt bis ${frist} über den persönlichen Link die aktuelle Größe eures Kindes ein. Das dauert eine Minute.`
+              : `Bitte tragt bis ${frist} über den persönlichen Link die aktuelle Größe eures Kindes ein. Das dauert eine Minute. Beflockte Sachen können nicht umgetauscht werden, im Zweifel lieber eine Nummer größer.`,
             "",
             ...(d.personen ?? []).map((p) => `${p.name}: ${p.groessen}`),
             "",
@@ -190,8 +213,12 @@ function m1Vollstaendig(d: M1Daten): { betreff: string; rahmen: Rahmen } {
           ],
         },
         { art: "links", zeilen: [{ name: "Deine Statusseite", href: d.statusLink }] },
-        { art: "titel", text: "Wichtig zur Bezahlung" },
-        { art: "absatz", text: ZAHLUNG },
+        ...(nur
+          ? ([] as Rahmen["bloecke"])
+          : ([
+              { art: "titel", text: "Wichtig zur Bezahlung" },
+              { art: "absatz", text: ZAHLUNG },
+            ] as Rahmen["bloecke"])),
       ],
     },
   };

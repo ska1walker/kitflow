@@ -24,6 +24,10 @@ Zugang über signierte Links: `/v/{vorgang}?t=…` (Status), `/g/{vorgang}/{hsid
 
 Angelegt werden: der Deal auf Stufe 1 mit der nächsten freien Vorgangsnummer des Jahres, je Artikel ein Produkt (vorhandene werden über `hs_sku` wiederverwendet), je Artikel **eine Position ohne `spieler_hsid`** — das ist die Artikelliste des Vorgangs, aus der F2 die Größenarten liest und die F3 später zu Person mal Artikel aufklappt — und die Verknüpfung zu allen Kontakten, deren `team` eine der gewählten Mannschaften ist.
 
+**Für wen?** Neben einer Mannschaft kann ein Vorgang auch genau **einer Person** gelten — für den einzelnen Nachzügler, der einen Trainingsanzug braucht. Dann wird die Person **über ihre E-Mail-Adresse benannt, nicht gesucht**: `/neu` steht ohne Token offen, eine Namenssuche dort wäre ein Mitgliederverzeichnis für jeden, der die Seite kennt. Ein EQ-Treffer auf `email` verrät nur dem etwas, der die Adresse ohnehin hat. Gibt es keinen Kontakt, entsteht **nichts** — kitflow legt keine Personen an. `mannschaft` am Deal wird mit dem `team` des Kontakts gefüllt, sonst hielte `istJugend` den Vorgang vorsichtshalber für Jugend. Den Weg gibt es nur im vollständigen Modus: eine Voranfrage holt einen Richtpreis für eine Gruppe, und F1b würde später wieder die ganze Mannschaft laden.
+
+**Nur Größen erfassen** ist eine dritte Ausstattungsart neben Trikotsatz und Weiterer Ausstattung. Dann hängt **kein Artikel** am Vorgang; was gefragt wird, steht als `groessenarten` am Deal (Semikolonliste). Keine Lieferadresse, keine Zahlungsregel, keine Initialen, kein Händler — die Kette endet bei der bestätigten Liste. Auch das gibt es nur im vollständigen Modus. Die Ausstattungsart ist in HubSpot eine Auswahl mit festen Optionen: `scripts/hubspot-setup.mjs` trägt fehlende Optionen an vorhandenen Eigenschaften nach, sonst weist HubSpot den Deal mit `INVALID_OPTION` ab.
+
 Findet sich zu keiner gewählten Mannschaft ein Kontakt, steht der Vorgang sofort auf Stufe 9 und die Seite sagt, dass die Mannschaft in HubSpot gepflegt werden muss (docs/formulare.md, M7).
 
 Es fehlt Mail M1. Solange sie fehlt, zeigt die Danke-Seite alle Links im Klartext, damit sie nicht verloren gehen. Ebenfalls offen: die Auswahl aus dem Artikelstamm statt freier Felder, und der Wunschtermin für die Lieferung, für den es keine Eigenschaft gibt.
@@ -75,7 +79,10 @@ Modus zurück, damit ein manipuliertes Formular keine Pflichtfelder abwählen ka
   Artikelnummer, keine Farbe, kein Für wen, keine Beflockung, keine Frist, keine Lieferadresse, keine
   Zahlungsregel. Ergebnis: Deal auf Stufe 0, Produkte mit Platzhalter-Nummer, keine Kontakte am Deal.
   Danke-Seite zeigt den Status-Link und den Link auf F1b.
-- **Komplett melden** (`vollstaendig`): unverändert der Ablauf unten, Deal auf Stufe 1.
+- **Komplett melden** (`vollstaendig`): unverändert der Ablauf unten, Deal auf Stufe 1. Nur hier gibt
+  es zwei weitere Schalter: **Für wen?** (eine Mannschaft oder eine einzelne Person über ihre
+  E-Mail-Adresse) und die Ausstattungsart **Nur Größen erfassen** (kein Artikel, stattdessen die
+  Größenarten angehakt). Beide lassen sich kombinieren — eine Person, eine Frage, kein Händler.
 
 Einleitung: „Hier meldest du als Trainerin oder Trainer neuen Ausstattungsbedarf für deine Mannschaft an. Danach bekommen deine Spielerinnen und Spieler einen persönlichen Link für ihre Größen. Du prüfst die fertige Liste, erst dann geht eine Anfrage an beide Händler (Intersport Uelzen und 11teamsports). Die Angebote bekommst du in Kopie.“
 Hinweis: „Diese Meldung ist noch keine Bestellung. Bestellt wird erst, wenn die Finanzierung steht und das Geld da ist.“

@@ -170,7 +170,7 @@ export function ListeFormular({ liste, token }: { liste: Liste; token: string })
 
       <Card className="p-5">
         <h2 className="font-display mb-3.5 text-lg font-bold text-ink-900">
-          Prüfungen vor der Anfrage
+          {liste.nurGroessen ? "Prüfung" : "Prüfungen vor der Anfrage"}
         </h2>
         <ul className="flex flex-col">
           {liste.pruefungen.map((p) => (
@@ -185,30 +185,38 @@ export function ListeFormular({ liste, token }: { liste: Liste; token: string })
 
       <Card className="p-5">
         <form onSubmit={abschicken(absenden)} className="flex flex-col gap-4">
-          <label className="flex flex-col gap-1.5">
-            <span className="text-sm font-semibold text-ink-900">
-              Lieferadresse{" "}
-              <span className="font-normal text-ink-500">— leer lassen heißt: bleibt wie sie ist</span>
-            </span>
-            <textarea
-              name="lieferadresse"
-              rows={3}
-              defaultValue={liste.lieferadresse}
-              className="w-full rounded-lg border border-ink-200 bg-white px-3 py-2 text-sm text-ink-800 focus:border-pitch-400 focus:ring-2 focus:ring-pitch-100 focus:outline-none"
-            />
-          </label>
+          {/* Lieferadresse und Händlerhinweis gehören zur Anfrage. Ein
+              Größencheck stellt keine – dann wären es zwei Felder ohne Ziel. */}
+          {!liste.nurGroessen && (
+            <>
+              <label className="flex flex-col gap-1.5">
+                <span className="text-sm font-semibold text-ink-900">
+                  Lieferadresse{" "}
+                  <span className="font-normal text-ink-500">
+                    — leer lassen heißt: bleibt wie sie ist
+                  </span>
+                </span>
+                <textarea
+                  name="lieferadresse"
+                  rows={3}
+                  defaultValue={liste.lieferadresse}
+                  className="w-full rounded-lg border border-ink-200 bg-white px-3 py-2 text-sm text-ink-800 focus:border-pitch-400 focus:ring-2 focus:ring-pitch-100 focus:outline-none"
+                />
+              </label>
 
-          <label className="flex flex-col gap-1.5">
-            <span className="text-sm font-semibold text-ink-900">
-              Hinweis an die Händler <span className="font-normal text-ink-500">— optional</span>
-            </span>
-            <textarea
-              name="hinweis"
-              rows={3}
-              defaultValue={liste.hinweisHaendler}
-              className="w-full rounded-lg border border-ink-200 bg-white px-3 py-2 text-sm text-ink-800 focus:border-pitch-400 focus:ring-2 focus:ring-pitch-100 focus:outline-none"
-            />
-          </label>
+              <label className="flex flex-col gap-1.5">
+                <span className="text-sm font-semibold text-ink-900">
+                  Hinweis an die Händler <span className="font-normal text-ink-500">— optional</span>
+                </span>
+                <textarea
+                  name="hinweis"
+                  rows={3}
+                  defaultValue={liste.hinweisHaendler}
+                  className="w-full rounded-lg border border-ink-200 bg-white px-3 py-2 text-sm text-ink-800 focus:border-pitch-400 focus:ring-2 focus:ring-pitch-100 focus:outline-none"
+                />
+              </label>
+            </>
+          )}
 
           <label className="flex items-start gap-2.5 text-sm text-ink-800">
             <input

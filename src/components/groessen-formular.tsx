@@ -39,8 +39,9 @@ export function GroessenFormular({
               öffnen und etwas ändern, es zählt die letzte Eingabe.
             </p>
             <p className="mt-3 text-sm text-ink-600">
-              Wenn alle eingetragen haben, prüft deine Trainerin oder dein Trainer die Liste. Danach
-              geht die Anfrage an die Händler.
+              {abfrage.nurGroessen
+                ? "Wenn alle eingetragen haben, prüft deine Trainerin oder dein Trainer die Liste. Damit ist es erledigt – bestellt wird nichts."
+                : "Wenn alle eingetragen haben, prüft deine Trainerin oder dein Trainer die Liste. Danach geht die Anfrage an die Händler."}
             </p>
           </div>
         </div>
@@ -55,8 +56,17 @@ export function GroessenFormular({
         {abfrage.anrede ? `Hallo ${abfrage.anrede},` : "Hallo,"}
       </h1>
       <p className="mt-1 text-sm text-ink-600">
-        für {abfrage.mannschaft ? <b>{abfrage.mannschaft}</b> : "deine Mannschaft"} wird neue
-        Ausstattung angefragt: {abfrage.gegenstand}.
+        {abfrage.nurGroessen ? (
+          <>
+            für {abfrage.mannschaft ? <b>{abfrage.mannschaft}</b> : "deine Mannschaft"} sammeln wir
+            gerade die aktuellen Größen ein. Bestellt wird damit nichts.
+          </>
+        ) : (
+          <>
+            für {abfrage.mannschaft ? <b>{abfrage.mannschaft}</b> : "deine Mannschaft"} wird neue
+            Ausstattung angefragt: {abfrage.gegenstand}.
+          </>
+        )}
       </p>
 
       <p className="mt-4 text-sm text-ink-700">
@@ -66,10 +76,14 @@ export function GroessenFormular({
         {abfrage.jugend ? " Prüf das kurz, Kinder wachsen schnell." : ""}
       </p>
 
-      <p className="mt-3 rounded-xl bg-amber-50 px-3.5 py-3 text-sm text-ink-700">
-        Beflockte Kleidung kann der Händler nicht umtauschen. Im Zweifel lieber eine Nummer größer
-        oder vorher bei einem Teamkollegen anprobieren.
-      </p>
+      {/* Der Warnhinweis gilt der Bestellung. Wo nichts bestellt wird, wäre er
+          eine Drohung ohne Anlass. */}
+      {!abfrage.nurGroessen && (
+        <p className="mt-3 rounded-xl bg-amber-50 px-3.5 py-3 text-sm text-ink-700">
+          Beflockte Kleidung kann der Händler nicht umtauschen. Im Zweifel lieber eine Nummer
+          größer oder vorher bei einem Teamkollegen anprobieren.
+        </p>
+      )}
 
       <form onSubmit={abschicken(absenden)} className="mt-5 flex flex-col gap-4">
         {abfrage.fragen.map((frage) => (

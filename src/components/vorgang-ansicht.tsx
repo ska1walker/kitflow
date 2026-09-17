@@ -193,10 +193,17 @@ export function VorgangAnsicht({
         <div className="grid items-start gap-4 md:grid-cols-2">{arbeitsKarten}</div>
       )}
 
-      <div className="grid items-start gap-4 md:grid-cols-2">
-        <ArtikelKarte vorgang={vorgang} stand={stand} />
+      {/* Ein Größencheck hat keine Artikel und bekommt nie welche. „Die Artikel
+          stehen fest, sobald die Positionen am Vorgang hängen“ wäre dort ein
+          Versprechen, das niemand einlöst. */}
+      {vorgang.nurGroessen ? (
         <VerlaufKarte vorgang={vorgang} stand={vorgang.stufe} ansicht={ansicht} />
-      </div>
+      ) : (
+        <div className="grid items-start gap-4 md:grid-cols-2">
+          <ArtikelKarte vorgang={vorgang} stand={stand} />
+          <VerlaufKarte vorgang={vorgang} stand={vorgang.stufe} ansicht={ansicht} />
+        </div>
+      )}
     </>
   );
 }

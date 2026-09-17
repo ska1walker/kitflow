@@ -331,6 +331,9 @@ export async function ergaenzeVorgang(
   return {
     vorgang: nummer,
     modus: "vollstaendig",
+    // F1b gibt es nur fuer eine Voranfrage, und die bestellt am Ende. Einen
+    // Groessencheck kann sie deshalb nie ergeben.
+    nurGroessen: false,
     ohnePersonen,
     artikelText: voranfrage.artikel.map((a) => ({
       name: [a.hersteller, a.bezeichnung].filter(Boolean).join(" "),

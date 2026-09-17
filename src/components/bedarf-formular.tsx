@@ -5,21 +5,19 @@ import { abschicken } from "./formular";
 import { Badge, Button, Card, SelectFeld } from "./ui";
 import { IconCheck } from "./icons";
 import { bedarfMelden, type Ergebnis } from "@/app/neu/aktion";
-import { GROESSEN_LABEL, groessenWerte } from "@/lib/groessen";
-import { AUSSTATTUNGSARTEN, BEFLOCKUNGEN, TEAMS } from "@/lib/mannschaften";
+import { GROESSEN_LABEL, GROESSENARTEN, groessenWerte } from "@/lib/groessen";
+import { AUSSTATTUNGSARTEN, BEFLOCKUNGEN, NUR_GROESSEN, TEAMS } from "@/lib/mannschaften";
 import type { Modus } from "@/lib/bedarf";
 import type { Groessenart } from "@/lib/typen";
 
 const LEER: Ergebnis = { stand: "leer" };
 
-const GROESSENARTEN: Groessenart[] = [
-  "trikot",
-  "oberteil",
-  "shorts",
-  "trainingshose",
-  "schuhe",
-  "ohne",
-];
+/**
+ * Die Auswahl in einer Artikelzeile. „Ohne“ kommt dazu, weil ein Ball oder
+ * eine Tasche keine Groesse hat – gefragt wird danach nie, deshalb steht es
+ * nicht in `GROESSENARTEN`.
+ */
+const ARTIKEL_GROESSENARTEN: Groessenart[] = [...GROESSENARTEN, "ohne"];
 
 const FUER = [
   { wert: "alle", label: "Alle" },
@@ -125,7 +123,7 @@ function ArtikelBlock({
             value={groessenart}
             onChange={(e) => setGroessenart(e.target.value as Groessenart)}
           >
-            {GROESSENARTEN.map((art) => (
+            {ARTIKEL_GROESSENARTEN.map((art) => (
               <option key={art} value={art}>
                 {art === "ohne" ? "ohne Größe (z. B. Tasche, Ball)" : GROESSEN_LABEL[art]}
               </option>
@@ -284,6 +282,10 @@ function Fertig({ ergebnis }: { ergebnis: Extract<Ergebnis, { stand: "fertig" }>
     );
   }
 
+  // Ein Vorgang fuer genau eine Person bekommt denselben Weg, aber nicht
+  // denselben Satz: „deine 1 Spielerinnen und Spieler“ waere schlicht falsch.
+  const eine = ergebnis.personen.length === 1;
+
   return (
     <Card className="p-6">
       <div className="flex items-start gap-3.5">
@@ -295,9 +297,13 @@ function Fertig({ ergebnis }: { ergebnis: Extract<Ergebnis, { stand: "fertig" }>
             Vorgang {ergebnis.vorgang} ist angelegt
           </h1>
           <p className="mt-1.5 text-sm text-ink-600">
-            Bitte gib die Nummer bei allen Rückfragen an. Unten stehen die persönlichen Links für
-            deine {ergebnis.personen.length} Spielerinnen und Spieler. Wenn alle eingetragen haben,
-            prüfst du die Liste, danach geht die Anfrage an beide Händler.
+            {ergebnis.nurGroessen
+              ? `Bitte gib die Nummer bei allen Rückfragen an. Unten ${
+                  eine ? "steht der persönliche Link" : "stehen die persönlichen Links"
+                } für die Größen. Wenn alle eingetragen haben, prüfst du die Liste – damit ist der Vorgang fertig. Bestellt wird nichts.`
+              : eine
+                ? "Bitte gib die Nummer bei allen Rückfragen an. Unten steht der persönliche Link für die Größen. Sobald sie eingetragen sind, prüfst du die Liste, danach geht die Anfrage an beide Händler."
+                : `Bitte gib die Nummer bei allen Rückfragen an. Unten stehen die persönlichen Links für deine ${ergebnis.personen.length} Spielerinnen und Spieler. Wenn alle eingetragen haben, prüfst du die Liste, danach geht die Anfrage an beide Händler.`}
           </p>
           {ergebnis.mailAn ? (
             <p className="mt-3 rounded-xl bg-pitch-50 px-3.5 py-3 text-sm text-ink-700">
@@ -321,7 +327,7 @@ function Fertig({ ergebnis }: { ergebnis: Extract<Ergebnis, { stand: "fertig" }>
           </div>
 
           <h2 className="font-display mt-5 mb-2 text-base font-bold text-ink-900">
-            Größen-Links für die Mannschaft
+            {eine ? "Der Größen-Link" : "Größen-Links für die Mannschaft"}
           </h2>
           <ul className="flex flex-col gap-1.5">
             {ergebnis.personen.map((p) => (
@@ -364,7 +370,15 @@ export function BedarfFormular() {
   const [ergebnis, absenden, laeuft] = useActionState(bedarfMelden, LEER);
   const [artikel, setArtikel] = useState([0]);
   const [modus, setModus] = useState<Modus>("voranfrage");
+  const [fuerEine, setFuerEine] = useState(false);
+  const [art, setArt] = useState("");
   const voranfrage = modus === "voranfrage";
+  // Ein reiner Groessencheck bestellt nichts: keine Artikel, keine
+  // Lieferadresse, keine Zahlungsregel. In der Voranfrage gibt es ihn nicht.
+  const nurGroessen = art === NUR_GROESSEN && !voranfrage;
+  // Die Voranfrage holt einen Richtpreis fuer eine Gruppe. Fuer eine einzelne
+  // Person gibt es da nichts zu schaetzen, also gilt sie nur beim Komplettweg.
+  const einzelperson = fuerEine && !voranfrage;
 
   if (ergebnis.stand === "fertig") return <Fertig ergebnis={ergebnis.ergebnis} />;
 
@@ -429,52 +443,133 @@ export function BedarfFormular() {
       </Card>
 
       <Card className="flex flex-col gap-3 p-6">
-        <h2 className="font-display text-lg font-bold text-ink-900">Mannschaft</h2>
-        <p className="text-sm text-ink-600">
-          Bei Jugendmannschaften die Jahrgänge wählen, zum Beispiel 2014 und 2015.
-        </p>
-        <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 sm:grid-cols-4">
-          {TEAMS.map((team) => (
-            <label key={team} className="flex items-center gap-2 text-sm text-ink-800">
-              <input
-                type="checkbox"
-                name="teams"
-                value={team}
-                className="h-4 w-4 flex-none accent-pitch-600"
-              />
-              {team}
-            </label>
-          ))}
-        </div>
-        <Feld label="Welche Mannschaft im Jahrgang?" hinweis="Optional, zum Beispiel JG2014-2015.">
-          <input name="mannschaftscode" className={EINGABE} />
-        </Feld>
+        <h2 className="font-display text-lg font-bold text-ink-900">Für wen?</h2>
+
+        {!voranfrage && (
+          <>
+            <input type="hidden" name="empfaenger" value={einzelperson ? "person" : "mannschaft"} />
+            <div className="grid gap-3 sm:grid-cols-2">
+              {[
+                {
+                  eine: false,
+                  titel: "Eine Mannschaft",
+                  text: "Alle, die in HubSpot zu dieser Mannschaft gehören, bekommen einen Größen-Link.",
+                },
+                {
+                  eine: true,
+                  titel: "Eine einzelne Person",
+                  text: "Nur für eine Person, zum Beispiel für jemanden, der neu dazugekommen ist.",
+                },
+              ].map((w) => (
+                <button
+                  key={String(w.eine)}
+                  type="button"
+                  onClick={() => setFuerEine(w.eine)}
+                  aria-pressed={einzelperson === w.eine}
+                  className={`cursor-pointer rounded-xl border p-4 text-left ${
+                    einzelperson === w.eine
+                      ? "border-pitch-500 bg-pitch-50 ring-2 ring-pitch-100"
+                      : "border-ink-200 hover:border-ink-300"
+                  }`}
+                >
+                  <b className="text-sm text-ink-900">{w.titel}</b>
+                  <span className="mt-1 block text-xs text-ink-600">{w.text}</span>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+
+        {einzelperson ? (
+          <>
+            <Feld
+              label="E-Mail-Adresse der Person"
+              hinweis="Genau die Adresse, die in HubSpot am Kontakt steht. kitflow legt keine Personen an."
+            >
+              <input type="email" name="person_email" required className={EINGABE} />
+            </Feld>
+            <p className="text-sm text-ink-600">
+              Die Mannschaft übernehmen wir aus dem Kontakt – du musst sie hier nicht wählen.
+            </p>
+          </>
+        ) : (
+          <>
+            <p className="text-sm text-ink-600">
+              Bei Jugendmannschaften die Jahrgänge wählen, zum Beispiel 2014 und 2015.
+            </p>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 sm:grid-cols-4">
+              {TEAMS.map((team) => (
+                <label key={team} className="flex items-center gap-2 text-sm text-ink-800">
+                  <input
+                    type="checkbox"
+                    name="teams"
+                    value={team}
+                    className="h-4 w-4 flex-none accent-pitch-600"
+                  />
+                  {team}
+                </label>
+              ))}
+            </div>
+            <Feld
+              label="Welche Mannschaft im Jahrgang?"
+              hinweis="Optional, zum Beispiel JG2014-2015."
+            >
+              <input name="mannschaftscode" className={EINGABE} />
+            </Feld>
+          </>
+        )}
       </Card>
 
       <Card className="flex flex-col gap-3 p-6">
         <h2 className="font-display text-lg font-bold text-ink-900">Was braucht ihr?</h2>
-        {AUSSTATTUNGSARTEN.map((art) => (
-          <label key={art} className="flex items-start gap-2.5 text-sm text-ink-800">
+        {AUSSTATTUNGSARTEN.filter((a) => !(voranfrage && a === NUR_GROESSEN)).map((a) => (
+          <label key={a} className="flex items-start gap-2.5 text-sm text-ink-800">
             <input
               type="radio"
               name="ausstattungsart"
-              value={art}
+              value={a}
               required
+              checked={art === a}
+              onChange={() => setArt(a)}
               className="mt-0.5 h-4 w-4 flex-none accent-pitch-600"
             />
             <span>
-              <b>{art}</b>
+              <b>{a}</b>
               <br />
               <span className="text-xs text-ink-500">
-                {art === "Trikotsatz"
+                {a === "Trikotsatz"
                   ? "Der Verein ist verantwortlich."
-                  : "Zum Beispiel Trainingsanzüge. Die Mannschaft finanziert selbst."}
+                  : a === NUR_GROESSEN
+                    ? "Es wird nichts bestellt. Wir fragen nur die Größen ab, damit sie aktuell sind."
+                    : "Zum Beispiel Trainingsanzüge. Die Mannschaft finanziert selbst."}
               </span>
             </span>
           </label>
         ))}
       </Card>
 
+      {nurGroessen ? (
+        <Card className="flex flex-col gap-3 p-6">
+          <h2 className="font-display text-lg font-bold text-ink-900">Welche Größen?</h2>
+          <p className="text-sm text-ink-600">
+            Gefragt wird genau das, was du hier anhakst – nicht mehr. Jede Angabe landet am
+            Kontakt und gilt dann auch für den nächsten Vorgang.
+          </p>
+          <div className="grid gap-x-4 gap-y-1.5 sm:grid-cols-2">
+            {GROESSENARTEN.map((a) => (
+              <label key={a} className="flex items-center gap-2 text-sm text-ink-800">
+                <input
+                  type="checkbox"
+                  name="groessenarten"
+                  value={a}
+                  className="h-4 w-4 flex-none accent-pitch-600"
+                />
+                {GROESSEN_LABEL[a]}
+              </label>
+            ))}
+          </div>
+        </Card>
+      ) : (
       <Card className="flex flex-col gap-3 p-6">
         <h2 className="font-display text-lg font-bold text-ink-900">Artikel</h2>
         {voranfrage && (
@@ -512,6 +607,7 @@ export function BedarfFormular() {
           Artikel hinzufügen
         </Button>
       </Card>
+      )}
 
       <Card className="flex flex-col gap-3 p-6">
         <h2 className="font-display text-lg font-bold text-ink-900">
@@ -525,35 +621,49 @@ export function BedarfFormular() {
             >
               <input type="date" name="groessen_frist" required className={EINGABE} />
             </Feld>
-            <Feld label="Lieferadresse">
-              <textarea name="lieferadresse" rows={3} required className={EINGABE} />
-            </Feld>
-            <label className="flex items-start gap-2.5 text-sm text-ink-800">
-              <input
-                type="checkbox"
-                name="initialen_noetig"
-                value="ja"
-                className="mt-0.5 h-4 w-4 flex-none accent-pitch-600"
-              />
-              <span>
-                Es werden Initialen aufgedruckt.
-                <span className="mt-0.5 block text-xs text-ink-500">
-                  Dann wird jede Person zusammen mit ihrer Größe nach ihren Initialen gefragt.
+            {!nurGroessen && (
+              <Feld label="Lieferadresse">
+                <textarea name="lieferadresse" rows={3} required className={EINGABE} />
+              </Feld>
+            )}
+            {/* Beim Größencheck wird nichts bedruckt, also auch nichts gefragt. */}
+            {!nurGroessen && (
+              <label className="flex items-start gap-2.5 text-sm text-ink-800">
+                <input
+                  type="checkbox"
+                  name="initialen_noetig"
+                  value="ja"
+                  className="mt-0.5 h-4 w-4 flex-none accent-pitch-600"
+                />
+                <span>
+                  Es werden Initialen aufgedruckt.
+                  <span className="mt-0.5 block text-xs text-ink-500">
+                    Dann wird jede Person zusammen mit ihrer Größe nach ihren Initialen gefragt.
+                  </span>
                 </span>
-              </span>
-            </label>
+              </label>
+            )}
           </>
         )}
-        <Feld label="Sponsor auf der Kleidung" hinweis="Optional, falls schon bekannt.">
-          <input name="sponsor" className={EINGABE} />
-        </Feld>
-        <Feld label="Hinweise" hinweis="Optional, geht mit in die Anfrage an die Händler.">
-          <textarea name="hinweise" rows={3} className={EINGABE} />
-        </Feld>
+        {!nurGroessen && (
+          <>
+            <Feld label="Sponsor auf der Kleidung" hinweis="Optional, falls schon bekannt.">
+              <input name="sponsor" className={EINGABE} />
+            </Feld>
+            <Feld label="Hinweise" hinweis="Optional, geht mit in die Anfrage an die Händler.">
+              <textarea name="hinweise" rows={3} className={EINGABE} />
+            </Feld>
+          </>
+        )}
       </Card>
 
       <Card className="flex flex-col gap-3 p-6">
-        {voranfrage ? (
+        {nurGroessen ? (
+          <p className="text-sm text-ink-600">
+            Hier wird nichts bestellt und niemandem etwas berechnet. Am Ende steht eine Liste mit
+            aktuellen Größen – mehr nicht. Für eine Bestellung meldest du den Bedarf danach neu.
+          </p>
+        ) : voranfrage ? (
           <p className="text-sm text-ink-600">
             Ein Richtpreis ist unverbindlich und noch keine Zusage – weder von dir noch vom Händler.
             Die Zahlungsregel bestätigst du erst, wenn du die Angaben vervollständigst.

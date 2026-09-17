@@ -147,6 +147,12 @@ export type Vorgang = {
   feldspielerAnzahl: number;
   torwartAnzahl: number;
 
+  /**
+   * Der Vorgang bestellt nichts, er sammelt nur Groessen ein. Dann gibt es
+   * keine Artikel – und die Seite soll auch keine ankuendigen.
+   */
+  nurGroessen: boolean;
+
   haendler: Haendler[];
   artikel: Artikel[];
   verlauf: Ereignis[];

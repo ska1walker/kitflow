@@ -88,7 +88,9 @@ export function naechsterSchritt(v: Vorgang, ansicht: Ansicht): NaechsterSchritt
           }
         : {
             wer: "Du",
-            was: `Wenn alle drin sind, bekommst du die Liste zum Prüfen. ${fehlend(v)} fehlen noch.`,
+            was: `Wenn alle drin sind, bekommst du die Liste zum Prüfen. ${fehlend(v)} ${
+              fehlend(v) === 1 ? "fehlt" : "fehlen"
+            } noch.`,
             du: true,
           };
     case 2:

@@ -90,6 +90,14 @@ const TEAMS = [
   "Damen", "Mädchen", "Sponsoring",
 ];
 
+/**
+ * Ausstattungsarten – dieselben Werte wie `AUSSTATTUNGSARTEN` in
+ * src/lib/mannschaften.ts. Dieses Skript ist reines JavaScript und kann das
+ * Modul nicht importieren; weichen die Listen ab, weist HubSpot den Deal mit
+ * `INVALID_OPTION` ab.
+ */
+const AUSSTATTUNGSARTEN = ["Trikotsatz", "Weitere Ausstattung", "Nur Größen erfassen"];
+
 const GRUPPE = "ausstattung";
 
 function auswahl(werte) {
@@ -106,7 +114,7 @@ const DEAL_FELDER = [
     description: "AUS-JJJJ-NNN, laufend je Jahr",
   }),
   feld("ausstattungsart", "Ausstattungsart", "enumeration", "select", {
-    options: auswahl(["Trikotsatz", "Weitere Ausstattung"]),
+    options: auswahl([...AUSSTATTUNGSARTEN]),
   }),
   feld("mannschaft", "Mannschaft", "enumeration", "checkbox", { options: auswahl(TEAMS) }),
   feld("mannschaftscode", "Mannschaftscode", "string", "text", {
@@ -137,6 +145,12 @@ const DEAL_FELDER = [
       { label: "Ja", value: "true", displayOrder: 0 },
       { label: "Nein", value: "false", displayOrder: 1 },
     ],
+  }),
+  // Welche Groessen gefragt werden, wenn es keine Artikel gibt. Bei einem
+  // normalen Vorgang sagen das die Positionen; ein reiner Groessencheck hat
+  // keine, und dann steht es hier (docs/formulare.md).
+  feld("groessenarten", "Größenarten", "string", "text", {
+    description: "F1 „Nur Größen erfassen“, Semikolonliste – z. B. trikot;oberteil",
   }),
   feld("liste_bestaetigt_am", "Liste bestätigt am", "date", "date", {
     description: "F3, Bestaetigung des Trainers",
@@ -304,10 +318,50 @@ async function gruppeAnlegen(objekt) {
   }
 }
 
+/**
+ * Traegt Auswahlmoeglichkeiten nach, die an einer vorhandenen Eigenschaft noch
+ * fehlen.
+ *
+ * Wichtig, weil `feldAnlegen` eine vorhandene Eigenschaft sonst gar nicht
+ * anfasst: eine neue Ausstattungsart stuende dann zwar im Code, aber HubSpot
+ * wiese sie mit `INVALID_OPTION` ab – und das Skript meldete „vollstaendig“.
+ *
+ * Entfernt wird nichts. Eine Option, die an einem Datensatz haengt, wegzunehmen
+ * hiesse, dessen Wert ungueltig zu machen.
+ */
+async function optionenNachtragen(objekt, definition, da) {
+  if (!definition.options || !da.options) return false;
+
+  const vorhandeneWerte = new Set(da.options.map((o) => o.value));
+  const fehlende = definition.options.filter((o) => !vorhandeneWerte.has(o.value));
+  if (fehlende.length === 0) return false;
+
+  const namen = fehlende.map((o) => o.label).join(", ");
+  if (!ANWENDEN) {
+    console.log(`  WÜRDE ergänzen: ${objekt}.${definition.name} um ${namen}`);
+    return true;
+  }
+
+  const alle = [...da.options, ...fehlende].map((o, i) => ({
+    label: o.label,
+    value: o.value,
+    displayOrder: i,
+  }));
+  try {
+    await api(`/crm/v3/properties/${objekt}/${definition.name}`, "PATCH", { options: alle });
+    console.log(`  ergänzt: ${objekt}.${definition.name} um ${namen}`);
+    angelegt++;
+  } catch (e) {
+    console.error(`  FEHLER bei ${objekt}.${definition.name}: ${e.message}`);
+    fehler++;
+  }
+  return true;
+}
+
 async function feldAnlegen(objekt, definition) {
   try {
-    await api(`/crm/v3/properties/${objekt}/${definition.name}`);
-    vorhanden++;
+    const da = await api(`/crm/v3/properties/${objekt}/${definition.name}`);
+    if (!(await optionenNachtragen(objekt, definition, da))) vorhanden++;
     return;
   } catch (e) {
     if (e.status !== 404) throw e;

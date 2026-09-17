@@ -95,7 +95,7 @@ export function GroessenKarte({
           ) : (
             // Bei Jugendmannschaften nennt die Seite keine Namen.
             <p className="text-sm text-ink-600">
-              {fehlen} von {vorgang.groessenGesamt} fehlen noch.
+              {fehlen} von {vorgang.groessenGesamt} {fehlen === 1 ? "fehlt" : "fehlen"} noch.
             </p>
           )}
           <div className="mt-3.5 flex flex-wrap gap-2">

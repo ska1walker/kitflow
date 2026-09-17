@@ -11,6 +11,17 @@ import "server-only";
  * mal Artikel auf. So bleibt alles in HubSpot sichtbar und bearbeitbar, statt
  * in einem Textfeld zu verschwinden.
  *
+ * Wer gefragt wird, steht auf zwei Arten fest: eine **Mannschaft** (dann sucht
+ * `kontakteDerMannschaft` ihre Kontakte) oder eine **einzelne Person** (dann
+ * hat die Action sie ueber ihre E-Mail-Adresse gefunden und reicht sie herein).
+ * Der zweite Weg ist fuer den Nachzuegler, der allein einen Trainingsanzug
+ * braucht – ein Vorgang fuer 25 waere dafuer die falsche Form.
+ *
+ * Ein Vorgang kann auch gar nichts bestellen: bei der Ausstattungsart
+ * `NUR_GROESSEN` haengt kein Artikel dran, und was gefragt wird, steht als
+ * `groessenarten` am Deal. Das ist der Groessencheck vor der Saison – er endet
+ * bei der bestaetigten Liste und geht an keinen Haendler.
+ *
  * Zwei Modi (docs/konzept.md):
  *
  * - `vollstaendig` ist der alte Weg: alles auf einmal, Deal auf Stufe 1, die
@@ -31,7 +42,7 @@ import {
   type HsObjekt,
 } from "./hubspot";
 import { groessenLink, statusLink, bestaetigenLink, ergaenzenLink } from "./links";
-import { TEAMS } from "./mannschaften";
+import { NUR_GROESSEN, TEAMS } from "./mannschaften";
 import type { ArtikelFuer, Groessenart } from "./typen";
 
 /** Welcher der beiden Wege von F1 gegangen wird. */
@@ -61,9 +72,20 @@ export type BedarfEingabe = {
   email: string;
   telefon: string;
   teams: string[];
+  /**
+   * Gesetzt, wenn der Vorgang genau einer Person gilt. Dann wird `teams` nicht
+   * gelesen: gefragt wird nur diese eine, egal wer sonst in ihrer Mannschaft
+   * spielt.
+   */
+  person?: Empfaenger;
   mannschaftscode: string;
   ausstattungsart: string;
   artikel: ArtikelEingabe[];
+  /**
+   * Nur bei `NUR_GROESSEN` gefuellt: welche Groessen gefragt werden. Sonst
+   * sagen das die Artikel, und diese Liste bleibt leer.
+   */
+  groessenarten: Groessenart[];
   /** Geschätzte Kadergröße, nur im Modus `voranfrage`. */
   personenZahl: number;
   groessenFrist: string;
@@ -79,6 +101,8 @@ export type PersonLink = { name: string; groessen: string; status: string };
 export type BedarfErgebnis = {
   vorgang: string;
   modus: Modus;
+  /** Der Vorgang bestellt nichts, er sammelt nur Groessen ein. */
+  nurGroessen: boolean;
   /** Leer, wenn zur Mannschaft niemand gefunden wurde oder noch keiner gesucht. */
   personen: PersonLink[];
   trainerStatus: string;
@@ -201,6 +225,38 @@ async function produktFinden(
   return angelegt?.id ?? null;
 }
 
+/** Eine Person eines Vorgangs, auf das Noetigste gekuerzt. */
+export type Empfaenger = { id: string; name: string; team: string };
+
+function alsEmpfaenger(k: HsObjekt): Empfaenger {
+  const name = `${k.properties.firstname ?? ""} ${k.properties.lastname ?? ""}`.trim();
+  return { id: k.id, name: name || `Kontakt ${k.id}`, team: k.properties.team ?? "" };
+}
+
+/**
+ * Der Kontakt zu einer E-Mail-Adresse, sonst `null`.
+ *
+ * Gesucht wird ueber die Adresse und nicht ueber den Namen, weil F1 als
+ * einzige Seite ohne Token offen steht (docs/formulare.md). Eine Namenssuche
+ * waere dort ein Mitgliederverzeichnis fuer jeden, der die Seite kennt; ein
+ * Treffer auf die genaue Adresse verraet nur dem etwas, der sie schon hat.
+ */
+export async function kontaktPerEmail(email: string): Promise<Empfaenger | null> {
+  const adresse = email.trim().toLowerCase();
+  if (!adresse) return null;
+
+  const treffer = await hubspot<HsListe<HsObjekt>>({
+    pfad: "/crm/v3/objects/contacts/search",
+    koerper: {
+      filterGroups: [{ filters: [{ propertyName: "email", operator: "EQ", value: adresse }] }],
+      properties: ["firstname", "lastname", "team"],
+      limit: 1,
+    },
+  });
+  const kontakt = treffer?.results[0];
+  return kontakt ? alsEmpfaenger(kontakt) : null;
+}
+
 /** Die Kontakte, deren `team` eine der gewaehlten Mannschaften ist. */
 export async function kontakteDerMannschaft(teams: string[]): Promise<HsObjekt[]> {
   const treffer = await hubspot<HsListe<HsObjekt>>({
@@ -254,14 +310,30 @@ export async function meldeBedarf(eingabe: BedarfEingabe): Promise<BedarfErgebni
 
   // Im Modus `voranfrage` wird noch niemand gefragt, also auch niemand gesucht.
   // Die Kontakte holt F1b, wenn die Groessenabfrage wirklich startet.
-  const kontakte = voranfrage ? [] : await kontakteDerMannschaft(eingabe.teams);
+  //
+  // Gilt der Vorgang einer einzelnen Person, steht sie schon fest: die Action
+  // hat sie ueber ihre Adresse gefunden. Dann wird nicht nach Mannschaft
+  // gesucht, sonst haenge der halbe Kader mit dran.
+  const kontakte: Empfaenger[] = voranfrage
+    ? []
+    : eingabe.person
+      ? [eingabe.person]
+      : (await kontakteDerMannschaft(eingabe.teams)).map(alsEmpfaenger);
   const ohnePersonen = !voranfrage && kontakte.length === 0;
+
+  // Die Mannschaft am Deal entscheidet spaeter ueber `istJugend`: ohne sie
+  // gaelte der Vorgang vorsichtshalber als Jugend, Groessen veralteten nach
+  // vier statt zwoelf Monaten und die Seite nennt keine Namen. Bei einer
+  // einzelnen Person steht deshalb deren eigene Mannschaft am Deal.
+  const mannschaft = eingabe.person ? eingabe.person.team : eingabe.teams.join(";");
 
   const deal = await hubspot<HsObjekt>({
     pfad: "/crm/v3/objects/deals",
     koerper: {
       properties: {
-        dealname: `${eingabe.teams.join(", ")} · ${eingabe.ausstattungsart}`,
+        dealname: eingabe.person
+          ? `${eingabe.person.name} · ${eingabe.ausstattungsart}`
+          : `${eingabe.teams.join(", ")} · ${eingabe.ausstattungsart}`,
         pipeline: pipeline.id,
         // Ohne Spieler gibt es nichts anzufragen: der Vorgang endet sofort
         // (docs/formulare.md, M7). Eine Voranfrage lebt dagegen von der
@@ -269,10 +341,11 @@ export async function meldeBedarf(eingabe: BedarfEingabe): Promise<BedarfErgebni
         dealstage: voranfrage ? stufe0.id : ohnePersonen ? stufe9.id : stufe1.id,
         vorgangsnummer: nummer,
         ausstattungsart: eingabe.ausstattungsart,
-        mannschaft: eingabe.teams.join(";"),
+        mannschaft,
         mannschaftscode: eingabe.mannschaftscode,
         trainer_email: eingabe.email,
         personen_geschaetzt: voranfrage ? String(eingabe.personenZahl) : "",
+        groessenarten: eingabe.groessenarten.join(";"),
         groessen_frist: eingabe.groessenFrist,
         lieferadresse: eingabe.lieferadresse,
         initialen_noetig: eingabe.initialenNoetig ? "true" : "false",
@@ -309,6 +382,7 @@ export async function meldeBedarf(eingabe: BedarfEingabe): Promise<BedarfErgebni
   return {
     vorgang: nummer,
     modus: eingabe.modus,
+    nurGroessen: eingabe.ausstattungsart === NUR_GROESSEN,
     ohnePersonen,
     artikelText: eingabe.artikel.map((a) => ({
       name: [a.hersteller, a.bezeichnung].filter(Boolean).join(" "),
@@ -323,7 +397,7 @@ export async function meldeBedarf(eingabe: BedarfEingabe): Promise<BedarfErgebni
     bestaetigen: voranfrage ? "" : (bestaetigenLink(nummer) ?? ""),
     ergaenzen: voranfrage ? (ergaenzenLink(nummer) ?? "") : "",
     personen: kontakte.map((k) => ({
-      name: `${k.properties.firstname ?? ""} ${k.properties.lastname ?? ""}`.trim() || k.id,
+      name: k.name,
       groessen: groessenLink(nummer, k.id) ?? "",
       status: statusLink(nummer, k.id) ?? "",
     })),

@@ -42,6 +42,7 @@ import {
   istVeraltet,
 } from "./groessen";
 import { kontakteDerMannschaft, verknuepfen } from "./bedarf";
+import { NUR_GROESSEN } from "./mannschaften";
 import { trainerLink } from "./links";
 import { offen, pruefung, type Pruefung } from "./pruefungen";
 import { stufeAusName } from "./stufen";
@@ -76,6 +77,7 @@ const DEAL_FELDER = [
   "angebot_intersport_am",
   "angebot_11teamsports_am",
   "initialen_noetig",
+  "groessenarten",
   "zusage_sponsor",
   "eingang_verein",
   "eingang_am",
@@ -219,6 +221,35 @@ function artikelAus(positionen: HsObjekt[], produkte: Map<string, HsObjekt>): Ar
  * Wer ist Feldspieler, wer Torwart? Entschieden wird ueber die Artikel, die
  * eine Person bekommt: wer auch nur eine Torwart-Position hat, ist Torwart.
  */
+/**
+ * Welche Groessen dieser Vorgang fragt.
+ *
+ * Normalerweise sagen das die Artikel: eine Trainingsjacke braucht ein
+ * Oberteil, eine Hose eine Hosengroesse. Ein reiner Groessencheck hat keine
+ * Artikel – dann steht am Deal, wonach gefragt wird.
+ *
+ * F2 und F3 muessen hier zum selben Ergebnis kommen, sonst fragt das Formular
+ * etwas anderes, als die Liste anzeigt. Deshalb steht es genau einmal hier.
+ */
+function gefragteArten(deal: HsObjekt, artikel: Artikel[]): Groessenart[] {
+  const ausArtikeln = [...new Set(artikel.map((a) => a.groessenart))].filter((a) => a !== "ohne");
+  if (ausArtikeln.length > 0) return ausArtikeln;
+
+  return [
+    ...new Set(
+      (text(deal, "groessenarten") ?? "")
+        .split(";")
+        .map((w) => w.trim())
+        .filter((w): w is Groessenart => w in GROESSEN_FELD && w !== "ohne"),
+    ),
+  ];
+}
+
+/** Ein Vorgang, der nichts bestellt, sondern nur Groessen einsammelt. */
+function nurGroessen(deal: HsObjekt): boolean {
+  return text(deal, "ausstattungsart") === NUR_GROESSEN;
+}
+
 function rollenZaehlen(
   positionen: HsObjekt[],
   produkte: Map<string, HsObjekt>,
@@ -433,9 +464,11 @@ export async function ladeVorgang(nummer?: string, personId?: string): Promise<V
       // In der Voranfrage haengt noch kein Kontakt am Deal; dann zaehlt die
       // Schaetzung des Trainers, ausdruecklich als solche gekennzeichnet.
       kontakte.length > 0
-        ? `${kontakte.length} Personen`
+        ? `${kontakte.length} ${kontakte.length === 1 ? "Person" : "Personen"}`
         : zahl(deal, "personen_geschaetzt") > 0
-          ? `geschätzt ${zahl(deal, "personen_geschaetzt")} Personen`
+          ? `geschätzt ${zahl(deal, "personen_geschaetzt")} ${
+              zahl(deal, "personen_geschaetzt") === 1 ? "Person" : "Personen"
+            }`
           : undefined,
       sponsor ? `Sponsor ${sponsor}` : undefined,
       lieferant,
@@ -464,6 +497,7 @@ export async function ladeVorgang(nummer?: string, personId?: string): Promise<V
     feldspielerAnzahl: rollen.feldspieler,
     torwartAnzahl: rollen.torwart,
 
+    nurGroessen: nurGroessen(deal),
     haendler: haendlerAus(deal),
     artikel,
     verlauf: verlaufAus(deal, lieferant),
@@ -514,6 +548,8 @@ export type GroessenAbfrage = {
   bestaetigtAm?: string;
   /** Dieser Vorgang laesst Initialen aufdrucken (F1, `initialen_noetig`). */
   initialenNoetig: boolean;
+  /** Der Vorgang bestellt nichts: es geht nur um aktuelle Groessen. */
+  nurGroessen: boolean;
   /** Die Initialen, die am Kontakt stehen. Leer, wenn noch keine da sind. */
   initialen: string;
   /** Nur auf Stufe 1 darf geaendert werden (docs/formulare.md). */
@@ -578,7 +614,7 @@ export async function ladeGroessenAbfrage(
   const veraltet = istVeraltet(text(kontakt, "groesse_zuletzt_bestaetigt_am"), jugend);
 
   // Jede Groessenart nur einmal fragen, auch wenn mehrere Artikel sie brauchen.
-  const arten = [...new Set(artikel.map((a) => a.groessenart))].filter((a) => a !== "ohne");
+  const arten = gefragteArten(deal, artikel);
 
   const fragen: GroessenFrage[] = arten.map((art) => {
     const feld = GROESSEN_FELD[art];
@@ -610,6 +646,7 @@ export async function ladeGroessenAbfrage(
     // ein Paar, egal wie viele Artikel beflockt werden.
     bestaetigtAm: kurzDatum(text(kontakt, "groesse_zuletzt_bestaetigt_am")),
     initialenNoetig: text(deal, "initialen_noetig") === "true",
+    nurGroessen: nurGroessen(deal),
     initialen: text(kontakt, "initialen") ?? "",
     offen: stufe === 1,
   };
@@ -680,6 +717,8 @@ export type Liste = {
   mannschaft: string;
   gegenstand: string;
   trikotsatz: boolean;
+  /** Der Vorgang bestellt nichts: keine Haendlerfelder, keine Artikelpruefungen. */
+  nurGroessen: boolean;
   jugend: boolean;
   /** Steuert die Initialen-Spalte: ohne das Haekchen in F1 gibt es sie nicht. */
   initialenNoetig: boolean;
@@ -748,9 +787,7 @@ export async function ladeListe(nummer: string): Promise<Liste | null> {
   const trikotsatz = text(deal, "ausstattungsart") === "Trikotsatz";
   const initialenNoetig = text(deal, "initialen_noetig") === "true";
 
-  const arten = [...new Set(artikel.map((a) => a.groessenart))]
-    .filter((a) => a !== "ohne")
-    .map((art) => ({ art, label: GROESSEN_LABEL[art] }));
+  const arten = gefragteArten(deal, artikel).map((art) => ({ art, label: GROESSEN_LABEL[art] }));
 
   const zeilen: ListenZeile[] = kontakte.map((k) => ({
     person: k.id,
@@ -771,6 +808,7 @@ export async function ladeListe(nummer: string): Promise<Liste | null> {
     mannschaft: text(deal, "mannschaft") ?? text(deal, "mannschaftscode") ?? "",
     gegenstand: text(deal, "ausstattungsart") ?? "Ausstattung",
     trikotsatz,
+    nurGroessen: nurGroessen(deal),
     jugend,
     initialenNoetig,
     lieferadresse: text(deal, "lieferadresse") ?? "",
@@ -778,7 +816,7 @@ export async function ladeListe(nummer: string): Promise<Liste | null> {
     bestaetigtAm: kurzDatum(text(deal, "liste_bestaetigt_am")),
     arten,
     zeilen,
-    pruefungen: pruefeVorgang(deal, artikel, produkte, zeilen, trikotsatz),
+    pruefungen: pruefeVorgang(deal, artikel, produkte, zeilen, trikotsatz, nurGroessen(deal)),
     offen: stufe === 1,
   };
 }
@@ -790,7 +828,22 @@ function pruefeVorgang(
   produkte: HsObjekt[],
   zeilen: ListenZeile[],
   trikotsatz: boolean,
+  nurGroessenCheck: boolean,
 ): Pruefung[] {
+  // Ein Groessencheck geht an keinen Haendler: Artikel, Beflockung, Summen und
+  // die Lieferadresse haben dort nichts zu pruefen. „Es haengt kein Artikel am
+  // Vorgang“ waere ein erfundener Mangel. Was bleibt, ist die eine Frage, um
+  // die es geht: hat jede Person eine aktuelle Groesse?
+  if (nurGroessenCheck) {
+    const maengel: string[] = [];
+    for (const zeile of zeilen) {
+      const fehlend = zeile.groessen.filter((g) => !g.wert).map((g) => g.label);
+      if (fehlend.length > 0) maengel.push(`${zeile.name}: ${fehlend.join(", ")} fehlt`);
+      else if (zeile.veraltet) maengel.push(`${zeile.name}: Größe ist veraltet`);
+    }
+    return [pruefung(2, "Jede Person hat eine aktuelle Größe je Größenart", maengel)];
+  }
+
   // 1 · Artikel sind aktive Produkte mit Herstellernummer und Farbe
   const artikelMaengel: string[] = [];
   if (artikel.length === 0) {

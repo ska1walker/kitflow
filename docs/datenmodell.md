@@ -33,12 +33,13 @@ Stand 10.09.2026. HubSpot ist die einzige Datenbasis. Neue Eigenschaften in der 
 | Eigenschaft | Typ | gesetzt bei |
 |---|---|---|
 | vorgangsnummer | Text, AUS-JJJJ-NNN | F1 |
-| ausstattungsart | Auswahl: Trikotsatz / Weitere Ausstattung | F1 |
-| mannschaft | Mehrfachauswahl, Werte wie Kontakt-team | F1 |
+| ausstattungsart | Auswahl: Trikotsatz / Weitere Ausstattung / Nur Größen erfassen | F1. „Nur Größen erfassen“ bestellt nichts: kein Artikel, kein Händler, nur `groessenarten` |
+| mannschaft | Mehrfachauswahl, Werte wie Kontakt-team | F1. Gilt der Vorgang einer einzelnen Person, steht hier deren eigenes `team` – sonst hielte `istJugend` den Vorgang vorsichtshalber für Jugend |
 | mannschaftscode | Text, z. B. JG2014-2015 | F1 |
 | personen_geschaetzt | Zahl, geschätzte Kadergröße; nur im einfachen Modus | F1 (Voranfrage) |
 | trainer_email, groessen_frist, lieferadresse | Text / Datum / Text | F1 |
 | initialen_noetig | Ja/Nein | F1 bzw. F1b – schaltet die Initialen-Abfrage in F2 frei |
+| groessenarten | Text | F1 „Nur Größen erfassen“ – Semikolonliste, z. B. `trikot;schuhe`. Nur gefüllt, wenn kein Artikel am Vorgang hängt: sonst sagen die Positionen, was gefragt wird |
 | ausgeschlossene_spieler | Text, Record-IDs | F2 (Trainer) |
 | torwarte | Text, Record-IDs; wer die Torwartartikel bekommt | F2 (Trainer) |
 | liste_bestaetigt_am | Datum | F3 |

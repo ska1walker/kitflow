@@ -11,11 +11,13 @@
 import {
   meldeBedarf,
   gueltigeTeams,
+  kontaktPerEmail,
   type ArtikelEingabe,
   type BedarfErgebnis,
+  type Empfaenger,
   type Modus,
 } from "@/lib/bedarf";
-import { AUSSTATTUNGSARTEN, BEFLOCKUNGEN } from "@/lib/mannschaften";
+import { AUSSTATTUNGSARTEN, BEFLOCKUNGEN, NUR_GROESSEN } from "@/lib/mannschaften";
 import { GROESSEN_FELD, groessenWerte } from "@/lib/groessen";
 import { absolut, sendeM1 } from "@/lib/mail";
 import type { ArtikelFuer, Groessenart } from "@/lib/typen";
@@ -131,16 +133,58 @@ export async function bedarfMelden(_bisher: Ergebnis, formular: FormData): Promi
     return { stand: "fehler", text: "Die E-Mail-Adresse sieht nicht richtig aus." };
   }
 
+  // Fuer wen? Die Voranfrage kennt nur Mannschaften: dort geht es um einen
+  // Richtpreis fuer eine Gruppe, und F1b wuerde spaeter wieder die ganze
+  // Mannschaft laden. Ein manipuliertes Formular faellt deshalb hierher zurueck.
+  const fuerEine = modus !== "voranfrage" && formular.get("empfaenger") === "person";
+
+  let person: Empfaenger | undefined;
   const teams = gueltigeTeams(formular.getAll("teams").map(String));
-  if (teams.length === 0) return { stand: "fehler", text: "Bitte mindestens eine Mannschaft wählen." };
+
+  if (fuerEine) {
+    const adresse = pflicht(formular, "person_email");
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(adresse)) {
+      return { stand: "fehler", text: "Bitte die E-Mail-Adresse der Person angeben." };
+    }
+    const gefunden = await kontaktPerEmail(adresse);
+    if (!gefunden) {
+      return {
+        stand: "fehler",
+        text: "Zu dieser E-Mail-Adresse gibt es in HubSpot keinen Kontakt. Bitte lass die Person erst von der Geschäftsstelle anlegen.",
+      };
+    }
+    person = gefunden;
+  } else if (teams.length === 0) {
+    return { stand: "fehler", text: "Bitte mindestens eine Mannschaft wählen." };
+  }
 
   const ausstattungsart = pflicht(formular, "ausstattungsart");
   if (!AUSSTATTUNGSARTEN.includes(ausstattungsart)) {
     return { stand: "fehler", text: "Bitte wählen, was gebraucht wird." };
   }
 
-  const artikel = artikelLesen(formular, modus);
-  if (typeof artikel === "string") return { stand: "fehler", text: artikel };
+  // Ein reiner Groessencheck bestellt nichts: kein Artikel, kein Haendler, keine
+  // Lieferadresse. Gefragt wird nur, was hier angehakt ist. In der Voranfrage
+  // gibt es ihn nicht – dort geht es um einen Richtpreis, und den braucht er
+  // nicht (docs/formulare.md).
+  const nurGroessen = modus !== "voranfrage" && ausstattungsart === NUR_GROESSEN;
+
+  let artikel: ArtikelEingabe[] = [];
+  let groessenarten: Groessenart[] = [];
+
+  if (nurGroessen) {
+    groessenarten = formular
+      .getAll("groessenarten")
+      .map(String)
+      .filter((w): w is Groessenart => w in GROESSEN_FELD && w !== "ohne");
+    if (groessenarten.length === 0) {
+      return { stand: "fehler", text: "Bitte mindestens eine Größe wählen, die gefragt werden soll." };
+    }
+  } else {
+    const gelesen = artikelLesen(formular, modus);
+    if (typeof gelesen === "string") return { stand: "fehler", text: gelesen };
+    artikel = gelesen;
+  }
 
   // Die Voranfrage braucht statt Fristen und Lieferadresse nur eine Zahl: fuer
   // wie viele Personen. Alles Weitere holt F1b nach (docs/formulare.md).
@@ -162,14 +206,18 @@ export async function bedarfMelden(_bisher: Ergebnis, formular: FormData): Promi
       return { stand: "fehler", text: "Bitte eine Frist für die Größen angeben." };
     }
 
-    lieferadresse = pflicht(formular, "lieferadresse");
-    if (!lieferadresse) return { stand: "fehler", text: "Bitte die Lieferadresse angeben." };
+    // Lieferadresse und Zahlungsregel gehoeren zur Bestellung. Ein Groessencheck
+    // bestellt nichts, also waeren beide nur Huerden ohne Grund.
+    if (!nurGroessen) {
+      lieferadresse = pflicht(formular, "lieferadresse");
+      if (!lieferadresse) return { stand: "fehler", text: "Bitte die Lieferadresse angeben." };
 
-    if (formular.get("zahlungsregel") !== "ja") {
-      return { stand: "fehler", text: "Bitte die Zahlungsregel bestätigen." };
+      if (formular.get("zahlungsregel") !== "ja") {
+        return { stand: "fehler", text: "Bitte die Zahlungsregel bestätigen." };
+      }
+
+      initialenNoetig = formular.get("initialen_noetig") === "ja";
     }
-
-    initialenNoetig = formular.get("initialen_noetig") === "ja";
   }
 
   const ergebnis = await meldeBedarf({
@@ -179,9 +227,11 @@ export async function bedarfMelden(_bisher: Ergebnis, formular: FormData): Promi
     email,
     telefon,
     teams,
+    person,
     mannschaftscode: pflicht(formular, "mannschaftscode"),
     ausstattungsart,
     artikel,
+    groessenarten,
     personenZahl,
     groessenFrist,
     lieferadresse,
@@ -202,7 +252,8 @@ export async function bedarfMelden(_bisher: Ergebnis, formular: FormData): Promi
   const mailAn = await sendeM1(email, {
     vorgang: ergebnis.vorgang,
     vorname,
-    mannschaft: teams.join(", "),
+    mannschaft: person ? person.name : teams.join(", "),
+    nurGroessen,
     artikel: ergebnis.artikelText,
     groessenFrist,
     statusLink: absolut(ergebnis.trainerStatus) ?? "",

@@ -179,6 +179,7 @@ export const BEISPIEL_VORGANG: Vorgang = {
   beflockung: "Standard auf den Trikots",
   feldspielerAnzahl: 17,
   torwartAnzahl: 1,
+  nurGroessen: false,
   haendler: HAENDLER,
   artikel: ARTIKEL,
   verlauf: VERLAUF,
