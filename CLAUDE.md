@@ -61,6 +61,11 @@ Getestet wird zuerst, was wehtut, wenn es bricht: `links.ts` ist die einzige Zug
 Anwendung, es gibt keinen Login. Ein Test, der auch bei kaputtem Code grün bliebe, ist
 wertlos; neue Tests werden deshalb einmal gegen eine absichtlich gebrochene Fassung gehalten.
 
+**Dabei muss belegt sein, dass der Bruch wirklich angekommen ist.** Eine Ersetzung, die nicht
+greift — falsche Einrückung, Text seither geändert — lässt die Tests grün und sieht aus wie ein
+bestandener Gegenbeweis. Also erst prüfen, dass die Stelle getroffen wurde, dann die Tests
+laufen lassen.
+
 **Der Dev-Server hydriert in der Cloud-Umgebung nicht** (der HMR-Websocket kommt durch den
 Proxy nicht durch, kein Knopf reagiert). Im Browser wird gegen `npm run start` geprüft, was
 ohnehin näher an Vercel ist.
