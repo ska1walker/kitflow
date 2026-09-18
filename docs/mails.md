@@ -88,17 +88,64 @@ trägt die Größe über die Liste selbst ein.
 
 ---
 
-## M2 · Erinnerung Größen (AUS-W → Eltern bzw. Spieler) · Phase 3
+## M2 · Erinnerung Größen (→ Spieler bzw. Eltern)
 
-**Betreff:** Erinnerung: Größe für {{mannschaft}} bis {{groessen_frist}}
+Gebaut: `sendeM2` in `src/lib/mail.ts`, verschickt vom täglichen Lauf in
+`src/lib/erinnerung.ts`.
 
-Hallo,
+**Betreff:** Erinnerung: Größe für {{mannschaft}} bis {{frist}}
+(bei der zweiten: „Letzte Erinnerung: …“)
 
-für {{spieler_vorname}} fehlt noch die Größe für die neue Ausstattung ({{artikel_kurz}}). Bitte trag sie bis {{groessen_frist}} hier ein:
-{{link_f2}}
+Hallo {{vorname}},
 
-Danke und sportliche Grüße
-Eintracht Munster Fußball
+für {{mannschaft}} fehlt noch deine Größe: {{arten}}.
+
+Bitte trag sie bis {{frist}} ein. Noch {{tage}} Tage. Das dauert eine Minute.
+
+[Größe jetzt eintragen] → {{groessen_link}}
+
+*(erste)* Beflockte Sachen können nicht umgetauscht werden. Im Zweifel lieber eine Nummer größer.
+*(zweite)* Das ist die letzte Erinnerung. Kommt bis zur Frist nichts, trägt deine Trainerin oder dein Trainer die Größe nach bestem Wissen ein.
+
+Hast du sie schon eingetragen? Dann ist diese Mail unterwegs gewesen, bevor es ankam – dann ist alles gut.
+
+Der Link gilt nur für dich. Bitte gib ihn nicht weiter – wer ihn hat, kann deine Größe ändern.
+
+### Die Grenzen
+
+Dies ist der einzige Mailweg in kitflow, den **kein Mensch auslöst**. Bei allem
+anderen sitzt jemand davor und sieht, was rausgeht; hier läuft es abends durch.
+Die Grenzen stehen deshalb alle an einer Stelle (`erinnerung.ts`) und sind
+einzeln geprüft:
+
+| | |
+| --- | --- |
+| **höchstens zwei** je Person und Vorgang | danach nie wieder, auch nicht nächste Woche |
+| **mindestens drei Tage Abstand** | zur letzten Mail dieses Vorgangs, auch zur ersten Größen-Mail |
+| **nie nach der Frist** | am Tag der Frist noch, danach nicht mehr |
+| **nur, wer die erste Mail hatte** | sonst wäre die „Erinnerung“ die erste Ansprache und klänge wie ein Vorwurf |
+| **nur auf Stufe 1** | danach ließe sich nichts mehr eintragen |
+| **nur ohne Größe** | wer eingetragen hat, ist fertig |
+| **umgeleitete Mails zählen nicht** | `MAIL_NUR_AN` legt sie in Kais Postfach, nicht in das des Spielers |
+
+Datum **und** Restzeit stehen in der Mail: „Noch 10 Tage“ allein rechnet falsch,
+sobald die Mail zwei Tage liegenbleibt; ein Datum allein sagt nicht, wie eilig
+es ist. (Das fiel erst durch einen Test auf — die erste Fassung nannte die
+Frist nur im Betreff.)
+
+### Der Zeitgeber
+
+Vercel Cron, täglich **16:00 UTC** = 18:00 Berlin im Sommer, 17:00 im Winter —
+nach Feierabend, wenn Eltern ihr Postfach ansehen. Steht in `vercel.json`.
+
+Die Adresse `/api/erinnerungen` **steht offen im Netz**; ein Zeitgeber ist kein
+Zugangsschutz. Sie prüft `CRON_SECRET` selbst, in konstanter Zeit, und
+antwortet **503 statt 200**, wenn das Geheimnis fehlt oder kürzer als 16 Zeichen
+ist. Dieselbe Regel wie bei `LINK_SECRET` und `SPARTE_EMAILS`: eine Anwendung
+ohne Schlüssel darf nicht offen stehen.
+
+Der Lauf berichtet in **Zahlen**. Vorname und Adresse eines Kindes gehören in
+die Mail und in kein Log (CLAUDE.md) — auch das ist geprüft.
 
 ---
 

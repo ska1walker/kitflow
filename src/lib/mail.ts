@@ -299,3 +299,81 @@ export async function sendeM2a(an: string, d: M2aDaten): Promise<string | null> 
     html: alsHtml(rahmen),
   });
 }
+
+export type M2Daten = M2aDaten & {
+  /** Tage bis zur Frist. 0 heißt „heute läuft sie ab“. */
+  tageBisFrist: number;
+  /** Die wievielte Erinnerung: 1 oder 2. Die zweite ist die letzte. */
+  nummer: 1 | 2;
+};
+
+/**
+ * M2 · die Erinnerung (docs/mails.md).
+ *
+ * Es gibt höchstens zwei, mit mindestens drei Tagen Abstand, und nie nach der
+ * Frist — die Regeln stehen in `erinnerung.ts`, nicht hier. Diese Funktion
+ * schreibt nur den Text.
+ *
+ * Sie sagt bei der zweiten ausdrücklich, dass es die letzte ist. Wer nicht
+ * weiß, ob noch etwas nachkommt, legt die Mail weg; wer weiß, dass es die
+ * letzte ist, macht es jetzt. Danach trägt der Trainer die Größe selbst ein —
+ * auch das steht in der Mail, damit niemand glaubt, er habe etwas verpasst.
+ *
+ * Wie M2a: kein Nachname und kein fremder Name. Die Mail erreicht Eltern.
+ */
+export async function sendeM2(an: string, d: M2Daten): Promise<string | null> {
+  const frist = kurzesDatum(d.frist);
+  const letzte = d.nummer === 2;
+
+  const wann =
+    d.tageBisFrist <= 0
+      ? "Heute ist der letzte Tag."
+      : d.tageBisFrist === 1
+        ? "Morgen ist der letzte Tag."
+        : `Noch ${d.tageBisFrist} Tage.`;
+
+  const rahmen: Rahmen = {
+    eyebrow: `Vorgang ${d.vorgang}`,
+    titel: letzte ? "Letzte Erinnerung an deine Größe" : "Deine Größe fehlt noch",
+    vorschau: `${d.mannschaft}: ${d.arten} bitte bis ${frist} eintragen. ${wann}`,
+    bloecke: [
+      {
+        art: "absatz",
+        text: `${anrede(d.vorname)} für ${d.mannschaft} fehlt noch deine Größe: ${d.arten}.`,
+      },
+      {
+        // Datum UND Restzeit. „Noch 10 Tage“ allein rechnet falsch, sobald die
+        // Mail zwei Tage liegenbleibt; ein Datum allein sagt nicht, wie eilig
+        // es ist.
+        art: "absatz",
+        text: `Bitte trag sie bis ${frist} ein. ${wann} Das dauert eine Minute.`,
+      },
+      { art: "knopf", text: "Größe jetzt eintragen", href: d.groessenLink },
+      {
+        art: "absatz",
+        text: letzte
+          ? "Das ist die letzte Erinnerung. Kommt bis zur Frist nichts, trägt deine Trainerin oder dein Trainer die Größe nach bestem Wissen ein."
+          : d.nurGroessen
+            ? "Mit dieser Angabe wird nichts bestellt – sie sorgt nur dafür, dass die Größe beim nächsten Mal stimmt."
+            : "Beflockte Sachen können nicht umgetauscht werden. Im Zweifel lieber eine Nummer größer.",
+      },
+      {
+        art: "absatz",
+        text: "Hast du sie schon eingetragen? Dann ist diese Mail unterwegs gewesen, bevor es ankam – dann ist alles gut.",
+      },
+      {
+        art: "absatz",
+        text: "Der Link gilt nur für dich. Bitte gib ihn nicht weiter – wer ihn hat, kann deine Größe ändern.",
+      },
+    ],
+  };
+
+  return sendeMail({
+    an,
+    betreff: letzte
+      ? `Letzte Erinnerung: Größe für ${d.mannschaft} bis ${frist}`
+      : `Erinnerung: Größe für ${d.mannschaft} bis ${frist}`,
+    text: alsText(rahmen),
+    html: alsHtml(rahmen),
+  });
+}

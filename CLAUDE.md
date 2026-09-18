@@ -46,6 +46,7 @@ Umgebungsvariablen: `HUBSPOT_TOKEN`, `RESEND_API_KEY`, `LINK_SECRET`, `MAKE_WEBH
 - Keine Mail an die Geschäftsstelle ohne Kais ausdrückliche Freigabe.
 - Aussagen zu Steuern immer mit dem Hinweis „ich bin kein Steuerberater“.
 - Bestellt wird erst, wenn das Geld da ist (Deckungsprüfung, docs/konzept.md). Eine Zusage allein macht nie bestellbar.
+- **Mails, die kein Mensch auslöst, brauchen harte Grenzen an einer Stelle.** Der Erinnerungslauf M2 (`src/lib/erinnerung.ts`, täglich über Vercel Cron) schickt höchstens zwei je Person, mit mindestens drei Tagen Abstand, nie nach der Frist und nie an jemanden, der die erste Mail nie bekam. Der Endpunkt `/api/erinnerungen` steht offen im Netz und prüft `CRON_SECRET` selbst; fehlt es, antwortet er 503 statt 200. Berichtet wird in Zahlen — Vorname und Adresse eines Kindes gehören in die Mail und in kein Log.
 
 ## Befehle und Verifikation
 

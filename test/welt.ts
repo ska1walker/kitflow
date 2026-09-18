@@ -348,10 +348,21 @@ function dbAntwort(
       // `umgeleitet=is.false` ist der Kern: eine umgeleitete Mail lag in Kais
       // Postfach, nicht im Postfach des Spielers, und zaehlt deshalb nicht.
       const nurEchte = suche.get("umgeleitet") === "is.false";
+      // Und je Person: `mailsAn` fragt nach genau einer Kontakt-ID. Ohne diesen
+      // Filter bekaeme jeder die Verlaufsliste aller — ein Test gegen so eine
+      // Attrappe pruefte etwas anderes, als der Code tut.
+      const wen = suche.get("hs_kontakt_id");
+      const passt = (m: { hs_kontakt_id: string | null }) =>
+        wen === null
+          ? true
+          : wen === "is.null"
+            ? m.hs_kontakt_id === null
+            : m.hs_kontakt_id === wen.replace("eq.", "");
       return json(
         (welt.mails ?? [])
           .filter((m) => (art ? m.art === art : true))
           .filter((m) => (nurEchte ? m.umgeleitet !== true : true))
+          .filter(passt)
           .sort((a, b) => b.gesendet_am.localeCompare(a.gesendet_am)),
       );
     }

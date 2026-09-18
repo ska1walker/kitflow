@@ -93,7 +93,7 @@ function standText(wert: string | undefined): string {
 }
 
 /** Hat der Kontakt eine Groesse hinterlegt? */
-function hatGroesse(kontakt: HsObjekt): boolean {
+export function hatGroesse(kontakt: HsObjekt): boolean {
   if (text(kontakt, "groesse_zuletzt_bestaetigt_am")) return true;
   // Rueckfall, solange das Bestaetigungsdatum noch nirgends gepflegt ist:
   // eine eingetragene Groesse zaehlt auch ohne Datum (docs/datenmodell.md).
@@ -113,7 +113,7 @@ function personName(kontakt: HsObjekt): string {
  * bleiben — sonst zeigt die Seite „0 von 0 eingetragen“, wo in Wahrheit 26
  * Leute warten.
  */
-async function kontakteVon(satz: VorgangSatz): Promise<HsObjekt[] | null> {
+export async function kontakteVon(satz: VorgangSatz): Promise<HsObjekt[] | null> {
   const raus = ausgeschlossene(satz);
   const ids = satz.personen.map((p) => p.kontaktId).filter((id) => !raus.has(id));
   if (ids.length === 0) return [];
@@ -749,8 +749,13 @@ export async function trageNach(
  * Die Groessen-Mail an die Mannschaft (M2a)
  * ------------------------------------------------------------------ */
 
-/** Die Art in `mail_versand`. Die Erinnerung (M2) bekommt spaeter eine eigene. */
+/**
+ * Die Arten in `mail_versand`. Getrennt gefuehrt, weil sie verschiedene
+ * Grenzen haben: die Groessen-Mail schickt der Trainer von Hand und so oft er
+ * will, die Erinnerung ein Lauf und hoechstens zweimal (`erinnerung.ts`).
+ */
 export const MAIL_GROESSEN = "groessen";
+export const MAIL_ERINNERUNG = "erinnerung";
 
 export type MailEmpfaenger = {
   person: string;
@@ -823,6 +828,31 @@ function aufzaehlung(teile: string[]): string {
   return `${teile.slice(0, -1).join(", ")} und ${teile[teile.length - 1]}`;
 }
 
+export type MailKontext = {
+  /** Was gefragt wird, in Worten: „Oberteil und Trainingshose“. */
+  arten: string;
+  /** Die Frist, deutsch gekuerzt. */
+  frist: string;
+  mannschaft: string;
+  nurGroessen: boolean;
+};
+
+/**
+ * Was jede Groessen-Mail ueber den Vorgang wissen muss.
+ *
+ * Steht an einer Stelle, weil zwei Absender daraus schoepfen: die Mail, die der
+ * Trainer von Hand verschickt (M2a), und die Erinnerung (M2). Liefen sie
+ * auseinander, fragte die Erinnerung nach etwas anderem als die erste Mail.
+ */
+export function mailKontext(satz: VorgangSatz): MailKontext {
+  return {
+    arten: aufzaehlung(gefragteArten(satz).map((art) => GROESSEN_LABEL[art])),
+    frist: kurz(satz.groessenFrist) ?? "zur Frist",
+    mannschaft: satz.mannschaften.join(", ") || (satz.mannschaftscode ?? ""),
+    nurGroessen: nurGroessen(satz),
+  };
+}
+
 export type VersandErgebnis =
   | { ok: true; verschickt: number; fehlgeschlagen: number; umgeleitetAn?: string }
   | { ok: false; grund: "gestoert" | "unbekannt" | "zu" | "niemand" | "kein-versand" };
@@ -862,10 +892,7 @@ export async function sendeGroessenMails(
   const kontakte = await batchLesen("contacts", gewaehlt, KONTAKT_FELDER);
   if (kontakte.length === 0) return { ok: false, grund: "gestoert" };
 
-  const arten = aufzaehlung(gefragteArten(satz).map((art) => GROESSEN_LABEL[art]));
-  const frist = kurz(satz.groessenFrist) ?? "zur Frist";
-  const nur = nurGroessen(satz);
-  const mannschaft = satz.mannschaften.join(", ") || (satz.mannschaftscode ?? "");
+  const { arten, frist, mannschaft, nurGroessen: nur } = mailKontext(satz);
 
   let verschickt = 0;
   let fehlgeschlagen = 0;
