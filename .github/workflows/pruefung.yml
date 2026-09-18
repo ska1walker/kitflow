@@ -40,3 +40,27 @@ jobs:
       # Ohne HUBSPOT_TOKEN und ohne HUBSPOT_AUTH_VIA_PROXY laeuft der Build auf
       # den Beispieldaten. Er braucht kein Geheimnis und geht nicht ins Netz.
       - run: npm run build
+
+      # Der Browser kommt aus dem Netz, die Pruefung selbst nicht: der Lauf
+      # bekommt die Zugaenge zu HubSpot, Supabase und Resend leer uebergeben
+      # (playwright.config.ts) und kann weder einen Kontakt lesen noch eine
+      # Mail verschicken. `--with-deps` holt die Systembibliotheken nach, die
+      # Chromium auf einem nackten Runner fehlen.
+      - name: Chromium fuer Playwright
+        run: npx playwright install --with-deps chromium
+
+      # Baut sich seinen eigenen Produktionsserver (der Schritt darueber laesst
+      # `.next` zwar gebaut zurueck, aber ein stiller Verlass darauf waere die
+      # naechste Falle: ein alter Build sieht aus wie ein bestandener Lauf).
+      - run: npm run test:browser
+
+      # Nur wenn etwas rot ist: Spur und Bilder zum Nachsehen, sonst laedt
+      # jeder gruene Lauf Ballast hoch.
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-bericht
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
