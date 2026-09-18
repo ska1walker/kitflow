@@ -196,35 +196,55 @@ die Mail und in kein Log (CLAUDE.md) — auch das ist geprüft.
 
 ---
 
-## M3 · Größenliste zum Prüfen (AUS-3 → Trainer)
+## M3 · Größenliste zum Prüfen (→ Trainer)
+
+Gebaut: `sendeM3` in `src/lib/mail.ts`, verschickt vom täglichen Lauf
+(`listenlauf` in `src/lib/erinnerung.ts`).
 
 **Betreff:** {{vorgang}} · Größenliste {{mannschaft}} bitte prüfen
 
-Hallo {{trainer_vorname}},
+Hallo,
 
-{{status_satz}}
+*(alle da)* für {{mannschaft}} haben alle {{gesamt}} ihre Größe eingetragen.
+*(Frist erreicht)* für {{mannschaft}} war der {{frist}} die Frist. {{offen}} Größen fehlen noch.
 
-{{tabelle}}
+**Was jetzt zu tun ist**
+1. Öffne die Liste und sieh sie durch.
+2. *(bei offenen)* Wer keine Größe hat, ist markiert. Du kannst sie dort selbst eintragen oder die Person für diese Runde herausnehmen.
+3. Stimmt alles, bestätigst du die Liste. Erst danach geht die Anfrage an Intersport Uelzen und 11teamsports.
 
-Die Tabelle zeigt je Person die Größe für jeden Artikel und die Rückennummer.
-- Gelb markiert: Größe fehlt noch oder ist älter als {{veraltet_monate}} Monate.
-- Rot markiert: Rückennummer doppelt oder fehlt.
+[Liste prüfen und bestätigen] → {{bestaetigen_link}}
 
-**Etwas ändern:** Hinter jeder Zeile steht ein Link. Damit kannst du Größe und Rückennummer anpassen oder jemanden für diese Runde herausnehmen.
+Die Namen und Größen stehen nur hinter diesem Link, nicht in dieser Mail.
 
-**Alles richtig?** Dann bestätige hier. Danach geht die Anfrage an beide Händler:
-{{link_f3}}
+### Zwei Abweichungen vom Entwurf
 
-Sportliche Grüße
-Kai Böhm
+**Keine Tabelle.** Der Entwurf sah eine Liste mit Namen, Größen und
+Rückennummern in der Mail vor. Das ist dieselbe Falle wie der Text für die
+Elterngruppe in M1: eine Mail wird weitergeleitet, ausgedruckt und
+liegengelassen — und dann liegen die Maße einer ganzen Jugendmannschaft
+irgendwo. Sie stehen hinter dem signierten Link, wo sie hingehören; in der Mail
+stehen Zahlen.
 
-`{{status_satz}}` je nach Auslöser:
-- alle da: „alle haben ihre Größe eingetragen.“
-- Frist erreicht: „die Frist ist abgelaufen. {{anzahl_offen}} Größen fehlen noch, sie sind unten markiert.“
+**Höchstens eine je Vorgang.** Danach hat der Trainer den Link und weiß
+Bescheid. Eine zweite wäre Nörgeln; kommt später ein Nachzügler dazu, sieht er
+das auf seiner Statusseite.
+
+Ausgelöst wird sie von genau zwei Anlässen — alle haben eingetragen, oder die
+Frist ist erreicht — und sonst von keinem. Ein Vorgang ohne Personen bekommt
+keine: „alle haben eingetragen" wäre dort eine Lüge.
 
 ---
 
-## M4 · Angebotsanfrage (AUS-4 → Intersport Uelzen und 11teamsports, je eine Mail)
+## M4 · Angebotsanfrage (→ Intersport Uelzen und 11teamsports, je eine Mail)
+
+**Ungebaut, und zwar mit Absicht.** Sie geht nach draußen, an zwei echte
+Geschäftspartner, und sie ist die einzige Mail, die niemand zurückholen kann.
+CLAUDE.md: bis zu Kais ausdrücklicher Freigabe bleibt sie ungebaut — eine
+allgemeine Ansage wie „bau es fertig“ ist diese Freigabe nicht.
+
+Vorher zu klären: ob die Händler auf eine Voranfrage ohne Personenzeilen
+überhaupt antworten (mit Jens Bormann und Michael Hillebrecht besprechen).
 
 **An:** {{haendler_email}}
 **Reply-To:** kai.boehm@eintrachtmunster.de
@@ -267,7 +287,10 @@ Spartenleiter Fußball · Eintracht Munster 2020 e.V.
 
 ---
 
-## M5 · Anfrage ist raus (AUS-4 → Trainer)
+## M5 · Anfrage ist raus (→ Trainer)
+
+**Ungebaut, weil sie ohne M4 lügen würde**: sie meldet, dass die Anfrage
+rausgegangen ist. Sie folgt M4 unmittelbar und wird mit ihr zusammen gebaut.
 
 **Betreff:** {{vorgang}} · Anfrage an beide Händler verschickt
 
@@ -282,7 +305,7 @@ Kai Böhm
 
 ---
 
-## M6 · Liste noch nicht vollständig (AUS-4, Prüfung nicht bestanden → Trainer)
+## M6 · Liste noch nicht vollständig — **nicht nötig**
 
 **Betreff:** {{vorgang}} · Anfrage noch nicht verschickt
 
@@ -297,11 +320,22 @@ Bitte korrigiere das über die Links in der letzten Mail mit der Größenliste. 
 Sportliche Grüße
 Kai Böhm
 
-`{{pruef_fehler}}` = eine Zeile je nicht bestandener Prüfung aus Blatt 05, im Klartext, z. B. „Rückennummer 7 ist doppelt (Name A, Name B)“.
+**Diese Mail wird nicht gebaut.** Sie setzt voraus, dass der Trainer eine Liste
+bestätigen kann, die die Prüfungen nicht besteht — und das geht seit jeher
+nicht: `listeBestaetigen` weist ab, bevor irgendetwas geschrieben wird
+(`darfBestaetigen` in `pruefungen.ts`), und die sechs Prüfungen stehen im
+Klartext auf der Seite, auf der er gerade steht. Eine Mail hinterher wäre
+langsamer und sagte dasselbe.
 
 ---
 
-## M7 · Keine Spieler gefunden (AUS-1 → Trainer)
+## M7 · Keine Spieler gefunden (→ Trainer)
+
+**Ungebaut, weil der Fall heute auf der Seite landet**: wer den Bedarf
+bestätigt und zu dessen Mannschaft niemand hinterlegt ist, liest es sofort
+(`ohnePersonen` in `vorgang-fertig.tsx`), und der Vorgang wird gleich wieder
+abgebrochen. Eine Mail hinterher wäre sinnvoll, wenn er die Seite schließt,
+bevor er liest — bisher ist das nie passiert. Offen, kein Versäumnis.
 
 **Betreff:** {{vorgang}} · Keine Spieler für {{mannschaft}} gefunden
 

@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { timingSafeEqual } from "node:crypto";
-import { erinnerungslauf } from "@/lib/erinnerung";
+import { erinnerungslauf, listenlauf } from "@/lib/erinnerung";
 import { raeumeEntwuerfe } from "@/lib/entwurf";
 
 /**
@@ -52,8 +52,23 @@ export async function GET(anfrage: NextRequest) {
     return NextResponse.json({ ok: false, grund: ergebnis.grund }, { status: 503 });
   }
 
-  // Der Bericht trägt nur Zahlen. Vornamen und Adressen stehen in den Mails
-  // und in keinem Log (CLAUDE.md).
-  console.log(`Erinnerungslauf: ${JSON.stringify(ergebnis.bericht)}`);
-  return NextResponse.json({ ok: true, ...ergebnis.bericht, entwuerfeGeraeumt: geraeumt });
+  // M3 danach: sie sagt dem Trainer, dass die Liste so weit ist. Scheitert
+  // sie, ist der Erinnerungslauf trotzdem gelaufen — die beiden hängen nicht
+  // voneinander ab und sollen sich auch nicht gegenseitig umbringen.
+  const listen = await listenlauf();
+  if (!listen.ok) console.error(`Listenlauf abgebrochen: ${listen.grund}`);
+
+  // Beide Berichte tragen nur Zahlen. Vornamen und Adressen stehen in den
+  // Mails und in keinem Log (CLAUDE.md).
+  console.log(
+    `Erinnerungslauf: ${JSON.stringify(ergebnis.bericht)} · Listenlauf: ${
+      listen.ok ? JSON.stringify(listen.bericht) : listen.grund
+    }`,
+  );
+  return NextResponse.json({
+    ok: true,
+    ...ergebnis.bericht,
+    entwuerfeGeraeumt: geraeumt,
+    listen: listen.ok ? listen.bericht : { fehler: listen.grund },
+  });
 }

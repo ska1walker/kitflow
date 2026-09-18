@@ -25,7 +25,11 @@ Stand 18.09.2026
 - Nötige Variablen: `RESEND_API_KEY`, `KITFLOW_BASIS` (sonst `VERCEL_URL`), optional `MAIL_ABSENDER`, `MAIL_ANTWORT` und `MAIL_NUR_AN` als Testbremse.
 - Die Domain hubsport.club muss in Resend verifiziert sein, sonst lehnt Resend ab und es geht still keine Mail raus (der Fehler steht im Log).
 - M2a (der persönliche Größen-Link) und **M2 (die Erinnerung)** sind gebaut. Die Erinnerung läuft täglich über Vercel Cron; ihre Grenzen stehen in docs/mails.md.
-- Noch offen: M3 bis M7 und der Anhang Merkblatt_Zahlwege.pdf.
+- **M3 (Größenliste zum Prüfen) ist gebaut** und läuft im täglichen Lauf mit: alle da oder Frist erreicht, höchstens eine je Vorgang.
+- **M6 entfällt** — die Prüfungen weisen eine unvollständige Liste schon auf der Seite ab, bevor etwas geschrieben wird.
+- **M4 und M5 bleiben ungebaut, bis Kai sie ausdrücklich freigibt.** M4 geht an zwei echte Geschäftspartner und ist nicht zurückzuholen; M5 folgt ihr.
+- M7 offen: der Fall steht heute auf der Seite. Eine Mail wäre für den, der sie zu früh schließt.
+- Noch offen: der Anhang Merkblatt_Zahlwege.pdf.
 - Die Händler-Mail M4 bleibt bis zu Kais ausdrücklicher Freigabe ungebaut.
 
 ## Vor Phase 2

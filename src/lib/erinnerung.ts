@@ -31,8 +31,8 @@ import "server-only";
  */
 
 import { text } from "./hubspot";
-import { absolut, mailAktiv, sendeM2 } from "./mail";
-import { groessenLink } from "./links";
+import { absolut, mailAktiv, sendeM2, sendeM3 } from "./mail";
+import { bestaetigenLink, groessenLink, statusLink } from "./links";
 import {
   MAIL_ERINNERUNG,
   MAIL_GROESSEN,
@@ -230,3 +230,127 @@ async function erinnereVorgang(
     });
   }
 }
+
+/* ------------------------------------------------------------------ *
+ * M3 · die Liste ist so weit
+ * ------------------------------------------------------------------ */
+
+/** Die Art in `mail_versand`. Eine je Vorgang, nicht je Person. */
+export const MAIL_LISTE = "liste";
+
+export type ListenBericht = {
+  /** Wie viele Vorgänge angesehen wurden. */
+  vorgaenge: number;
+  verschickt: number;
+  fehlgeschlagen: number;
+  /** Nichts zu melden: weder alle da noch Frist erreicht. */
+  nochNichtSoweit: number;
+  /** Der Trainer wurde für diesen Vorgang schon benachrichtigt. */
+  schonGemeldet: number;
+};
+
+/**
+ * Sagt dem Trainer, dass die Liste so weit ist — weil alle eingetragen haben
+ * oder weil die Frist erreicht ist.
+ *
+ * Ohne das endete die Kette im Stillen: der Trainer musste von sich aus auf
+ * seiner Statusseite nachsehen. Wer das vergisst, lässt den Vorgang liegen, und
+ * niemand merkt es.
+ *
+ * **Höchstens eine je Vorgang.** Danach hat der Trainer den Link und weiß
+ * Bescheid; eine zweite wäre Nörgeln. Kommt später ein Nachzügler dazu, sieht
+ * er das auf seiner Statusseite.
+ *
+ * Läuft im selben täglichen Lauf wie die Erinnerungen, aber getrennt davon:
+ * die eine Mail geht an die Mannschaft, diese an genau einen Menschen.
+ */
+export async function listenlauf(jetzt: Date = new Date()): Promise<LaufErgebnis2> {
+  if (!mailAktiv()) return { ok: false, grund: "kein-versand" };
+
+  const vorgaenge = await vorgaengeAufStufe(1);
+  if (vorgaenge === null) return { ok: false, grund: "gestoert" };
+
+  const bericht: ListenBericht = {
+    vorgaenge: 0,
+    verschickt: 0,
+    fehlgeschlagen: 0,
+    nochNichtSoweit: 0,
+    schonGemeldet: 0,
+  };
+
+  for (const satz of vorgaenge) {
+    // Ohne Trainer-Adresse gibt es niemanden zu benachrichtigen.
+    if (!satz.trainerEmail) continue;
+    bericht.vorgaenge += 1;
+
+    const schon = await mailsAn(satz.id, MAIL_LISTE, null);
+    // `null` heißt „konnte nicht fragen“. Weiterzumachen hieße, dieselbe Mail
+    // jeden Tag erneut zu schicken.
+    if (schon === null) {
+      bericht.fehlgeschlagen += 1;
+      continue;
+    }
+    if (schon.length > 0) {
+      bericht.schonGemeldet += 1;
+      continue;
+    }
+
+    const kontakte = await kontakteVon(satz);
+    if (kontakte === null) {
+      bericht.fehlgeschlagen += 1;
+      continue;
+    }
+    if (kontakte.length === 0) {
+      bericht.nochNichtSoweit += 1;
+      continue;
+    }
+
+    const offen = kontakte.filter((k) => !hatGroesse(k)).length;
+    const frist = alsDatum(satz.groessenFrist);
+    const fristErreicht = frist !== null && tageZwischen(jetzt, frist) <= 0;
+
+    // Zwei Anlässe, sonst gar keiner.
+    if (offen > 0 && !fristErreicht) {
+      bericht.nochNichtSoweit += 1;
+      continue;
+    }
+
+    const kontext = mailKontext(satz);
+    const bestaetigen = absolut(bestaetigenLink(satz.nummer) ?? "");
+    const status = absolut(statusLink(satz.nummer) ?? "");
+    if (!bestaetigen || !status) {
+      bericht.fehlgeschlagen += 1;
+      continue;
+    }
+
+    const ging = await sendeM3(satz.trainerEmail, {
+      vorgang: satz.nummer,
+      vorname: "",
+      mannschaft: kontext.mannschaft,
+      gesamt: kontakte.length,
+      offen,
+      wegenFrist: offen > 0,
+      frist: satz.groessenFrist ?? "",
+      nurGroessen: kontext.nurGroessen,
+      bestaetigenLink: bestaetigen,
+      statusLink: status,
+    });
+    if (!ging) {
+      bericht.fehlgeschlagen += 1;
+      continue;
+    }
+
+    bericht.verschickt += 1;
+    await vermerkeMail(satz.id, MAIL_LISTE, null, ging !== satz.trainerEmail);
+    // Ohne Namen: der Verlauf steht auch auf der Spieler-Ansicht.
+    await vermerke(satz.id, {
+      art: "mail",
+      text: offen > 0 ? "Frist erreicht, Liste zum Prüfen verschickt" : "Alle Größen da, Liste zum Prüfen verschickt",
+      abStufe: 1,
+    });
+  }
+
+  return { ok: true, bericht };
+}
+
+export type LaufErgebnis2 = { ok: true; bericht: ListenBericht } | { ok: false; grund: string };

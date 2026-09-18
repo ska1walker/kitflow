@@ -359,6 +359,89 @@ export async function sendeM2a(an: string, d: M2aDaten): Promise<string | null> 
   });
 }
 
+export type M3Daten = {
+  vorgang: string;
+  /** Leer, wenn am Kontakt kein Vorname steht. */
+  vorname: string;
+  mannschaft: string;
+  /** Wie viele Personen am Vorgang hängen. */
+  gesamt: number;
+  /** Wie viele davon noch keine Größe haben. */
+  offen: number;
+  /** Ausgelöst, weil die Frist erreicht ist – sonst: alle sind da. */
+  wegenFrist: boolean;
+  frist: string;
+  /** Der Vorgang bestellt nichts, er sammelt nur Größen ein. */
+  nurGroessen: boolean;
+  bestaetigenLink: string;
+  statusLink: string;
+};
+
+/**
+ * M3 · die Größenliste ist so weit (docs/mails.md).
+ *
+ * Ohne sie endete die Kette im Stillen: der Trainer musste von sich aus auf
+ * seiner Statusseite nachsehen, ob alle eingetragen haben. Diese Mail sagt es
+ * ihm — entweder weil alle da sind oder weil die Frist erreicht ist.
+ *
+ * **Sie trägt keine Tabelle.** Der Entwurf in docs/mails.md sah eine Liste mit
+ * Namen, Größen und Rückennummern vor. Das ist dieselbe Falle wie der Text für
+ * die Elterngruppe in M1: eine Mail wird weitergeleitet, ausgedruckt und
+ * liegengelassen, und dann liegen die Maße einer ganzen Jugendmannschaft
+ * irgendwo. Die Liste steht hinter dem signierten Link, wo sie hingehört —
+ * hier stehen nur Zahlen.
+ */
+export async function sendeM3(an: string, d: M3Daten): Promise<string | null> {
+  const frist = kurzesDatum(d.frist);
+  const fehlt = d.offen === 1 ? "eine Größe" : `${d.offen} Größen`;
+
+  const rahmen: Rahmen = {
+    eyebrow: `Vorgang ${d.vorgang}`,
+    titel: d.wegenFrist ? "Die Frist ist erreicht" : "Alle Größen sind da",
+    vorschau: d.wegenFrist
+      ? `${d.mannschaft}: ${fehlt} fehlen noch. Bitte prüf die Liste.`
+      : `${d.mannschaft}: alle ${d.gesamt} haben eingetragen. Bitte prüf die Liste.`,
+    bloecke: [
+      {
+        art: "absatz",
+        text: d.wegenFrist
+          ? `${anrede(d.vorname)} für ${d.mannschaft} war der ${frist} die Frist. ${d.offen === 0 ? "Alle haben eingetragen." : `${fehlt} fehlen noch.`}`
+          : `${anrede(d.vorname)} für ${d.mannschaft} haben alle ${d.gesamt} ihre Größe eingetragen.`,
+      },
+      { art: "titel", text: "Was jetzt zu tun ist" },
+      {
+        art: "schritte",
+        punkte: [
+          "Öffne die Liste und sieh sie durch.",
+          ...(d.offen > 0
+            ? [
+                "Wer keine Größe hat, ist markiert. Du kannst sie dort selbst eintragen oder die Person für diese Runde herausnehmen.",
+              ]
+            : []),
+          ...(d.nurGroessen
+            ? ["Stimmt alles, bestätigst du die Liste. Damit ist der Vorgang fertig – bestellt wird nichts."]
+            : [
+                "Stimmt alles, bestätigst du die Liste. Erst danach geht die Anfrage an Intersport Uelzen und 11teamsports.",
+              ]),
+        ],
+      },
+      { art: "knopf", text: "Liste prüfen und bestätigen", href: d.bestaetigenLink },
+      {
+        art: "absatz",
+        text: "Die Namen und Größen stehen nur hinter diesem Link, nicht in dieser Mail.",
+      },
+      { art: "links", zeilen: [{ name: "Deine Statusseite", href: d.statusLink }] },
+    ],
+  };
+
+  return sendeMail({
+    an,
+    betreff: `${d.vorgang} · Größenliste ${d.mannschaft} bitte prüfen`,
+    text: alsText(rahmen),
+    html: alsHtml(rahmen),
+  });
+}
+
 export type M2Daten = M2aDaten & {
   /** Tage bis zur Frist. 0 heißt „heute läuft sie ab“. */
   tageBisFrist: number;
