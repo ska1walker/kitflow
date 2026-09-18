@@ -40,7 +40,7 @@ Umgebungsvariablen: `HUBSPOT_TOKEN`, `RESEND_API_KEY`, `LINK_SECRET`, `MAKE_WEBH
 - Keine erfundenen Artikeldaten. Artikel kommen von den Händlern oder aus echten Anfragen. Beispieldaten in Entwürfen immer als Beispieldaten markieren.
 - Daten von Kindern (Namen, Größen) nur serverseitig lesen, nie in den Code, nie in Logs. Spieler sehen nur sich selbst und den Mannschaftsstand ohne Beträge. Kontaktdaten nie offen anzeigen.
 - **`/neu` ist offen im Netz** (kein Token). Dort nie Namen, Größen oder persönliche Links anzeigen — auch nicht auf der Danke-Seite, auch nicht im Antwortobjekt der Server Action. Anlegen darf nur, wer als Kontakt in HubSpot steht **und** dort „Funktion im Verein“ = Trainer oder Spartenleiter mit Sparte Fußball hat (`darfMelden` in `bedarf.ts`).
-- Das Schaufenster unter `/` steht ebenfalls offen. Beispieldaten dort müssen **wie Beispieldaten aussehen** („Spieler 7“), nicht wie echte Mitglieder.
+- **Die Startseite `/` steht ebenfalls offen** und trägt deshalb gar nichts Echtes mehr: keine Händler, keine Ansprechpartner, keine Artikelnummern, keinen Sponsor, keinen Beispiel-Kader. Das Schaufenster zum Durchklicken zieht mit dem Login nach `/sparte` (`browser/startseite.spec.ts` hält das fest).
 - Die bestehende Make-HubSpot-Verbindung 2981268 und die Szenarien für Spartenzuordnung und Passantrag nicht anfassen.
 - Keine Mail an die Geschäftsstelle ohne Kais ausdrückliche Freigabe.
 - Aussagen zu Steuern immer mit dem Hinweis „ich bin kein Steuerberater“.
@@ -63,13 +63,13 @@ echtes PostgREST auf einem echten Postgres, aufgesetzt von `scripts/db-testumgeb
 (docs/datenbank.md). Ein Papp-Netz spiegelt die eigene Annahme zurück — dort kam ein Fehler
 heraus, den die 54 Tests gegen die Attrappe nie gefunden hätten.
 
-`npm run test:browser` fährt 27 Prüfungen in einem echten Chromium gegen einen frisch gebauten
+`npm run test:browser` fährt 28 Prüfungen in einem echten Chromium gegen einen frisch gebauten
 Server (`playwright.config.ts`) und läuft in der Prüfung mit. Der Lauf bekommt die Zugänge zu
 HubSpot, Supabase und Resend **leer** übergeben — leer gesetzt heißt in Next, dass `.env.local`
 sie nicht mehr überschreibt. Er kann deshalb keinen echten Kontakt lesen, keinen Vorgang
 anlegen und keine Mail verschicken; nur der Browser selbst kommt aus dem Netz. Geprüft wird,
 was nur im Browser zu prüfen ist: die Zugangsgrenze im laufenden Server, die Umschalter in F1,
-das Schaufenster. Er baut dabei `.next` neu, ohne Zugänge — vor dem nächsten Lauf von Hand
+die Startseite. Er baut dabei `.next` neu, ohne Zugänge — vor dem nächsten Lauf von Hand
 also einmal `npm run build`. Wird er rot, hängen Spur und Bilder als Artefakt am Lauf.
 
 `npm test` prüft reine Logik und geht **nie** ins Netz: keine HubSpot, kein Schlüssel, keine

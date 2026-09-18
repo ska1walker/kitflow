@@ -234,7 +234,6 @@ export async function ladeVorgang(
       : "Deine persönlichen Größen erscheinen hier, sobald du über deinen eigenen Link kommst.",
     spielerGruss: "Hier siehst du, wo die neue Ausstattung gerade steckt.",
 
-    quelle: "echt",
   };
 
   return { stand: "da", vorgang };

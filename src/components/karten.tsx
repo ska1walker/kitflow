@@ -3,7 +3,6 @@
 import type { ReactNode } from "react";
 import { Badge, Button, Card } from "./ui";
 import { IconBell, IconCheck } from "./icons";
-import { ABBRUCH_EREIGNIS } from "@/lib/beispieldaten";
 import { LETZTE_STUFE } from "@/lib/stufen";
 import type { Ansicht, Artikel, ArtikelFuer, StufeNr, Vorgang } from "@/lib/typen";
 
@@ -392,14 +391,9 @@ export function VerlaufKarte({
   const eintraege = vorgang.verlauf
     .filter((e) => e.ab <= bis && !(ansicht === "spieler" && e.intern))
     .reverse();
-  // Der Beispiel-Abbruch hat einen erfundenen Grund. An einen echten Vorgang
-  // gehoert er nicht, dort steht nur die nackte Tatsache.
+  // Der Abbruch selbst steht nicht im Verlauf, er ergibt sich aus der Stufe.
   if (abgebrochen) {
-    eintraege.unshift(
-      vorgang.quelle === "beispiel"
-        ? ABBRUCH_EREIGNIS
-        : { ab: 9, datum: "", uhrzeit: "", text: "Vorgang abgebrochen" },
-    );
+    eintraege.unshift({ ab: 9, datum: "", uhrzeit: "", text: "Vorgang abgebrochen" });
   }
 
   return (

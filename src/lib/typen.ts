@@ -3,7 +3,7 @@
  *
  * Ein Ausstattungs-Vorgang laeuft durch die Stufen aus docs/konzept.md. Die
  * Daten kommen spaeter aus HubSpot (Deal = Vorgang, Positionen = Person x
- * Artikel, Kontakte = Groessen); vorerst aus src/lib/beispieldaten.ts.
+ * Artikel, Kontakte = Groessen).
  */
 
 import type { ComponentType, SVGProps } from "react";
@@ -118,9 +118,9 @@ export type PersonGroesse = {
  * Ein vollstaendiger Vorgang, so wie die Statusseite ihn braucht.
  *
  * Zusammengesetzt aus dem Vorgang in der Datenbank und den Kontakten in
- * HubSpot (docs/datenbank.md). `quelle` sagt, ob echte Daten oder
- * Beispieldaten angezeigt werden – die Oberflaeche muss Beispieldaten
- * kennzeichnen (CLAUDE.md).
+ * HubSpot (docs/datenbank.md). Seit die Startseite kein Schaufenster mehr ist,
+ * gibt es nur noch echte Vorgaenge – das Feld `quelle`, das beides
+ * auseinanderhielt, hatte keinen Leser mehr.
  */
 export type Vorgang = {
   nummer: string;
@@ -163,7 +163,6 @@ export type Vorgang = {
   meinHinweis: string;
   spielerGruss: string;
 
-  quelle: "echt" | "beispiel";
 };
 
 /* ------------------------------------------------------------------ *

@@ -39,7 +39,6 @@ describe("Den Vorgang gibt es", () => {
     expect(e.vorgang.nummer).toBe("AUS-2026-001");
     expect(e.vorgang.stufe).toBe(1);
     expect(e.vorgang.groessenGesamt).toBe(2);
-    expect(e.vorgang.quelle).toBe("echt");
   });
 
   test("die Artikel kommen aus der Datenbank", async () => {
