@@ -62,6 +62,13 @@ durchgehen.
   wirklich `offen` ist.
 - **Ohne hinterlegte Händler wird gar nicht erst gefragt.** Es gäbe nichts
   freizugeben, und eine Aufgabe, die ins Leere liefe, ist keine.
+- **Ohne eine einzige Größe ebenso wenig.** Die Prüfungen auf der Seite halten
+  die Bestätigung ausdrücklich nicht auf, ein Trainer kann also eine leere Liste
+  bestätigen. Vorher war die Folge: Telegram meldet sich, die Karte erscheint,
+  und der Klick darauf scheitert — eine Freigabe, die von Anfang an nicht
+  gelingen konnte. Eine **Störung** beim Nachsehen zählt dabei nicht als „keine
+  Größen“: dann wird die Freigabe ganz normal erbeten und beim Versand noch
+  einmal geprüft.
 - **Eine erneute Bestätigung setzt zurück** — alle vier Spalten, nicht nur den
   Stand. Sonst trüge eine geänderte Liste noch die Unterschrift der alten
   Entscheidung.
@@ -71,9 +78,12 @@ durchgehen.
 
 ## Später: automatisch durchlaufen
 
-Kais Wunsch vom 18.09.2026. Die Naht dafür steht: `freigabeWeg(satz)` in
+Kais Wunsch vom 18.09.2026. Die Naht dafür steht: `freigabeWeg()` in
 `src/lib/freigabe.ts` entscheidet, ob ein Mensch gefragt wird oder eine Regel
-entscheidet. Gibt sie einen `Freigeber` vom Typ `regel` zurück, gibt
+entscheidet. Sie nimmt **keinen Parameter** — was die Regel ansehen muss, ist
+offen (der Betrag steht zu diesem Zeitpunkt noch gar nicht fest), und einen
+geratenen Parameter hereinzureichen und ungelesen wegzuwerfen sähe aus wie eine
+Entscheidung, die niemand getroffen hat. Es gibt genau eine Aufrufstelle. Gibt sie einen `Freigeber` vom Typ `regel` zurück, gibt
 `beantrageFreigabe` sofort frei — alles danach ist identisch, und der Verlauf
 hält fest, welches von beidem es war.
 

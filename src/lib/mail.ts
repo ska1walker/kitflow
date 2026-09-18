@@ -21,6 +21,9 @@ import { alsHtml, alsText, type Rahmen } from "./mail-rahmen";
 const ABSENDER_STANDARD = "Eintracht Munster Fußball <ausstattung@hubsport.club>";
 const ANTWORT_STANDARD = "kai.boehm@eintrachtmunster.de";
 
+/** Wie lange auf Resend gewartet wird, bevor die Mail als nicht zugestellt gilt. */
+const ZEITGRENZE_MS = 20_000;
+
 /**
  * Die Adresse, unter der kitflow erreichbar ist. Links in einer Mail müssen
  * absolut sein; relative Pfade führen im Postfach ins Leere.
@@ -102,6 +105,16 @@ export async function sendeMail({
             ? `<p style="font:13px sans-serif;color:#a1a1aa;">Testumleitung, eigentlich an ${an}</p>${html}`
             : html,
       }),
+      // Ohne Zeitgrenze haengt ein stiller Resend-Ausfall die ganze Server
+      // Action auf — und die wichtigste davon ist „Freigeben und verschicken“,
+      // bei der ein Mensch vor dem Knopf sitzt und wartet. Telegram und Todoist
+      // hatten die Grenze von Anfang an, der Mailversand nicht; aufgefallen ist
+      // das erst, als beide nebeneinander standen.
+      //
+      // 20 Sekunden statt 10 wie bei den Benachrichtigungen: hier haengt ein
+      // Anhang dran, und eine Mail, die nicht rausgeht, ist teurer als eine
+      // Chatnachricht, die ausbleibt.
+      signal: AbortSignal.timeout(ZEITGRENZE_MS),
     });
 
     if (!antwort.ok) {

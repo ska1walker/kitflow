@@ -519,6 +519,8 @@ export type BestaetigungsErgebnis =
   | { ok: true; wie: "fertig" }
   /** Kein Haendler hinterlegt – es gibt nichts freizugeben. */
   | { ok: true; wie: "ohne_haendler" }
+  /** Keine einzige Groesse eingetragen – ein Haendler haette nichts zu bepreisen. */
+  | { ok: true; wie: "ohne_zeilen" }
   /** Die Anfrage liegt jetzt bei der Spartenleitung. */
   | { ok: true; wie: "wartet" }
   /** Eine Regel hat sofort freigegeben, die Anfrage ging raus. */
@@ -571,7 +573,42 @@ export async function bestaetigeListe(
     return { ok: true, wie: "ohne_haendler" };
   }
 
+  // Und ohne eine einzige Groesse gibt es ebenso wenig freizugeben. Die
+  // Pruefungen auf der Seite halten die Bestaetigung ausdruecklich nicht auf
+  // („Offene Pruefungen halten die Bestaetigung nicht auf“), ein Trainer kann
+  // also eine Liste bestaetigen, in der niemand etwas eingetragen hat. Ohne
+  // diese Frage waere die Folge: Telegram meldet sich, die Karte erscheint auf
+  // /sparte, und der Klick darauf scheitert — eine Freigabe, die von Anfang an
+  // nicht gelingen konnte.
+  if (await ohneZeilen(satz)) {
+    await vermerke(satz.id, {
+      art: "anfrage_offen",
+      text: "Anfrage nicht möglich: keine einzige Größe eingetragen",
+      intern: true,
+      abStufe: 1,
+    });
+    return { ok: true, wie: "ohne_zeilen" };
+  }
+
   return beantrageFreigabe(satz);
+}
+
+/**
+ * Haette die Anfrage ueberhaupt eine Zeile?
+ *
+ * Kostet einen Griff nach der Liste (und damit nach HubSpot). Das ist der Preis
+ * dafuer, es **vor** der Freigabe zu wissen statt danach: eine Aufgabe in
+ * Todoist, die niemand erledigen kann, ist teurer als eine Abfrage.
+ *
+ * Eine Stoerung heisst hier ausdruecklich **nicht** „keine Zeilen“: kommt die
+ * Liste nicht, wird die Freigabe ganz normal erbeten, und `verschickeAnfrage`
+ * prueft spaeter noch einmal. Aus „konnte nicht fragen“ ein „gibt es nicht“ zu
+ * machen ist genau der Fehler, der kitflow schon dreimal wehgetan hat.
+ */
+async function ohneZeilen(satz: VorgangSatz): Promise<boolean> {
+  const abruf = await ladeListe(satz.nummer);
+  if (abruf.stand !== "da") return false;
+  return baueAnfrage(abruf.daten, satz.artikel).zeilen.length === 0;
 }
 
 /**
@@ -632,6 +669,8 @@ export type FreigabeGrund =
   | "unbekannt"
   | "nicht_offen"
   | "ohne_haendler"
+  /** Keine einzige Groesse — die Anfrage haette ein leeres Blatt geschickt. */
+  | "ohne_zeilen"
   | "versand";
 
 export type FreigabeErgebnis =
@@ -686,17 +725,20 @@ export async function gibFrei(nummer: string, wer: Freigeber): Promise<FreigabeE
     return { ok: false, grund: "ohne_haendler" };
   }
 
-  const verschickt = await verschickeAnfrage(satz);
+  const versand = await verschickeAnfrage(satz);
 
-  if (verschickt === 0) {
+  if (versand.stand !== "raus") {
     await vermerke(satz.id, {
       art: "freigabe_ohne_versand",
-      text: "Freigabe erteilt, aber die Anfrage ging nicht raus",
+      text:
+        versand.stand === "leer"
+          ? "Freigabe erteilt, aber die Anfrage hatte keine einzige Zeile"
+          : "Freigabe erteilt, aber die Anfrage ging nicht raus",
       sub: freigeberName(wer),
       intern: true,
       abStufe: 1,
     });
-    return { ok: false, grund: "versand" };
+    return { ok: false, grund: versand.stand === "leer" ? "ohne_zeilen" : "versand" };
   }
 
   await setzeFreigabe(satz.id, "freigegeben", freigeberName(wer));
@@ -711,7 +753,7 @@ export async function gibFrei(nummer: string, wer: Freigeber): Promise<FreigabeE
     abStufe: 1,
   });
 
-  return { ok: true, anHaendler: verschickt };
+  return { ok: true, anHaendler: versand.anzahl };
 }
 
 /**
@@ -762,18 +804,26 @@ export async function lehneAb(
  * Getrennt von `bestaetigeListe`, weil hier alles passiert, was nach draussen
  * geht — und weil sich das so einzeln pruefen laesst.
  */
-async function verschickeAnfrage(satz: VorgangSatz): Promise<number> {
+type AnfrageVersand =
+  | { stand: "raus"; anzahl: number }
+  /** Es gab nichts anzufragen – kein Fehler, aber auch kein Versand. */
+  | { stand: "leer" }
+  | { stand: "fehlgeschlagen" };
+
+async function verschickeAnfrage(satz: VorgangSatz): Promise<AnfrageVersand> {
   const empfaenger = anfrageHaendler();
-  if (empfaenger.length === 0 || !mailAktiv()) return 0;
+  if (empfaenger.length === 0 || !mailAktiv()) return { stand: "fehlgeschlagen" };
 
   const abruf = await ladeListe(satz.nummer);
-  if (abruf.stand !== "da") return 0;
+  if (abruf.stand !== "da") return { stand: "fehlgeschlagen" };
   const liste = abruf.daten;
 
   const anfrage = baueAnfrage(liste, satz.artikel);
-  // Ohne eine einzige Zeile gibt es nichts anzufragen. Das faengt schon
-  // `pruefeVorgang` ab; hier steht es, damit kein leeres Blatt rausgeht.
-  if (anfrage.zeilen.length === 0) return 0;
+  // Ohne eine einzige Zeile gibt es nichts anzufragen. `bestaetigeListe` fragt
+  // das schon vorher, damit gar keine Freigabe erbeten wird; hier steht es
+  // zweitens, weil zwischen Bestaetigung und Freigabe Zeit vergeht — und weil
+  // ein leeres Blatt an einen Haendler nicht passieren darf.
+  if (anfrage.zeilen.length === 0) return { stand: "leer" };
 
   const csv = alsCsv(anfrage, liste.trikotsatz, liste.initialenNoetig);
   const antwortAn = process.env.MAIL_ANTWORT || "kai.boehm@eintrachtmunster.de";
@@ -804,7 +854,7 @@ async function verschickeAnfrage(satz: VorgangSatz): Promise<number> {
     umgeleitet.push(ging !== h.email);
   }
 
-  if (verschickt === 0) return 0;
+  if (verschickt === 0) return { stand: "fehlgeschlagen" };
 
   // Die Mailspuren erst danach: im Versandweg zwischen zwei Haendlern zu
   // schreiben verzoegert nur den zweiten.
@@ -835,7 +885,7 @@ async function verschickeAnfrage(satz: VorgangSatz): Promise<number> {
   // Abfrage fuer eine Zahl, die wir schon kennen.
   await spiegele({ ...satz, stufe: 2 });
 
-  return verschickt;
+  return { stand: "raus", anzahl: verschickt };
 }
 
 /* ------------------------------------------------------------------ *

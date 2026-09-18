@@ -254,6 +254,97 @@ describe("Ablehnen", () => {
   });
 });
 
+describe("Eine Liste ohne eine einzige Größe", () => {
+  /** Derselbe Vorgang, aber der Kontakt hat nichts eingetragen. */
+  function ohneGroessen() {
+    return welt({ kontakte: [kontakt("111", { firstname: "Anna" })] });
+  }
+
+  test("geht gar nicht erst zur Freigabe", async () => {
+    // Die Prüfungen auf der Seite halten die Bestätigung ausdrücklich nicht
+    // auf. Ein Trainer kann also eine leere Liste bestätigen — und vorher war
+    // die Folge: Telegram meldet sich, die Karte erscheint, und der Klick
+    // darauf scheitert. Eine Freigabe, die von Anfang an nicht gelingen konnte.
+    process.env.TELEGRAM_TOKEN = "zz-token";
+    process.env.TELEGRAM_CHAT = "-100";
+    const { aufrufe } = ohneGroessen();
+
+    const ergebnis = await bestaetigeListe("AUS-2026-001", "Am Sportplatz 14", "");
+
+    expect(ergebnis).toEqual({ ok: true, wie: "ohne_zeilen" });
+    expect(freigabeWechsel(aufrufe)).toHaveLength(0);
+    expect(aufrufe.some((a) => a.host === "telegram")).toBe(false);
+    expect(anHaendler(aufrufe)).toHaveLength(0);
+  });
+
+  test("die Bestätigung des Trainers gilt trotzdem", async () => {
+    // Er hat seinen Teil getan. Sein Datum gehört an den Vorgang.
+    const { aufrufe } = ohneGroessen();
+
+    await bestaetigeListe("AUS-2026-001", "Am Sportplatz 14", "");
+
+    const gesetzt = aufrufe.filter(
+      (a) =>
+        a.pfad === "vorgang" &&
+        a.methode === "PATCH" &&
+        typeof a.koerper === "object" &&
+        a.koerper !== null &&
+        "liste_bestaetigt_am" in a.koerper,
+    );
+    expect(gesetzt).toHaveLength(1);
+  });
+
+  test("und der Verlauf sagt, woran es lag", async () => {
+    const { aufrufe } = ohneGroessen();
+
+    await bestaetigeListe("AUS-2026-001", "Am Sportplatz 14", "");
+
+    const eintraege = aufrufe
+      .filter((a) => a.pfad === "ereignis" && a.methode === "POST")
+      .map((a) => a.koerper as { art: string; text: string });
+    expect(eintraege.find((e) => e.art === "anfrage_offen")?.text).toContain("keine einzige Größe");
+  });
+
+  test("eine Störung zählt nicht als „keine Zeilen“", async () => {
+    // Aus „konnte nicht fragen“ ein „gibt es nicht“ zu machen ist der Fehler,
+    // der kitflow schon dreimal wehgetan hat. Antwortet HubSpot nicht, wird die
+    // Freigabe ganz normal erbeten.
+    const { aufrufe } = welt({ hubspotGestoert: true });
+
+    const ergebnis = await bestaetigeListe("AUS-2026-001", "Am Sportplatz 14", "");
+
+    expect(ergebnis).toEqual({ ok: true, wie: "wartet" });
+    expect(freigabeWechsel(aufrufe)).toContainEqual(
+      expect.objectContaining({ freigabe_stand: "offen" }),
+    );
+  });
+
+  test("und an der Freigabe heißt der Grund nicht „Versand“", async () => {
+    // Zwischen Bestätigung und Freigabe vergeht Zeit. Fällt die letzte Größe in
+    // der Zwischenzeit weg, soll die Spartenleitung lesen, was wirklich fehlt.
+    const { aufrufe } = welt();
+    await bestaetigeListe("AUS-2026-001", "Am Sportplatz 14", "");
+
+    // Dieselbe Welt, aber der Kontakt hat seine Größe verloren.
+    stelleWelt({
+      vorgang: satz({
+        nummer: "AUS-2026-001",
+        stufe: 1,
+        trainerEmail: "trainer@example.invalid",
+        artikel: [artikel({ id: "a1", groessenart: "oberteil" })],
+        personen: [person({ id: "p1", kontaktId: "111" })],
+        freigabe: { stand: "offen" },
+      }),
+      kontakte: [kontakt("111", { firstname: "Anna" })],
+    });
+
+    const ergebnis = await gibFrei("AUS-2026-001", WER);
+
+    expect(ergebnis).toEqual({ ok: false, grund: "ohne_zeilen" });
+    expect(anHaendler(aufrufe)).toHaveLength(0);
+  });
+});
+
 describe("Ein Stand, den niemand kennt", () => {
   test("gilt als „keine“ und nicht als Freigabe", async () => {
     // Ein Tippfehler in der Spalte, eine künftige Migration mit einem fünften

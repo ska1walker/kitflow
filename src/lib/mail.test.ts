@@ -245,3 +245,33 @@ describe("Ohne Schlüssel oder Adresse", () => {
     expect(gesendet).not.toHaveBeenCalled();
   });
 });
+
+describe("Der Versand wartet nicht ewig", () => {
+  test("jede Mail geht mit einer Zeitgrenze raus", async () => {
+    // Ohne sie hängt ein stiller Resend-Ausfall die ganze Server Action auf —
+    // und die wichtigste davon ist „Freigeben und verschicken“, bei der ein
+    // Mensch vor dem Knopf sitzt und wartet. Telegram und Todoist hatten die
+    // Grenze von Anfang an, der Mailversand nicht.
+    await sendeM1("zz@example.invalid", daten());
+
+    const [, o] = gesendet.mock.calls[0];
+    const signal = (o as RequestInit).signal;
+    expect(signal, "fetch bekam kein AbortSignal").toBeInstanceOf(AbortSignal);
+    expect(signal?.aborted).toBe(false);
+  });
+
+  test("läuft sie ab, ist das kein Absturz, sondern „nicht zugestellt“", async () => {
+    // Der Aufrufer darf daraus nie einen Abbruch machen: ein Vorgang ist auch
+    // ohne Mail gültig, die Links stehen auf der Seite.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new DOMException("The operation was aborted.", "TimeoutError");
+      }),
+    );
+
+    await expect(
+      sendeMail({ an: "zz@example.invalid", betreff: "x", text: "y", html: "<p>y</p>" }),
+    ).resolves.toBeNull();
+  });
+});

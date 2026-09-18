@@ -219,6 +219,8 @@ function freigabeFehler(grund: FreigabeGrund, nummer: string): string {
       return `Für ${nummer} steht gerade keine Freigabe aus. Lade die Seite neu.`;
     case "ohne_haendler":
       return "Es ist kein Händler hinterlegt (HAENDLER). Die Anfrage kann nicht rausgehen.";
+    case "ohne_zeilen":
+      return "In der Liste steht keine einzige Größe. Ein Händler hätte nichts zu bepreisen.";
     case "versand":
       return "Die Anfrage ging nicht raus. Am Vorgang steht, woran es lag.";
   }

@@ -82,6 +82,18 @@ function bestaetigungsText(wie: Ausgang, vorgang: string) {
           </>
         ),
       };
+    case "ohne_zeilen":
+      return {
+        titel: "Liste bestätigt – aber es fehlen alle Größen",
+        ohneNamen: false,
+        text: (
+          <>
+            Die Bestätigung steht am Vorgang {vorgang}. Es ist allerdings keine einzige Größe
+            eingetragen – ein Händler hätte nichts zu bepreisen, deshalb geht die Anfrage so nicht
+            zur Freigabe. Trag die Größen nach und bestätige noch einmal.
+          </>
+        ),
+      };
     case "fertig":
       return {
         titel: "Liste bestätigt",
