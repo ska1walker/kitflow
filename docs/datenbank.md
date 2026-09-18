@@ -1,6 +1,6 @@
 # Eigene Datenbank für Vorgänge
 
-Stand 17.09.2026 · Migration `supabase/migrations/001_vorgaenge.sql`
+Stand 17.09.2026 · Migration `supabase/migrations/20260917200000_vorgaenge.sql`
 
 **Angeschlossen ist noch nichts.** Die App läuft weiter vollständig auf HubSpot. Diese
 Schicht steht daneben, ist geprüft, und wird in Schritt 2 angeschlossen.
@@ -67,8 +67,27 @@ Action, nicht im Proxy. Next nennt die Prüfung im Proxy selbst ausdrücklich op
 
 ## Migration ausführen
 
-Im Supabase-SQL-Editor, Inhalt von `supabase/migrations/001_vorgaenge.sql` einfügen und
-ausführen. Die Datei ist wiederholbar: sie legt nur an, was fehlt, und löscht nichts.
+Zwei Wege, beide von Kais Rechner aus — aus der Entwicklungsumgebung ist Supabase gesperrt.
+
+**Mit der CLI** (dafür trägt die Datei einen Zeitstempel im Namen, so wie `supabase migration
+new` es anlegt):
+
+```
+supabase login
+supabase init          # legt supabase/config.toml an, rührt die Migration nicht an
+supabase link --project-ref <ref>
+supabase db push
+```
+
+**Oder im SQL-Editor**: Inhalt der Migration einfügen und ausführen.
+
+Die Datei ist wiederholbar: sie legt nur an, was fehlt, und löscht nichts. Bricht sie
+mittendrin ab, ist das Nachziehen nach der Korrektur deshalb gefahrlos.
+
+Danach `supabase/pruefung.sql` im SQL-Editor: sechs Tabellen, RLS überall an und keine einzige
+Policy, keine Rechte für `anon` und `authenticated`, die Nummernfunktion zählt hoch, der
+Trigger steht. Das Skript setzt den Zähler danach zurück, damit der erste echte Vorgang die
+001 bekommt.
 
 Danach in Vercel und `.env.local`:
 
