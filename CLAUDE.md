@@ -39,7 +39,7 @@ Umgebungsvariablen: `HUBSPOT_TOKEN`, `RESEND_API_KEY`, `LINK_SECRET`, `MAKE_WEBH
 - Typografische Anführungszeichen („…“) in Texten.
 - Keine erfundenen Artikeldaten. Artikel kommen von den Händlern oder aus echten Anfragen. Beispieldaten in Entwürfen immer als Beispieldaten markieren.
 - Daten von Kindern (Namen, Größen) nur serverseitig lesen, nie in den Code, nie in Logs. Spieler sehen nur sich selbst und den Mannschaftsstand ohne Beträge. Kontaktdaten nie offen anzeigen.
-- **`/neu` ist offen im Netz** (kein Token). Dort nie Namen, Größen oder persönliche Links anzeigen — auch nicht auf der Danke-Seite, auch nicht im Antwortobjekt der Server Action. Anlegen darf nur, wessen Adresse als Kontakt in HubSpot steht.
+- **`/neu` ist offen im Netz** (kein Token). Dort nie Namen, Größen oder persönliche Links anzeigen — auch nicht auf der Danke-Seite, auch nicht im Antwortobjekt der Server Action. Anlegen darf nur, wer als Kontakt in HubSpot steht **und** dort „Funktion im Verein“ = Trainer oder Spartenleiter mit Sparte Fußball hat (`darfMelden` in `bedarf.ts`).
 - Das Schaufenster unter `/` steht ebenfalls offen. Beispieldaten dort müssen **wie Beispieldaten aussehen** („Spieler 7“), nicht wie echte Mitglieder.
 - Die bestehende Make-HubSpot-Verbindung 2981268 und die Szenarien für Spartenzuordnung und Passantrag nicht anfassen.
 - Keine Mail an die Geschäftsstelle ohne Kais ausdrückliche Freigabe.

@@ -73,9 +73,17 @@ Entwurf: prototyp/statusseite.html. Drei Ansichten:
 konnte jeder, der die Adresse kennt, „2014“ wählen, abschicken und bekam die Vor- und Nachnamen
 eines ganzen Jugendjahrgangs samt gültiger Größen-Links auf die Danke-Seite. Zwei Riegel:
 
-1. **Die E-Mail-Adresse muss als Kontakt bei Eintracht Munster stehen.** Gesucht wird über die
-   genaue Adresse, nicht über den Namen — ein Treffer verrät nur dem etwas, der die Adresse schon
-   hat. Kein Treffer heißt: es entsteht nichts.
+1. **Die E-Mail-Adresse muss als Kontakt bei Eintracht Munster stehen, und die Person muss
+   Trainerin, Trainer oder Spartenleitung der Fußballsparte sein.** Gesucht wird über die genaue
+   Adresse, nicht über den Namen — ein Treffer verrät nur dem etwas, der die Adresse schon hat.
+   Kein Treffer heißt: es entsteht nichts.
+
+   „Kontakt beim Verein“ allein reicht nicht: das wäre jedes Mitglied, auch jedes Kind. Maßgeblich
+   ist die HubSpot-Eigenschaft **„Funktion im Verein“** (intern `numemployees`, Mehrfachauswahl)
+   zusammen mit `sparte`. Stand 18.09.2026: 36 Trainer und 3 Spartenleiter Fußball. Die
+   Spartenleiter der anderen Sparten kommen nicht durch — Ausstattung der Fußballsparte geht sie
+   nichts an. Wer abgewiesen wird, erfährt den Grund, damit eine falsch gepflegte Zeile sich
+   klären lässt.
 2. **Die Danke-Seite trägt keine Namen und keine persönlichen Links mehr.** Sie zeigt die
    Vorgangsnummer, die Personenzahl und die beiden Links des Trainers. Alles andere geht per Mail
    an genau die Adresse, die unter 1. bestätigt wurde. Die Namen verlassen den Server gar nicht:

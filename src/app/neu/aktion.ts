@@ -11,6 +11,7 @@
 import {
   meldeBedarf,
   gueltigeTeams,
+  darfMelden,
   kontaktPerEmail,
   type ArtikelEingabe,
   type BedarfErgebnis,
@@ -150,6 +151,14 @@ export async function bedarfMelden(_bisher: Ergebnis, formular: FormData): Promi
     return {
       stand: "fehler",
       text: "Diese E-Mail-Adresse kennt der Verein nicht. Bitte trag die Adresse ein, unter der du bei Eintracht Munster gemeldet bist — oder melde dich bei der Geschäftsstelle.",
+    };
+  }
+  // „Kontakt beim Verein“ reicht nicht: das waere jedes Mitglied, auch jedes
+  // Kind. Wer hier durchkommt, sieht die Namen einer ganzen Mannschaft.
+  if (!darfMelden(trainer.kontakt)) {
+    return {
+      stand: "fehler",
+      text: "Diese Adresse ist bei Eintracht Munster nicht als Trainerin, Trainer oder Spartenleitung der Fußballsparte hinterlegt. Wenn das ein Fehler ist, melde dich bitte bei der Geschäftsstelle.",
     };
   }
 

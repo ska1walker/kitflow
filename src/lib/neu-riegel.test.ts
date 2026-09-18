@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { bedarfMelden } from "@/app/neu/aktion";
+import { darfMelden } from "./bedarf";
 import { kontakt, satz } from "../../test/satz";
 import { raeumeUmgebung, stelleUmgebung, stelleWelt } from "../../test/welt";
 
@@ -47,7 +48,14 @@ function welt(mehr: Parameters<typeof stelleWelt>[0] = {}) {
   return stelleWelt({
     vorgang: satz({ nummer: "AUS-2026-001", stufe: 1 }),
     kontakte: [
-      kontakt("900", { firstname: "Kai", lastname: "Böhm", email: TRAINER, team: "2007" }),
+      kontakt("900", {
+        firstname: "Kai",
+        lastname: "Böhm",
+        email: TRAINER,
+        team: "2007",
+        numemployees: "Spartenleiter;Spieler",
+        sparte: "Fußball",
+      }),
       kontakt("111", { firstname: "Anna", lastname: "Klein", email: "a@example.invalid", team: "2007" }),
       kontakt("222", { firstname: "Bernd", lastname: "Groß", email: "b@example.invalid", team: "2007" }),
     ],
@@ -100,6 +108,48 @@ describe("Wer einen Vorgang anlegen darf", () => {
     expect(angelegt(aufrufe)).toBe(true);
   });
 
+  test("ein Mitglied ohne Funktion darf nicht melden", async () => {
+    // Bis hierher reichte „Kontakt beim Verein“. Das ist jedes Mitglied, auch
+    // jedes Kind — und wer durchkommt, sieht die Namen einer ganzen Mannschaft.
+    const { aufrufe } = stelleWelt({
+      vorgang: satz({ nummer: "AUS-2026-001", stufe: 1 }),
+      kontakte: [
+        kontakt("901", { email: "spieler@example.invalid", numemployees: "Spieler", sparte: "Fußball" }),
+      ],
+      naechsteNummer: "AUS-2026-002",
+    });
+
+    const ergebnis = await bedarfMelden({ stand: "leer" }, formular({ email: "spieler@example.invalid" }));
+
+    expect(ergebnis.stand === "fehler" && ergebnis.text).toContain("nicht als Trainerin");
+    expect(angelegt(aufrufe)).toBe(false);
+  });
+
+  test("ein Trainer einer anderen Sparte auch nicht", async () => {
+    // Die Spartenleiter und Trainer der anderen Sparten stehen im selben
+    // Portal. Ausstattung der Fußballsparte geht sie nichts an.
+    const { aufrufe } = stelleWelt({
+      vorgang: satz({ nummer: "AUS-2026-001", stufe: 1 }),
+      kontakte: [
+        kontakt("902", { email: "handball@example.invalid", numemployees: "Trainer", sparte: "Handball" }),
+      ],
+      naechsteNummer: "AUS-2026-002",
+    });
+
+    const ergebnis = await bedarfMelden({ stand: "leer" }, formular({ email: "handball@example.invalid" }));
+
+    expect(ergebnis.stand === "fehler" && ergebnis.text).toContain("nicht als Trainerin");
+    expect(angelegt(aufrufe)).toBe(false);
+  });
+
+  test("die Spartenleitung Fußball darf – sonst sperrt sich Kai selbst aus", async () => {
+    // Kai steht in HubSpot als „Spartenleiter;Spieler“, nicht als Trainer.
+    const { aufrufe } = welt();
+
+    expect((await bedarfMelden({ stand: "leer" }, formular())).stand).toBe("fertig");
+    expect(angelegt(aufrufe)).toBe(true);
+  });
+
   test("schweigt HubSpot, ist das keine unbekannte Adresse", async () => {
     // Der Unterschied, der kitflow schon dreimal wehgetan hat: ein Ausfall
     // darf nie als Tatsache gelesen werden. Sonst sperrt ein Rate-Limit jeden
@@ -144,4 +194,26 @@ describe("Was die Danke-Seite zu sehen bekommt", () => {
 
     expect(ergebnis.stand === "fertig" && ergebnis.ergebnis.trainerStatus).toContain("/v/");
   });
+});
+
+describe("Die Regel selbst", () => {
+  // Klein und ohne Netz: was die Funktion im Verein hergibt, entscheidet, wer
+  // an die Namen einer Mannschaft kommt.
+  const faelle: [string, string, string, boolean][] = [
+    ["Trainer", "Trainer", "Fußball", true],
+    ["Trainer und Spieler", "Spieler;Trainer", "Fußball", true],
+    ["Spartenleiter Fußball", "Spartenleiter;Spieler", "Fußball", true],
+    ["nur Spieler", "Spieler", "Fußball", false],
+    ["Betreuer", "Betreuer", "Fußball", false],
+    ["Trainer im Handball", "Trainer", "Handball", false],
+    ["Trainer in beiden Sparten", "Trainer", "Handball;Fußball", true],
+    ["gar keine Funktion", "", "Fußball", false],
+    ["Funktion ohne Sparte", "Trainer", "", false],
+  ];
+
+  for (const [name, funktion, sparte, erwartet] of faelle) {
+    test(`${name}: ${erwartet ? "darf" : "darf nicht"}`, () => {
+      expect(darfMelden({ funktion, sparte })).toBe(erwartet);
+    });
+  }
 });

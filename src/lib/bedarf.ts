@@ -145,6 +145,10 @@ export type Empfaenger = {
   team: string;
   /** Ob am Kontakt eine Adresse steht. Die Adresse selbst bleibt serverseitig. */
   hatAdresse: boolean;
+  /** „Funktion im Verein“, mehrfach: `Spieler;Trainer`. */
+  funktion: string;
+  /** Die Sparten, mehrfach: `Fußball;Handball`. */
+  sparte: string;
 };
 
 function alsEmpfaenger(k: HsObjekt): Empfaenger {
@@ -154,7 +158,42 @@ function alsEmpfaenger(k: HsObjekt): Empfaenger {
     name: name || `Kontakt ${k.id}`,
     team: k.properties.team ?? "",
     hatAdresse: Boolean(k.properties.email),
+    funktion: k.properties[FUNKTION_FELD] ?? "",
+    sparte: k.properties.sparte ?? "",
   };
+}
+
+/**
+ * Die HubSpot-Eigenschaft „Funktion im Verein“. Der interne Name ist ein
+ * zweckentfremdetes Standardfeld — deshalb steht er hier einmal und nicht
+ * verstreut im Code.
+ */
+const FUNKTION_FELD = "numemployees";
+
+/** Wer einen Vorgang melden darf (Stand 18.09.2026: 36 Trainer, 3 Spartenleiter). */
+const MELDE_FUNKTIONEN = ["Trainer", "Spartenleiter"];
+
+const SPARTE = "Fußball";
+
+/** Mehrfachauswahlen kommen als `Spieler;Trainer` zurück. */
+function werte(feld: string): string[] {
+  return feld.split(";").map((w) => w.trim()).filter(Boolean);
+}
+
+/**
+ * Darf diese Person in F1 einen Vorgang anlegen?
+ *
+ * `/neu` steht offen im Netz, und wer dort durchkommt, sieht anschliessend die
+ * Namen einer ganzen Mannschaft. „Kontakt beim Verein“ reicht dafuer nicht:
+ * das waere jedes Mitglied, auch jedes Kind. Es braucht eine Funktion, die mit
+ * Ausstattung zu tun hat — und zwar in der Fussballsparte. Die Spartenleiter
+ * der anderen Sparten haben hier nichts verloren.
+ */
+export function darfMelden(kontakt: { funktion: string; sparte: string }): boolean {
+  const meine = werte(kontakt.funktion);
+  return (
+    meine.some((f) => MELDE_FUNKTIONEN.includes(f)) && werte(kontakt.sparte).includes(SPARTE)
+  );
 }
 
 /**
@@ -178,7 +217,7 @@ export async function kontaktPerEmail(email: string): Promise<KontaktTreffer> {
     pfad: "/crm/v3/objects/contacts/search",
     koerper: {
       filterGroups: [{ filters: [{ propertyName: "email", operator: "EQ", value: adresse }] }],
-      properties: ["firstname", "lastname", "team", "email"],
+      properties: ["firstname", "lastname", "team", "email", FUNKTION_FELD, "sparte"],
       limit: 1,
     },
   });
@@ -207,7 +246,7 @@ export async function kontakteDerMannschaft(teams: string[]): Promise<HsObjekt[]
       filterGroups: teams.map((team) => ({
         filters: [{ propertyName: "team", operator: "EQ", value: team }],
       })),
-      properties: ["firstname", "lastname", "team", "email"],
+      properties: ["firstname", "lastname", "team", "email", FUNKTION_FELD, "sparte"],
       limit: 200,
     },
   });
