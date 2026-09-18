@@ -7,11 +7,12 @@
     "build": "next build",
     "start": "NODE_OPTIONS=--use-env-proxy next start",
     "typecheck": "next typegen && tsc --noEmit",
-    "lint": "eslint src scripts",
+    "lint": "eslint src scripts browser playwright.config.ts",
     "test": "vitest run",
     "hubspot-setup": "node --use-env-proxy scripts/hubspot-setup.mjs",
     "link": "node scripts/link.mjs",
-    "test:db": "vitest run --config vitest.echt.mts"
+    "test:db": "vitest run --config vitest.echt.mts",
+    "test:browser": "playwright test"
   },
   "dependencies": {
     "next": "16.3.4",
@@ -20,6 +21,7 @@
     "server-only": "^0.0.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.56.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^22.20.3",
     "@types/react": "^19",
