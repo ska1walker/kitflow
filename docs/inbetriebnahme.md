@@ -1,106 +1,111 @@
 # Inbetriebnahme
 
-Stand: 18.09.2026. Was noch zu tun ist, in der Reihenfolge, in der es Sinn ergibt.
+Stand: 18.09.2026, nach der Freigabe-Kette und dem Mail-Rahmen.
 
-Alles, was hier steht, kann nur Kai tun: Vercel, Supabase und die Vercel-Adressen
-sind aus der Entwicklungsumgebung gesperrt (403 vom Proxy).
+**Alles hier kann nur Kai tun.** Vercel, Supabase, Resend, Telegram und Todoist
+sind aus der Entwicklungsumgebung gesperrt (403 vom Proxy, Richtlinie — kein
+Netzfehler). Ich kann bauen und prüfen, aber keinen dieser Dienste ein einziges
+Mal wirklich aufrufen.
 
 ---
 
-## Teil 0 · Der Stand, gelesen am 18.09. um 10 Uhr
+## Der Stand
 
-Aus den Deal-Spiegeln in HubSpot:
+**Gebaut, auf `main`, Prüfung grün:** die Datenbank und der Umzug, F1/F1b/F2/F3,
+die Statusseite, der Login mit `/sparte`, Stufenwechsel und Größenfrist, die
+Mails M0 bis M5 samt M4b, die Freigabe der Händleranfrage mit Telegram und
+Todoist, und der tägliche Lauf für Erinnerungen und Größenliste.
+
+**Läuft noch nicht**, weil die Variablen fehlen: der Login, der Erinnerungslauf,
+die Händleranfrage und die Benachrichtigungen. Alle vier fallen *geschlossen*
+aus — ohne Variable passiert nichts, statt dass alles offensteht. Das ist
+Absicht, heißt aber auch: bis Schritt 2 durch ist, steht die Hälfte still.
 
 | Vorgang | Kontakte | Größenfrist | Stufe |
 | --- | --- | --- | --- |
 | **AUS-2026-002** · Ü40 Team 3 | **26** | **20.09.** | Größen laufen |
 | AUS-2026-001 · Ü40 Team 3 | 1 | 19.09. | Größen laufen |
 
-**AUS-2026-002 ist der echte Vorgang.** AUS-2026-001 hat nur einen Kontakt und
-ist der Probelauf von 08:54.
-
-Gebaut und auf `main`, Prüfung grün: die Datenbank, der Umzug, F1/F1b/F2/F3, die
-Statusseite, M1, M2a (Größen-Mail je Person), der Login mit `/sparte`, der
-Stufenwechsel und M2 (die tägliche Erinnerung).
+AUS-2026-002 ist der echte Vorgang. AUS-2026-001 ist der Probelauf.
 
 ---
 
-## Teil 1 · Zuerst: der laufende Vorgang hat eine Frist in zwei Tagen
+## Schritt 1 · Heute, weil die Frist übermorgen ist
 
-### 1.1 Entscheide über die Testbremse
+### 1.1 Die Testbremse richtig herum stellen
 
-`MAIL_NUR_AN` steht nach deinem Screenshot **nur auf Production**. Das heißt:
+`MAIL_NUR_AN` stand zuletzt **nur auf Production**. Das ist verkehrt herum: auf
+der Produktion landet jede Mail bei dir, auf jeder Branch-Vorschau geht sie an
+den echten Empfänger.
 
-- auf **kitflow-dun.vercel.app** landet jede Mail bei dir
-- auf jeder **Branch-Vorschau** geht sie an den echten Empfänger
-
-Das ist genau verkehrt herum. Vercel → Projekt kitflow → Settings →
-Environment Variables → `MAIL_NUR_AN`:
-
-1. Haken bei **Production** raus
-2. Haken bei **Preview** und **Development** rein (Wert bleibt deine Adresse)
+Vercel → kitflow → Settings → Environment Variables → `MAIL_NUR_AN`:
+Haken bei **Production** raus, bei **Preview** und **Development** rein.
 
 Willst du erst zusehen, lass sie noch auf Production und verschick einmal — dann
 kommen 26 Mails zu dir und keine ins Team. **Umgeleitete Mails zählen nicht als
 verschickt**, dieser Blick kostet dich also nichts.
 
-### 1.2 Neu bereitstellen
+### 1.2 Die Größenfrist verlängern
 
-Env-Änderungen greifen **nur bei einem neuen Deployment**. Vercel → Deployments →
-das oberste → „Redeploy". Ohne das trägt die laufende Produktion weiter den
-alten Wert.
+**Das ist der eigentliche Grund für die Eile.** Die Erinnerung braucht drei Tage
+Abstand zur letzten Mail. Verschickst du heute, wäre die erste Erinnerung am
+21.09. — die Frist ist der 20.09. **Für diesen Vorgang ginge damit nie eine
+Erinnerung raus.**
 
-### 1.3 Die Größen-Mails verschicken
-
-Deine Statusseite zu AUS-2026-002 öffnen (der Link steht in der M1-Mail zu
-diesem Vorgang) → Karte „Größen-Mail verschicken" → anhaken → abschicken.
-
-- **25 von 26** haben eine Adresse. Ohne: nur noch **Daniel Klein** — seine
-  Größen trägst du über die Liste selbst ein (`/b/…`).
-- Wer schon eine Mail hat, steht mit Datum da und ist nicht vorausgewählt.
-
-### 1.4 Wichtig: die Frist reicht für keine Erinnerung
-
-Die Erinnerung braucht **drei Tage Abstand** zur letzten Mail. Verschickst du
-heute (18.09.), wäre die erste Erinnerung am 21.09. — die Frist ist aber der
-20.09. **Für diesen Vorgang geht damit nie eine Erinnerung raus.**
-
-Zwei Wege:
-
-- **Frist verlängern** auf z. B. den 30.09. Dann erinnert kitflow am 21.09. und
-  ein zweites Mal am 24.09.
-- **So lassen** und in zwei Tagen selbst nachhaken.
-
-**Verlängern geht auf `/sparte`**, Karte „Größenfrist ändern" (seit 18.09.).
-Vorgang wählen, Datum wählen, „Setzen". Angeboten werden nur Vorgänge, bei
-denen gerade Größen gesammelt werden.
-
-Ohne Anmeldung ginge es auch im Supabase-SQL-Editor:
+Auf `/sparte`, Karte „Größenfrist ändern" — geht aber erst nach Schritt 2, weil
+der Login sonst nicht läuft. Bis dahin im Supabase-SQL-Editor:
 
 ```sql
 update vorgang set groessen_frist = '2026-09-30' where nummer = 'AUS-2026-002';
 ```
 
-### 1.5 AUS-2026-001 aufräumen
+Mit dem 30.09. erinnert kitflow am 21.09. und ein zweites Mal am 24.09.
 
-Der Probelauf mit einem Kontakt steht noch auf „Größen laufen" und taucht in
-jeder Übersicht auf. Auf `/sparte` (sobald der Login läuft, Teil 2) auf
-**Abgebrochen** setzen — dann ist er aus dem Weg, ohne gelöscht zu sein.
+### 1.3 Die Größen-Mails verschicken
+
+Statusseite zu AUS-2026-002 öffnen (Link steht in der M1-Mail) → Karte
+„Größen-Mail verschicken" → anhaken → abschicken.
+
+**25 von 26** haben eine Adresse. Ohne: nur **Daniel Klein** — seine Größen
+trägst du über die Liste selbst ein (`/b/…`). Wer schon eine Mail hat, steht mit
+Datum da und ist nicht vorausgewählt.
 
 ---
 
-## Teil 2 · Die vier Variablen und zwei Einstellungen
+## Schritt 2 · Die Variablen und die Migrationen
 
-### 2.1 In Vercel anlegen
+### 2.1 Zwei Migrationen im SQL-Editor
 
-Settings → Environment Variables. Alle drei für **Production, Preview und
+Supabase → SQL Editor → Inhalt einfügen → Run. Beide sind wiederholbar, ein
+zweiter Lauf schadet nicht.
+
+| Datei | Was sie anlegt | Ohne sie |
+| --- | --- | --- |
+| `supabase/migrations/002_entwurf.sql` | `vorgang_entwurf` | jede Bedarfsmeldung an `/neu` scheitert |
+| `supabase/migrations/20260918150000_freigabe.sql` | vier Spalten an `vorgang` | keine Freigabe möglich, die Anfrage bleibt liegen |
+
+### 2.2 Die Variablen in Vercel
+
+Settings → Environment Variables, alle für **Production, Preview und
 Development**.
 
-| Variable | Wert | wofür |
-| --- | --- | --- |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase → Settings → API → **anon public** | die Anmeldung. Darf in den Browser, anders als der Dienst-Schlüssel |
-| `SPARTE_EMAILS` | deine Adresse und die von Sebastian Hebisch, mit Komma getrennt | wer sich anmelden darf |
-| `CRON_SECRET` | 32 zufällige Zeichen, siehe unten | der tägliche Erinnerungslauf |
+| Variable | Wert | wofür | fehlt sie |
+| --- | --- | --- | --- |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase → Settings → API → **anon public** | die Anmeldung | kein Login |
+| `SPARTE_EMAILS` | deine Adresse und die von Sebastian, mit Komma | wer hinein darf | **niemand** kommt hinein |
+| `CRON_SECRET` | 32 zufällige Zeichen | der tägliche Lauf | Lauf antwortet 503 |
+| `HAENDLER` | siehe unten | die Angebotsanfrage | keine Anfrage, Vorgang bleibt liegen |
+| `TELEGRAM_TOKEN` | vom BotFather | Freigabe-Meldung | keine Nachricht |
+| `TELEGRAM_CHAT` | Chat- oder Gruppen-ID (bei Gruppen negativ) | dieselbe | keine Nachricht |
+| `TODOIST_TOKEN` | Todoist → Einstellungen → Integrationen → Entwickler | Aufgabe je Freigabe | keine Aufgabe |
+| `TODOIST_PROJEKT` | optional, Projekt-ID | wohin die Aufgabe geht | landet im Posteingang |
+
+Format für `HAENDLER` — Firma`|`Ansprechpartner`|`Adresse, Händler mit Komma
+getrennt:
+
+```
+HAENDLER=Intersport Uelzen|Herr Hillebrecht|<adresse>,11teamsports|Herr Bormann|<adresse>
+```
 
 Ein Geheimnis erzeugen:
 
@@ -108,25 +113,15 @@ Ein Geheimnis erzeugen:
 node -e "console.log(require('node:crypto').randomBytes(32).toString('base64url'))"
 ```
 
-**Fehlt eine davon, ist das kein stiller Ausfall**: ohne `SPARTE_EMAILS` kommt
-niemand hinein (nicht: jeder), ohne `CRON_SECRET` antwortet der Lauf 503 (nicht:
-200). Das ist Absicht — aber es heißt auch, dass nichts passiert, bis sie da sind.
+**Fehlen Telegram und Todoist beide, funktioniert die Freigabe trotzdem** — sie
+wartet dann still auf `/sparte`, statt sich zu melden. Der Ausfall steht im
+Verlauf des Vorgangs, damit Stille nicht als „nichts zu tun" gelesen wird.
 
-### 2.1b Die Migration 002 einmal laufen lassen
-
-**Neu und nötig**, sonst scheitert jede Bedarfsmeldung. Supabase → SQL Editor →
-den Inhalt von `supabase/migrations/002_entwurf.sql` einfügen → Run.
-
-Sie legt die Tabelle `vorgang_entwurf` an. Darin parkt kitflow eine
-Bedarfsmeldung, bis der Trainer sie per Mail bestätigt — ohne die Tabelle
-entsteht kein Vorgang mehr.
-
-### 2.2 In Supabase einrichten
+### 2.3 Zwei Einstellungen in Supabase
 
 **Custom SMTP auf Resend.** Authentication → Emails → SMTP Settings. Ohne das
 verschickt Supabase aus einer eigenen Domain und lässt nur **zwei Mails pro
-Stunde** durch — bei zwei Personen reicht das gerade, aber die Mail sieht nicht
-nach kitflow aus.
+Stunde** durch.
 
 **Redirect-URL freigeben.** Authentication → URL Configuration → Redirect URLs:
 
@@ -134,40 +129,41 @@ nach kitflow aus.
 https://kitflow-dun.vercel.app/auth/callback
 ```
 
-Was nicht freigegeben ist, landet auf der Site-URL. Der Link „funktioniert"
-dann scheinbar und meldet niemanden an — das ist der Fehler, der am meisten
-Zeit kostet, weil er wie ein Fehler im Code aussieht.
+Was nicht freigegeben ist, landet auf der Site-URL. Der Link „funktioniert" dann
+scheinbar und meldet niemanden an — der Fehler, der am meisten Zeit kostet, weil
+er wie ein Fehler im Code aussieht.
 
-### 2.3 Noch einmal neu bereitstellen
+### 2.4 Neu bereitstellen
 
-Wieder: Env-Änderungen greifen erst beim nächsten Deployment.
+Env-Änderungen greifen **nur bei einem neuen Deployment**. Vercel → Deployments →
+das oberste → „Redeploy". Ohne das trägt die Produktion weiter die alten Werte.
 
 ---
 
-## Teil 3 · Prüfen, dass es wirklich läuft
+## Schritt 3 · Prüfen, dass es wirklich läuft
+
+Fünf Proben. Jede hat eine **Gegenprobe** — ohne sie ist nur belegt, dass etwas
+passiert, nicht dass die Grenze hält.
 
 ### 3.1 Anmeldung
 
-1. `https://kitflow-dun.vercel.app/anmelden` → deine Adresse → Mail kommt an?
+1. `/anmelden` → deine Adresse → Mail kommt an?
 2. Link öffnen → landet auf `/sparte`, die Liste steht da?
-3. Eine Stufe setzen → steht sie in der Liste, im Verlauf des Vorgangs **und**
-   am Deal in HubSpot?
-4. Abmelden → `/sparte` schickt wieder zur Anmeldung.
-5. **Gegenprobe**: eine Adresse eintragen, die *nicht* in `SPARTE_EMAILS` steht.
-   Es muss dieselbe Bestätigung erscheinen — und **keine** Mail ankommen.
+3. Abmelden → `/sparte` schickt wieder zur Anmeldung.
+4. **Gegenprobe:** eine Adresse eintragen, die *nicht* in `SPARTE_EMAILS` steht.
+   Es muss **dieselbe** Bestätigung erscheinen — und **keine** Mail ankommen.
 
-Punkt 5 ist der wichtige. Ohne ihn ist nicht belegt, dass die Liste etwas tut.
+Punkt 4 ist der wichtige: gäbe es eine andere Antwort, verriete die Seite, wer
+in der Liste steht.
 
 ### 3.2 Erinnerungslauf
-
-Nicht auf den Abend warten, sondern von Hand anstoßen:
 
 ```
 curl -H "Authorization: Bearer DEIN_CRON_SECRET" \
   https://kitflow-dun.vercel.app/api/erinnerungen
 ```
 
-Erwartet: `{"ok":true,"vorgaenge":…,"verschickt":…}` mit **Zahlen, keinen Namen**.
+Erwartet: `{"ok":true,…}` mit **Zahlen, keinen Namen**.
 
 **Gegenprobe ohne Kopfzeile** — muss `401` geben:
 
@@ -176,25 +172,72 @@ curl -i https://kitflow-dun.vercel.app/api/erinnerungen
 ```
 
 Am selben Tag, an dem die Größen-Mails rausgingen, ist `verschickt` **0** (drei
-Tage Abstand). Das ist richtig so, kein Fehler.
+Tage Abstand). Das ist richtig, kein Fehler.
 
 ### 3.3 Der ganze Weg an einer Person
 
 Deinen eigenen Größen-Link öffnen, Größe eintragen, speichern, Link erneut
 öffnen — steht alles noch da? Danach auf der Statusseite: „x von 26 eingetragen".
 
+### 3.4 Die Freigabe — der Teil, der noch nie gelaufen ist
+
+Am besten mit einem **Wegwerf-Vorgang** üben, nicht mit AUS-2026-002:
+
+1. Über `/neu` einen Vorgang für **eine Person** anlegen (deine Adresse), mit
+   einem erfundenen Artikel.
+2. Größe eintragen, Liste über `/b/…` bestätigen.
+3. Erwartet: die Seite sagt **„die Anfrage geht zur Freigabe"**, und es geht
+   **keine** Mail an die Händler.
+4. Telegram-Nachricht und Todoist-Aufgabe kommen an?
+5. `/sparte` → Karte „Händleranfragen freigeben" → **Freigeben**.
+6. Erwartet: M4 an die Händler (mit `MAIL_NUR_AN` an dich), M5 an dich als
+   Trainer, Stufe wandert auf „Anfrage raus".
+7. **Sieh dir die CSV im Anhang an.** Dort darf **kein einziger Name** stehen —
+   nur Artikel, Größe, Stück, Nummer, Initialen.
+
+**Gegenprobe:** einen zweiten Wegwerf-Vorgang bis zur Freigabe bringen und dort
+**Stoppen** mit einem Grund. Erwartet: keine Händlermail, stattdessen M4b an dich
+mit dem Grund im Text.
+
+Danach beide Wegwerf-Vorgänge auf `/sparte` **abbrechen** und das Nachlesen nicht
+vergessen.
+
+### 3.5 AUS-2026-001 aufräumen
+
+Der Probelauf mit einem Kontakt steht noch auf „Größen laufen" und taucht in
+jeder Übersicht auf. Auf `/sparte` auf **Abgebrochen** setzen — dann ist er aus
+dem Weg, ohne gelöscht zu sein.
+
 ---
 
-## Teil 4 · Was danach ansteht
+## Schritt 4 · Der echte Durchlauf
+
+Erst wenn Schritt 3 sitzt. AUS-2026-002 läuft bis zur verlängerten Frist, du
+trägst Daniel Kleins Größe nach, bestätigst die Liste, gibst frei — und die
+Anfrage geht an Bormann und Hillebrecht.
+
+**Vorher zwei Dinge klären**, beide nicht technisch:
+
+- **Reden die Händler über eine Voranfrage?** Ob Bormann und Hillebrecht auf
+  eine Anfrage ohne Personenzeilen überhaupt antworten, weiß niemand. Das ist
+  ein Gespräch, kein Code (docs/offen.md).
+- **Die Beflockung bestätigen.** Der Standardtext steht in `vorgaenge.ts`; er
+  geht so in jede Anfrage.
+
+---
+
+## Danach, in dieser Reihenfolge
 
 Nichts davon ist dringend, und nichts davon fange ich ohne dein Wort an.
 
 | | |
 | --- | --- |
-| **M3 · Größenliste zum Prüfen** | die Mail an den Trainer, wenn alle eingetragen haben |
-| **M4 · Anfrage an die Händler** | **bleibt ungebaut bis zu deiner ausdrücklichen Freigabe** |
-| **Foto-Upload** | meine Empfehlung: harte Größengrenze *und* serverseitig verkleinern, nur Trainer, erst nach dem echten Durchlauf |
-| **Frist für die Sponsorensuche** | Stufe 0 hat noch keinen Wecker (docs/offen.md) |
+| **Freigabe automatisch** | die Naht steht (`freigabeWeg`), die Regel nicht. Die offenen Fragen — ab welchem Betrag? Jugend anders? was bei lückenhafter Liste? — stehen in docs/freigabe.md |
+| **`Anfrage_Vorlage.xlsx`** | ersetzt die CSV im Anhang durch die Vorlage, die die Händler kennen |
+| **M7 · keine Spieler gefunden** | steht heute auf der Seite; eine Mail wäre für den, der sie zu früh schließt |
+| **Vereinswappen in den Mails** | Platz ist vorbereitet; als Anhang mit Content-ID, nicht als externe Adresse |
+| **Foto-Upload** | Empfehlung: harte Größengrenze *und* serverseitig verkleinern, nur Trainer, erst nach dem echten Durchlauf |
+| **Frist für die Sponsorensuche** | Stufe 0 hat noch keinen Wecker |
 | **Zwei lose HubSpot-Kontakte** | `kai.boehm@eintrachtmunster.de` ohne Name und Funktion, zweiter „Kai Böhm" unter `fussball@eintrachtmunster.de` |
 
 ---
@@ -204,10 +247,26 @@ Nichts davon ist dringend, und nichts davon fange ich ohne dein Wort an.
 | Symptom | fast immer |
 | --- | --- |
 | Anmeldeseite sagt „nicht eingerichtet" | `NEXT_PUBLIC_SUPABASE_ANON_KEY` fehlt oder kein Redeploy |
-| Link aus der Mail meldet niemanden an | Redirect-URL in Supabase nicht freigegeben (2.2) |
-| `/sparte` schickt dich sofort zurück | deine Adresse steht nicht in `SPARTE_EMAILS`, oder Groß-/Kleinschreibung — die ist egal, aber ein Tippfehler nicht |
+| Link aus der Mail meldet niemanden an | Redirect-URL in Supabase nicht freigegeben (2.3) |
+| `/sparte` schickt dich sofort zurück | deine Adresse steht nicht in `SPARTE_EMAILS` — Groß-/Kleinschreibung ist egal, ein Tippfehler nicht |
 | Erinnerungslauf gibt 503 | `CRON_SECRET` fehlt oder ist kürzer als 16 Zeichen |
 | Erinnerungslauf gibt 401 | falsches Geheimnis im `Authorization`-Kopf |
 | `verschickt: 0`, obwohl Leute fehlen | richtig, wenn: keine drei Tage Abstand, Frist vorbei, oder die erste Größen-Mail ging nie raus |
 | Mails kommen bei dir statt beim Team | `MAIL_NUR_AN` steht noch auf Production (1.1) |
+| Bestätigen sagt „die Anfrage schickt die Spartenleitung raus" | `HAENDLER` fehlt — es wird gar keine Freigabe erbeten, weil es nichts freizugeben gäbe |
+| Freigabe-Karte erscheint nicht auf `/sparte` | Migration 004 fehlt, oder kein Vorgang steht auf „offen" |
+| Keine Telegram-Nachricht, Freigabe aber da | genau so gebaut. Der Grund steht im Verlauf des Vorgangs |
 | Statusseite meldet eine Störung | Supabase oder HubSpot antwortet nicht — kitflow sagt das, statt „gibt es nicht" zu behaupten |
+
+---
+
+## Was in dieser Umgebung nie geprüft werden konnte
+
+Damit niemand später denkt, es sei geprüft gewesen:
+
+| | |
+| --- | --- |
+| **Resend** | der Mailversand ist nie wirklich gelaufen. Ob hubsport.club verifiziert ist, entscheidet sich beim ersten Absenden |
+| **Telegram und Todoist** | nie aufgerufen. Ob Token und Chat-ID stimmen, zeigt erst Schritt 3.4 |
+| **Supabase über HTTP** | nur gegen ein lokales Postgres und ein echtes PostgREST geprüft, nie gegen das echte Projekt |
+| **Outlook und Apple Mail** | die Mails sind in Chromium angesehen. VML-Knopf und Dunkelmodus sind nach Regeln gebaut, nicht in den echten Programmen gesehen |
