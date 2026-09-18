@@ -261,7 +261,8 @@ export async function meldeBedarf(eingabe: BedarfEingabe): Promise<BedarfErgebni
 
   // Der Spiegel ist Sicht, keine Wahrheit: scheitert er, bleibt der Vorgang
   // gueltig und es steht im Verlauf (spiegel.ts).
-  if (await spiegele(satz)) await spiegelePersonen({ ...satz, hsDealId: satz.hsDealId });
+  const dealId = await spiegele(satz);
+  if (dealId) await spiegelePersonen(satz, dealId);
 
   return {
     vorgang: satz.nummer,

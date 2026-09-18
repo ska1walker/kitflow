@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { spiegele } from "./spiegel";
+import { spiegele, spiegelePersonen } from "./spiegel";
 import { raeumeUmgebung, stelleUmgebung, vorgangZeile } from "../../test/db-fake";
 import { satz } from "../../test/satz";
 
@@ -84,7 +84,7 @@ describe("Einen Vorgang zum ersten Mal spiegeln", () => {
       db: { "PATCH vorgang": { koerper: [vorgangZeile({ hs_deal_id: "d99" })] } },
     });
 
-    expect(await spiegele(satz())).toBe(true);
+    expect(await spiegele(satz())).toBe("d99");
 
     const angelegt = aufrufe.find((a) => a.host === "hubspot" && a.methode === "POST");
     const props = (angelegt!.koerper as { properties: Record<string, string> }).properties;
@@ -127,7 +127,7 @@ describe("Einen gespiegelten Vorgang nachziehen", () => {
       },
     });
 
-    expect(await spiegele(satz({ hsDealId: "d99", stufe: 2 }))).toBe(true);
+    expect(await spiegele(satz({ hsDealId: "d99", stufe: 2 }))).toBe("d99");
 
     expect(aufrufe.some((a) => a.host === "hubspot" && a.methode === "POST")).toBe(false);
     const patch = aufrufe.find((a) => a.methode === "PATCH")!;
@@ -145,7 +145,7 @@ describe("Wenn das CRM nicht mitspielt", () => {
       db: { "POST ereignis": { koerper: [{}] } },
     });
 
-    expect(await spiegele(satz({ hsDealId: "d99" }))).toBe(false);
+    expect(await spiegele(satz({ hsDealId: "d99" }))).toBeNull();
 
     const vermerk = aufrufe.find((a) => a.host === "db" && a.pfad === "ereignis");
     expect(vermerk).toBeDefined();
@@ -165,7 +165,7 @@ describe("Wenn das CRM nicht mitspielt", () => {
       db: { "POST ereignis": { koerper: [{}] } },
     });
 
-    expect(await spiegele(satz({ stufe: 1 }))).toBe(false);
+    expect(await spiegele(satz({ stufe: 1 }))).toBeNull();
     expect(aufrufe.some((a) => a.host === "hubspot" && a.pfad.includes("/objects/deals"))).toBe(false);
   });
 
@@ -179,7 +179,7 @@ describe("Wenn das CRM nicht mitspielt", () => {
       db: { "PATCH vorgang": { status: 500 }, "POST ereignis": { koerper: [{}] } },
     });
 
-    expect(await spiegele(satz())).toBe(false);
+    expect(await spiegele(satz())).toBeNull();
     const vermerk = aufrufe.find((a) => a.pfad === "ereignis");
     expect(String((vermerk!.koerper as Record<string, unknown>).text)).toContain("d99");
   });
@@ -193,7 +193,7 @@ describe("Wenn das CRM nicht mitspielt", () => {
       db: { "POST ereignis": { koerper: [{}] } },
     });
 
-    expect(await spiegele(satz())).toBe(false);
+    expect(await spiegele(satz())).toBeNull();
 
     const vermerk = aufrufe.find((a) => a.host === "db" && a.pfad === "ereignis");
     expect(vermerk).toBeDefined();
@@ -204,11 +204,33 @@ describe("Wenn das CRM nicht mitspielt", () => {
     expect(aufrufe.some((a) => a.host === "db" && a.pfad === "vorgang")).toBe(false);
   });
 
+  test("die frische Deal-ID kommt zurück, nicht nur ein Ja", async () => {
+    // Beim ersten Spiegeln entsteht die ID hier. Der Aufrufer haelt noch den
+    // Satz von vorher in der Hand: wer daraus `hsDealId` liest, bekommt nichts.
+    // Genau daran hingen die Personen eines frischen Vorgangs an keinem Deal.
+    const { aufrufe } = stelleBeide({
+      hubspot: {
+        "GET /crm/v3/pipelines/deals": { koerper: PIPELINE },
+        "POST /crm/v3/objects/deals": { koerper: { id: "d77", properties: {} } },
+        "PUT /crm/v4/objects/deals/d77/associations/default/contacts/111": { koerper: {} },
+      },
+      db: { "PATCH vorgang": { koerper: [vorgangZeile({ hs_deal_id: "d77" })] } },
+    });
+
+    const v = satz({ personen: [{ id: "p1", kontaktId: "111", ausgeschlossen: false, torwart: false }] });
+    const dealId = await spiegele(v);
+    expect(dealId).toBe("d77");
+
+    // Und mit dieser ID haengen die Personen wirklich am richtigen Deal.
+    expect(await spiegelePersonen(v, dealId!)).toBe(true);
+    expect(aufrufe.some((a) => a.pfad.includes("/associations/default/contacts/111"))).toBe(true);
+  });
+
   test("ohne CRM-Zugang passiert gar nichts – und das ist kein Fehler", async () => {
     delete process.env.HUBSPOT_TOKEN;
     const { netz } = stelleBeide({});
 
-    expect(await spiegele(satz())).toBe(false);
+    expect(await spiegele(satz())).toBeNull();
     // Kein Ereignis: die Datenbank ist die Quelle, HubSpot nur die Sicht.
     expect(netz).not.toHaveBeenCalled();
   });

@@ -147,7 +147,28 @@ describe("Händler und Verlauf", () => {
       "Frist für die Größen",
       "Bestellt",
     ]);
-    expect(eintraege[0]).toMatchObject({ uhrzeit: "09:30", intern: true });
+    // 09:30 UTC sind in Munster 11:30 – der Verlauf zeigt Ortszeit.
+    expect(eintraege[0]).toMatchObject({ uhrzeit: "11:30", intern: true });
+  });
+
+  test("Ereignisse stehen in deutscher Zeit, nicht in UTC", () => {
+    // Auf der Statusseite rechnet der Kopf („Stand: …“) in Ortszeit um. Stünde
+    // der Verlauf daneben in UTC, zeigte eine Seite zwei verschiedene Uhren.
+    const sommer = verlauf(satz({ groessenFrist: undefined }), [
+      { zeitpunkt: "2026-09-18T06:38:00+00:00", art: "x", text: "Sommerzeit", intern: false, abStufe: 0 },
+    ]);
+    expect(sommer[0]).toMatchObject({ datum: "18.09.", uhrzeit: "08:38" });
+
+    const winter = verlauf(satz({ groessenFrist: undefined }), [
+      { zeitpunkt: "2026-12-01T06:38:00+00:00", art: "x", text: "Winterzeit", intern: false, abStufe: 0 },
+    ]);
+    expect(winter[0]).toMatchObject({ datum: "01.12.", uhrzeit: "07:38" });
+
+    // Um 23:30 UTC ist in Munster schon der naechste Tag.
+    const mitternacht = verlauf(satz({ groessenFrist: undefined }), [
+      { zeitpunkt: "2026-09-18T23:30:00+00:00", art: "x", text: "spät", intern: false, abStufe: 0 },
+    ]);
+    expect(mitternacht[0].datum).toBe("19.09.");
   });
 
   test("steht ein Lieferant fest, sagt der Verlauf, an wen bestellt wurde", () => {

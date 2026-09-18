@@ -176,6 +176,20 @@ describe("Der Spiegel im CRM", () => {
     expect(aufrufe.some((a) => a.host === "hubspot" && a.pfad.includes("/objects/deals"))).toBe(true);
   });
 
+  test("und die Personen hängen danach am Deal", async () => {
+    // Hier steckte ein echter Fehler: die Deal-ID entsteht erst beim Spiegeln,
+    // der Aufrufer hielt aber noch den Satz von vorher. Im CRM stand ein Deal
+    // mit null Kontakten -- aufgefallen erst beim Durchlauf im Browser.
+    const { aufrufe } = stelleWelt({ kontakte: [kontakt("111"), kontakt("222")] });
+
+    await meldeBedarf(eingabe());
+
+    const verknuepft = aufrufe.filter(
+      (a) => a.host === "hubspot" && a.pfad.includes("/associations/default/contacts/"),
+    );
+    expect(verknuepft).toHaveLength(2);
+  });
+
   test("scheitert er, entsteht der Vorgang trotzdem", async () => {
     // Die Datenbank ist die Wahrheit, HubSpot nur die Sicht darauf. Nur: ohne
     // HubSpot findet die Kontaktsuche auch niemanden – deshalb hier über eine

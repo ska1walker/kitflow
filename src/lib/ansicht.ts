@@ -181,14 +181,14 @@ export function verlauf(satz: VorgangSatz, ereignisse: EreignisSatz[] = []): Ere
   ausDatum(satz.erstattung.am, 8, "Erstattung überwiesen", undefined, true);
 
   for (const e of ereignisse) {
-    const datum = kurzDatum(e.zeitpunkt);
-    if (!datum) continue;
+    const zeit = inBerlin(e.zeitpunkt);
+    if (!zeit) continue;
     eintraege.push({
       sortier: e.zeitpunkt,
       ereignis: {
         ab: e.abStufe,
-        datum,
-        uhrzeit: e.zeitpunkt.slice(11, 16),
+        datum: zeit.datum,
+        uhrzeit: zeit.uhrzeit,
         text: e.text,
         sub: e.sub,
         intern: e.intern,
@@ -197,6 +197,31 @@ export function verlauf(satz: VorgangSatz, ereignisse: EreignisSatz[] = []): Ere
   }
 
   return eintraege.sort((a, b) => a.sortier.localeCompare(b.sortier)).map((e) => e.ereignis);
+}
+
+/**
+ * Ein Zeitstempel aus der Datenbank, in deutscher Ortszeit.
+ *
+ * `kurzDatum` schneidet die Zeichenkette auf, und das ist für ein reines Datum
+ * (`groessen_frist`) auch richtig. Ein Ereignis trägt dagegen eine Uhrzeit mit
+ * Zeitzone: um 23:30 UTC ist in Munster schon der nächste Tag, und 06:38 UTC
+ * sind hier 08:38. Wer das aufschneidet, zeigt zwei verschiedene Uhren auf
+ * derselben Seite — der Kopf „Stand: …" rechnet nämlich richtig um.
+ */
+function inBerlin(zeitpunkt: string): { datum: string; uhrzeit: string } | null {
+  const zeit = new Date(zeitpunkt);
+  if (Number.isNaN(zeit.getTime())) return null;
+
+  const teile = new Intl.DateTimeFormat("de-DE", {
+    timeZone: "Europe/Berlin",
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).formatToParts(zeit);
+  const hole = (art: string) => teile.find((t) => t.type === art)?.value ?? "";
+
+  return { datum: `${hole("day")}.${hole("month")}.`, uhrzeit: `${hole("hour")}:${hole("minute")}` };
 }
 
 /** Eine Zeile der Liste, so weit die Prüfungen sie brauchen. */

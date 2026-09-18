@@ -48,7 +48,7 @@ import {
   vorgangPerNummer,
   type VorgangSatz,
 } from "./vorgaenge-db";
-import { spiegele, spiegelePersonen } from "./spiegel";
+import { spiegelePersonen } from "./spiegel";
 import { kontakteDerMannschaft } from "./bedarf";
 import { trainerLink } from "./links";
 import type { Pruefung } from "./pruefungen";
@@ -731,11 +731,6 @@ export async function trageNach(
   if (ergebnis.stand === "da") await spiegelePersonen(ergebnis.vorgang);
 
   return { ok: true, name: person.name };
-}
-
-/** Der Spiegel nach einem Stufenwechsel – oeffentlich fuer F1b und /sparte. */
-export async function spiegeleVorgang(satz: VorgangSatz): Promise<boolean> {
-  return spiegele(satz);
 }
 
 export type { StufeNr };

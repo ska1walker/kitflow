@@ -66,13 +66,17 @@ function eigenschaften(satz: VorgangSatz, stufe: string, pipeline: string) {
 
 /**
  * Schreibt den Stand des Vorgangs an seinen Deal — und legt den Deal an, wenn
- * es noch keinen gibt. Gibt zurück, ob es geklappt hat; niemand muss darauf
- * warten, aber wer will, kann es wissen.
+ * es noch keinen gibt.
+ *
+ * Zurück kommt die Deal-ID, nicht nur ein Ja. Der Grund ist gemessen: beim
+ * ersten Spiegeln entsteht die ID hier, der Aufrufer hält aber noch den Satz
+ * von vorher in der Hand. Wer daraus `hsDealId` liest, bekommt nichts — und
+ * `spiegelePersonen` hängt die Leute dann an keinen Deal.
  */
-export async function spiegele(satz: VorgangSatz): Promise<boolean> {
+export async function spiegele(satz: VorgangSatz): Promise<string | null> {
   // Ohne CRM-Zugang gibt es nichts zu spiegeln. Das ist kein Fehler: die
   // Datenbank ist die Quelle, HubSpot ist die Sicht.
-  if (!hubspotAktiv()) return false;
+  if (!hubspotAktiv()) return null;
 
   const ids = await stufenId(satz.stufe);
   if (!ids) {
@@ -82,7 +86,7 @@ export async function spiegele(satz: VorgangSatz): Promise<boolean> {
       sub: "Der Vorgang läuft weiter; nur die Sicht in HubSpot fehlt.",
       intern: true,
     });
-    return false;
+    return null;
   }
 
   const properties = eigenschaften(satz, ids.stufe, ids.pipeline);
@@ -93,7 +97,7 @@ export async function spiegele(satz: VorgangSatz): Promise<boolean> {
       methode: "PATCH",
       koerper: { properties },
     });
-    if (geaendert) return true;
+    if (geaendert) return satz.hsDealId;
 
     await vermerke(satz.id, {
       art: "spiegel",
@@ -101,7 +105,7 @@ export async function spiegele(satz: VorgangSatz): Promise<boolean> {
       sub: "Der Vorgang läuft weiter; im CRM steht ein älterer Stand.",
       intern: true,
     });
-    return false;
+    return null;
   }
 
   const angelegt = await hubspot<HsObjekt>({ pfad: "/crm/v3/objects/deals", koerper: { properties } });
@@ -112,7 +116,7 @@ export async function spiegele(satz: VorgangSatz): Promise<boolean> {
       sub: "Der Vorgang läuft weiter; im CRM ist er nicht zu sehen.",
       intern: true,
     });
-    return false;
+    return null;
   }
 
   // Ohne das legt der nächste Spiegel einen zweiten Deal an.
@@ -124,10 +128,10 @@ export async function spiegele(satz: VorgangSatz): Promise<boolean> {
       sub: "Beim nächsten Spiegeln entstünde sonst ein zweiter Deal.",
       intern: true,
     });
-    return false;
+    return null;
   }
 
-  return true;
+  return angelegt.id;
 }
 
 /**
@@ -140,12 +144,13 @@ export async function spiegele(satz: VorgangSatz): Promise<boolean> {
  * Es geht dabei um eine Faehigkeit, die Kai heute hat und behalten soll: am
  * Deal in HubSpot sehen, wer dazugehoert. Zurueckgelesen wird auch das nie.
  */
-export async function spiegelePersonen(satz: VorgangSatz): Promise<boolean> {
-  if (!hubspotAktiv() || !satz.hsDealId) return false;
+export async function spiegelePersonen(satz: VorgangSatz, dealId?: string): Promise<boolean> {
+  const deal = dealId ?? satz.hsDealId;
+  if (!hubspotAktiv() || !deal) return false;
 
   let alle = true;
   for (const person of satz.personen) {
-    const ok = await verknuepfen("deals", satz.hsDealId, "contacts", person.kontaktId);
+    const ok = await verknuepfen("deals", deal, "contacts", person.kontaktId);
     if (!ok) alle = false;
   }
 
