@@ -144,6 +144,54 @@ async function produktFinden(artikel: ArtikelEingabe): Promise<string | null> {
   return angelegt?.id ?? null;
 }
 
+/** Ein Kontakt, auf das Noetigste gekuerzt. */
+export type Kontakt = { id: string; name: string; team: string };
+
+export type KontaktTreffer =
+  | { stand: "da"; kontakt: Kontakt }
+  | { stand: "unbekannt" }
+  | { stand: "gestoert" };
+
+/**
+ * Der Kontakt zu einer E-Mail-Adresse.
+ *
+ * Gesucht wird ueber die genaue Adresse und nicht ueber den Namen, weil F1 als
+ * einzige Seite ohne Token offen steht (docs/formulare.md). Eine Namenssuche
+ * waere dort ein Mitgliederverzeichnis fuer jeden, der die Seite kennt; ein
+ * Treffer auf die genaue Adresse verraet nur dem etwas, der sie schon hat.
+ *
+ * Drei Staende statt `null`: eine Stoerung bei HubSpot darf nie „kenne ich
+ * nicht" heissen. Sonst sperrt ein Rate-Limit jeden Trainer aus und sagt ihm
+ * auch noch, er sei kein Mitglied.
+ */
+export async function kontaktPerEmail(email: string): Promise<KontaktTreffer> {
+  const adresse = email.trim().toLowerCase();
+  if (!adresse) return { stand: "unbekannt" };
+
+  const treffer = await hubspot<HsListe<HsObjekt>>({
+    pfad: "/crm/v3/objects/contacts/search",
+    koerper: {
+      filterGroups: [{ filters: [{ propertyName: "email", operator: "EQ", value: adresse }] }],
+      properties: ["firstname", "lastname", "team"],
+      limit: 1,
+    },
+  });
+  if (treffer === null) return { stand: "gestoert" };
+
+  const kontakt = treffer.results[0];
+  if (!kontakt) return { stand: "unbekannt" };
+
+  const name = `${kontakt.properties.firstname ?? ""} ${kontakt.properties.lastname ?? ""}`.trim();
+  return {
+    stand: "da",
+    kontakt: {
+      id: kontakt.id,
+      name: name || `Kontakt ${kontakt.id}`,
+      team: kontakt.properties.team ?? "",
+    },
+  };
+}
+
 /** Die Kontakte, deren `team` eine der gewaehlten Mannschaften ist. */
 async function kontakteDerMannschaft(teams: string[]): Promise<HsObjekt[]> {
   const treffer = await hubspot<HsListe<HsObjekt>>({
