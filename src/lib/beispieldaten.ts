@@ -161,8 +161,8 @@ export const ABBRUCH_EREIGNIS: Ereignis = {
 
 /**
  * Das Schaufenster unter `/` steht offen im Netz. Hier standen vier erfundene
- * Namen, die wie eine echte Ue40-Mannschaft aus Munster aussahen — niemand von
- * aussen konnte erkennen, dass sie erfunden sind. Platzhalter, die auch wie
+ * Namen, die wie eine echte Ue40-Mannschaft aus Munster aussahen — von aussen
+ * konnte niemand erkennen, dass sie erfunden sind. Platzhalter, die auch wie
  * Platzhalter aussehen, sagen dasselbe ueber die Oberflaeche aus.
  */
 const FEHLENDE_GROESSEN = ["Spieler 3", "Spieler 7", "Spieler 12", "Spieler 15"];
