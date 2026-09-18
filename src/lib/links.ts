@@ -32,7 +32,13 @@ import "server-only";
 
 import { createHmac, timingSafeEqual } from "node:crypto";
 
-export type Zweck = "status" | "groessen" | "bestaetigen" | "trainer" | "ergaenzen";
+export type Zweck =
+  | "status"
+  | "groessen"
+  | "bestaetigen"
+  | "trainer"
+  | "ergaenzen"
+  | "anlegen";
 
 /**
  * Der Schluessel. Fehlt er, funktioniert kein einziger Link – das ist Absicht:
@@ -113,6 +119,20 @@ export function ergaenzenLink(vorgang: string): string | null {
   const token = signiere("ergaenzen", vorgang);
   if (!token) return null;
   return `/e/${encodeURIComponent(vorgang)}?t=${token}`;
+}
+
+/**
+ * Der Link, mit dem ein Entwurf zum Vorgang wird (der Bestaetigungsklick an
+ * `/neu`).
+ *
+ * Eigener Zweck, und er traegt nur die Entwurfs-ID: sie ist eine UUID, also
+ * nicht zu raten, und die Signatur haelt fest, dass wir sie ausgegeben haben.
+ * Wer den Link hat, hat die Mail bekommen — und nur darum geht es hier.
+ */
+export function anlegenLink(entwurf: string): string | null {
+  const token = signiere("anlegen", entwurf);
+  if (!token) return null;
+  return `/neu/bestaetigen/${encodeURIComponent(entwurf)}?t=${token}`;
 }
 
 /** Der Link, mit dem der Trainer die Angaben einer Person aendert (F2 als Trainer). */

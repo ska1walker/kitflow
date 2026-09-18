@@ -236,6 +236,65 @@ export async function sendeM1(an: string, daten: M1Daten): Promise<string | null
   return sendeMail({ an, betreff, text: alsText(rahmen), html: alsHtml(rahmen) });
 }
 
+export type BestaetigungDaten = {
+  /** Leer, wenn der Vorname nicht bekannt ist. */
+  vorname: string;
+  mannschaft: string;
+  ausstattungsart: string;
+  artikel: { name: string; detail: string }[];
+  anlegenLink: string;
+  gueltigStunden: number;
+};
+
+/**
+ * Die Bestätigung an `/neu`: „warst du das?“
+ *
+ * `/neu` steht offen im Netz und prüft, ob die eingetragene Adresse einem
+ * Trainer gehört — nicht, ob der am Formular sie besitzt. Diese Mail schließt
+ * die Lücke: ohne den Klick darin entsteht kein Vorgang.
+ *
+ * Sie muss deshalb zweierlei können. Für den, der es war, ist sie ein
+ * Zwischenschritt und soll nicht aufhalten. Für den, der es **nicht** war, ist
+ * sie eine Warnung — und die gehört nach oben, nicht ans Ende.
+ */
+export async function sendeBestaetigung(
+  an: string,
+  d: BestaetigungDaten,
+): Promise<string | null> {
+  const rahmen: Rahmen = {
+    eyebrow: "Noch nicht abgeschickt",
+    titel: "Bitte einmal bestätigen",
+    vorschau: `${d.mannschaft}: ein Klick, dann läuft es.`,
+    bloecke: [
+      {
+        art: "absatz",
+        text: `${anrede(d.vorname)} unter dieser Adresse wurde gerade Ausstattung für ${d.mannschaft} gemeldet. Bevor etwas passiert, brauchen wir einen Klick von dir.`,
+      },
+      { art: "knopf", text: "Ja, das war ich – Vorgang anlegen", href: d.anlegenLink },
+      {
+        art: "hinweis",
+        text: "Warst du das nicht? Dann ignorier diese Mail einfach. Ohne den Klick entsteht kein Vorgang, es wird niemand angeschrieben, und nach kurzer Zeit ist die Meldung von selbst weg.",
+      },
+      { art: "titel", text: "Das wurde gemeldet" },
+      { art: "absatz", text: d.ausstattungsart },
+      ...(d.artikel.length > 0
+        ? ([{ art: "artikel", zeilen: d.artikel }] as Rahmen["bloecke"])
+        : ([] as Rahmen["bloecke"])),
+      {
+        art: "absatz",
+        text: `Der Link gilt ${d.gueltigStunden} Stunden. Danach meldest du den Bedarf einfach neu.`,
+      },
+    ],
+  };
+
+  return sendeMail({
+    an,
+    betreff: `Bitte bestätigen: Ausstattung für ${d.mannschaft}`,
+    text: alsText(rahmen),
+    html: alsHtml(rahmen),
+  });
+}
+
 export type M2aDaten = {
   vorgang: string;
   /** Leer, wenn am Kontakt kein Vorname steht. */

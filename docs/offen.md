@@ -20,6 +20,7 @@ Stand 18.09.2026
 - Händler-XLSX in kitflow erzeugen oder Make
 
 ## Mail
+- Die Bestätigungsmail an `/neu` ist gebaut (`sendeBestaetigung`): ohne den Klick darin entsteht kein Vorgang.
 - M1 an den Trainer ist gebaut (Resend über REST, `src/lib/mail.ts`), in beiden Zuschnitten: Voranfrage und vollständig.
 - Nötige Variablen: `RESEND_API_KEY`, `KITFLOW_BASIS` (sonst `VERCEL_URL`), optional `MAIL_ABSENDER`, `MAIL_ANTWORT` und `MAIL_NUR_AN` als Testbremse.
 - Die Domain hubsport.club muss in Resend verifiziert sein, sonst lehnt Resend ab und es geht still keine Mail raus (der Fehler steht im Log).

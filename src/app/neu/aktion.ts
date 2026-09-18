@@ -6,26 +6,39 @@
  * Diese Seite hat als einzige keinen Token: der Link geht offen an alle
  * Trainer (docs/formulare.md). Deshalb prüft die Action jedes Feld selbst und
  * hat ein verstecktes Feld als Honigtopf. Wer es ausfüllt, ist kein Mensch.
+ *
+ * **Abschicken legt nichts an.** Die Prüfungen bleiben, wie sie waren — Format,
+ * Artikel, und ob die Adresse einem Trainer der Fußballsparte gehört. Aber ob
+ * der am Formular diese Adresse *besitzt*, kann keine davon beantworten: die
+ * Adressen des Vereins folgen dem Muster `vorname.nachname@…`, und wer Trainer
+ * ist, steht auf fussball.de. Ein Fremder konnte damit einen Vorgang in fremdem
+ * Namen anlegen.
+ *
+ * Deshalb entsteht hier nur ein Entwurf (`lib/entwurf.ts`), und eine Mail geht
+ * an die eingetragene Adresse. Erst der Klick darin legt den Vorgang an —
+ * `app/neu/bestaetigen/[entwurf]`.
  */
 
 import {
-  meldeBedarf,
   gueltigeTeams,
   darfMelden,
   kontaktPerEmail,
   type ArtikelEingabe,
-  type BedarfErgebnis,
+  type BedarfEingabe,
   type Empfaenger,
   type Modus,
 } from "@/lib/bedarf";
 import { AUSSTATTUNGSARTEN, BEFLOCKUNGEN, NUR_GROESSEN } from "@/lib/mannschaften";
 import { GROESSEN_FELD, groessenWerte } from "@/lib/groessen";
-import { absolut, sendeM1 } from "@/lib/mail";
+import { absolut, mailAktiv, sendeBestaetigung } from "@/lib/mail";
+import { GUELTIG_STUNDEN, parkeEntwurf } from "@/lib/entwurf";
+import { anlegenLink } from "@/lib/links";
 import type { ArtikelFuer, Groessenart } from "@/lib/typen";
 
 export type Ergebnis =
   | { stand: "leer" }
-  | { stand: "fertig"; ergebnis: BedarfErgebnis }
+  /** Der Entwurf steht, die Bestätigungsmail ist unterwegs. */
+  | { stand: "bestaetigen"; an: string }
   | { stand: "fehler"; text: string };
 
 function pflicht(formular: FormData, feld: string): string {
@@ -250,7 +263,7 @@ export async function bedarfMelden(_bisher: Ergebnis, formular: FormData): Promi
     }
   }
 
-  const ergebnis = await meldeBedarf({
+  const eingabe: BedarfEingabe = {
     modus,
     vorname,
     nachname,
@@ -268,34 +281,54 @@ export async function bedarfMelden(_bisher: Ergebnis, formular: FormData): Promi
     initialenNoetig,
     sponsor: pflicht(formular, "sponsor"),
     hinweise: pflicht(formular, "hinweise"),
-  });
+  };
 
-  if (!ergebnis) {
+  // Ohne Mailweg gaebe es keinen Weg zurueck: der Entwurf laege da und der
+  // Trainer wartete auf eine Bestaetigung, die nie kommt. Dann lieber gar nicht
+  // erst anfangen und es ehrlich sagen.
+  if (!mailAktiv()) {
     return {
       stand: "fehler",
-      text: "Der Vorgang konnte gerade nicht angelegt werden. Bitte versuch es in einer Minute noch einmal.",
+      text: "kitflow kann gerade keine Mails verschicken. Ohne die Bestätigungsmail lässt sich der Vorgang nicht anlegen – bitte versuch es später noch einmal.",
     };
   }
 
-  // M1 an den Trainer (docs/mails.md). Schlaegt der Versand fehl, bleibt der
-  // Vorgang gueltig: die Danke-Seite zeigt die Links dann weiter selbst an.
-  const mailAn = await sendeM1(email, {
-    vorgang: ergebnis.vorgang,
+  const entwurf = await parkeEntwurf(eingabe);
+  if (!entwurf) {
+    return {
+      stand: "fehler",
+      text: "Das hat gerade nicht geklappt. Bitte versuch es in einer Minute noch einmal.",
+    };
+  }
+
+  const pfad = anlegenLink(entwurf);
+  const link = pfad ? absolut(pfad) : null;
+  if (!link) {
+    return {
+      stand: "fehler",
+      text: "Das hat gerade nicht geklappt. Bitte versuch es in einer Minute noch einmal.",
+    };
+  }
+
+  const ging = await sendeBestaetigung(email, {
     vorname,
     mannschaft: person ? person.name : teams.join(", "),
-    nurGroessen,
-    artikel: ergebnis.artikelText,
-    groessenFrist,
-    statusLink: absolut(ergebnis.trainerStatus) ?? "",
-    bestaetigenLink: absolut(ergebnis.bestaetigen) ?? undefined,
-    ergaenzenLink: absolut(ergebnis.ergaenzen) ?? undefined,
+    ausstattungsart,
+    artikel: artikel.map((a) => ({
+      name: [a.hersteller, a.bezeichnung].filter(Boolean).join(" "),
+      detail: `${a.stueck} Stück je Person`,
+    })),
+    anlegenLink: link,
+    gueltigStunden: GUELTIG_STUNDEN,
   });
+  if (!ging) {
+    return {
+      stand: "fehler",
+      text: "Die Bestätigungsmail ging nicht raus. Bitte versuch es in einer Minute noch einmal.",
+    };
+  }
 
-  // `/neu` hat kein Token. Die Namen und die persoenlichen Links bleiben
-  // deshalb serverseitig: sie stehen in M1 und gehen an genau die Adresse, die
-  // oben als Kontakt bestaetigt wurde. Die Zahl reicht fuer die Danke-Seite.
-  return {
-    stand: "fertig",
-    ergebnis: { ...ergebnis, personen: [], mailAn: mailAn ?? undefined },
-  };
+  // `/neu` hat kein Token, deshalb steht hier nur die Adresse, die der
+  // Absender selbst eingetippt hat – kein Name, keine Zahl, kein Link.
+  return { stand: "bestaetigen", an: email };
 }

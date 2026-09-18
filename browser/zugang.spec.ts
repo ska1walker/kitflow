@@ -100,3 +100,39 @@ for (const seite of SEITEN) {
     await expect(page.getByRole("heading", { name: ABGEWIESEN })).toHaveCount(0);
   });
 }
+
+/**
+ * Der Bestätigungslink an `/neu`.
+ *
+ * `/neu` steht offen im Netz und kann nicht prüfen, ob der am Formular die
+ * eingetragene Adresse besitzt. Der Link aus der Bestätigungsmail ist der
+ * Beweis — und er hängt an derselben Signatur wie alle anderen Links.
+ */
+test("Bestätigen: ohne Token abgewiesen", async ({ page }) => {
+  await page.goto("/neu/bestaetigen/00000000-0000-4000-8000-000000000001");
+  await expect(page.getByRole("heading", { name: "Dieser Link funktioniert nicht" })).toBeVisible();
+});
+
+test("Bestätigen: verbogenes Token abgewiesen", async ({ page }) => {
+  await page.goto("/neu/bestaetigen/00000000-0000-4000-8000-000000000001?t=erfunden");
+  await expect(page.getByRole("heading", { name: "Dieser Link funktioniert nicht" })).toBeVisible();
+});
+
+test("Bestätigen: ein Token für eine andere Entwurfs-ID öffnet nichts", async ({ page }) => {
+  // Das Token ist echt, gehört aber zu einem anderen Entwurf.
+  const fremd = token("anlegen", "00000000-0000-4000-8000-000000000002");
+  await page.goto(`/neu/bestaetigen/00000000-0000-4000-8000-000000000001?t=${fremd}`);
+  await expect(page.getByRole("heading", { name: "Dieser Link funktioniert nicht" })).toBeVisible();
+});
+
+test("Bestätigen: das richtige Token kommt durch – und legt beim Öffnen nichts an", async ({
+  page,
+}) => {
+  // Mailprogramme öffnen Links vorab. Käme der Vorgang schon beim Öffnen, wäre
+  // die Bestätigung wertlos. Ohne Datenbank endet die Seite hier in einer
+  // Störung – und genau das beweist, dass sie erst dort etwas tut.
+  const echt = token("anlegen", "00000000-0000-4000-8000-000000000001");
+  await page.goto(`/neu/bestaetigen/00000000-0000-4000-8000-000000000001?t=${echt}`);
+  await expect(page.getByRole("heading", { name: "Dieser Link funktioniert nicht" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Vorgang jetzt anlegen" })).toHaveCount(0);
+});

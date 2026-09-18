@@ -64,6 +64,11 @@ function welt(mehr: Parameters<typeof stelleWelt>[0] = {}) {
   });
 }
 
+/** Wurde ein Entwurf geparkt? */
+function geparkt(aufrufe: { host: string; methode: string; pfad: string }[]) {
+  return aufrufe.some((a) => a.host === "db" && a.pfad === "vorgang_entwurf" && a.methode === "POST");
+}
+
 /** Wurde in der Datenbank ein Vorgang angelegt? */
 function angelegt(aufrufe: { host: string; methode: string; pfad: string }[]) {
   return aufrufe.some((a) => a.host === "db" && a.pfad === "vorgang" && a.methode === "POST");
@@ -99,13 +104,17 @@ describe("Wer einen Vorgang anlegen darf", () => {
     expect(aufrufe.some((a) => a.host === "resend")).toBe(false);
   });
 
-  test("eine bekannte Adresse kommt durch", async () => {
+  test("eine bekannte Adresse kommt durch – und legt trotzdem nichts an", async () => {
+    // Seit dem Bestaetigungsklick entsteht beim Abschicken nur ein Entwurf.
+    // Der Vorgang folgt erst auf den Klick in der Mail.
     const { aufrufe } = welt();
 
     const ergebnis = await bedarfMelden({ stand: "leer" }, formular());
 
-    expect(ergebnis.stand).toBe("fertig");
-    expect(angelegt(aufrufe)).toBe(true);
+    expect(ergebnis.stand).toBe("bestaetigen");
+    expect(angelegt(aufrufe)).toBe(false);
+    expect(geparkt(aufrufe)).toBe(true);
+    expect(aufrufe.some((a) => a.host === "resend")).toBe(true);
   });
 
   test("ein Mitglied ohne Funktion darf nicht melden", async () => {
@@ -146,8 +155,8 @@ describe("Wer einen Vorgang anlegen darf", () => {
     // Kai steht in HubSpot als „Spartenleiter;Spieler“, nicht als Trainer.
     const { aufrufe } = welt();
 
-    expect((await bedarfMelden({ stand: "leer" }, formular())).stand).toBe("fertig");
-    expect(angelegt(aufrufe)).toBe(true);
+    expect((await bedarfMelden({ stand: "leer" }, formular())).stand).toBe("bestaetigen");
+    expect(geparkt(aufrufe)).toBe(true);
   });
 
   test("schweigt HubSpot, ist das keine unbekannte Adresse", async () => {
@@ -161,38 +170,6 @@ describe("Wer einen Vorgang anlegen darf", () => {
     expect(ergebnis.stand).toBe("fehler");
     expect(ergebnis.stand === "fehler" && ergebnis.text).toContain("nicht an die Mitgliederdaten");
     expect(angelegt(aufrufe)).toBe(false);
-  });
-});
-
-describe("Was die Danke-Seite zu sehen bekommt", () => {
-  test("keine Namen und keine persönlichen Links", async () => {
-    welt();
-    const ergebnis = await bedarfMelden({ stand: "leer" }, formular());
-
-    expect(ergebnis.stand).toBe("fertig");
-    if (ergebnis.stand !== "fertig") return;
-
-    expect(ergebnis.ergebnis.personen).toEqual([]);
-    const text = JSON.stringify(ergebnis.ergebnis);
-    expect(text).not.toContain("Anna");
-    expect(text).not.toContain("Klein");
-    // Auch kein Größen-Link: er trägt die Personen-ID und öffnet fremde Größen.
-    expect(text).not.toContain("/g/");
-  });
-
-  test("die Zahl steht trotzdem da", async () => {
-    // Ohne sie stünde auf der Seite „es geht um 0 Spielerinnen und Spieler“.
-    welt();
-    const ergebnis = await bedarfMelden({ stand: "leer" }, formular());
-
-    expect(ergebnis.stand === "fertig" && ergebnis.ergebnis.anzahl).toBe(3);
-  });
-
-  test("der Status-Link des Trainers bleibt – er ist seiner", async () => {
-    welt();
-    const ergebnis = await bedarfMelden({ stand: "leer" }, formular());
-
-    expect(ergebnis.stand === "fertig" && ergebnis.ergebnis.trainerStatus).toContain("/v/");
   });
 });
 

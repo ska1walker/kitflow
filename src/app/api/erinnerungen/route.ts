@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { timingSafeEqual } from "node:crypto";
 import { erinnerungslauf } from "@/lib/erinnerung";
+import { raeumeEntwuerfe } from "@/lib/entwurf";
 
 /**
  * Der tägliche Erinnerungslauf, angestoßen von Vercel Cron (`vercel.json`).
@@ -39,6 +40,12 @@ export async function GET(anfrage: NextRequest) {
     return NextResponse.json({ fehler: "kein Zugang" }, { status: 401 });
   }
 
+  // Zuerst aufräumen, und zwar unabhängig davon, wie der Lauf ausgeht: in einem
+  // unbestätigten Entwurf stehen Name, Adresse und Telefon eines Menschen, der
+  // am Ende vielleicht gar nichts gemeldet hat. Das darf nicht liegenbleiben,
+  // nur weil HubSpot gerade schweigt.
+  const geraeumt = await raeumeEntwuerfe();
+
   const ergebnis = await erinnerungslauf();
   if (!ergebnis.ok) {
     console.error(`Erinnerungslauf abgebrochen: ${ergebnis.grund}`);
@@ -48,5 +55,5 @@ export async function GET(anfrage: NextRequest) {
   // Der Bericht trägt nur Zahlen. Vornamen und Adressen stehen in den Mails
   // und in keinem Log (CLAUDE.md).
   console.log(`Erinnerungslauf: ${JSON.stringify(ergebnis.bericht)}`);
-  return NextResponse.json({ ok: true, ...ergebnis.bericht });
+  return NextResponse.json({ ok: true, ...ergebnis.bericht, entwuerfeGeraeumt: geraeumt });
 }

@@ -1,4 +1,4 @@
-# Mailvorlagen M1–M7
+# Mailvorlagen M0–M7
 
 Stand: 10.09.2026 · Versand über Resend (Domain hubsport.club), aus kitflow als React-Email-Vorlagen im Coachbase-Design; Hintergrund-Mails ggf. aus Make (Modul resend:sendAnEmail). Links auf die Statusseite in jede Mail aufnehmen.
 
@@ -7,6 +7,53 @@ Anrede: Trainer, Eltern und Spieler per du, Händler per Sie.
 
 Absender für alle Mails: Eintracht Munster Fußball <ausstattung@hubsport.club> (Vorschlag; Domain hubsport.club in Resend verifiziert).
 Reply-To: kai.boehm@eintrachtmunster.de – dort landen Antworten, Angebote und Rechnungen
+
+---
+
+## M0 · Bitte bestätigen (→ die Adresse aus F1)
+
+Gebaut: `sendeBestaetigung` in `src/lib/mail.ts`.
+
+**Betreff:** Bitte bestätigen: Ausstattung für {{mannschaft}}
+
+Hallo {{vorname}},
+
+unter dieser Adresse wurde gerade Ausstattung für {{mannschaft}} gemeldet. Bevor etwas passiert, brauchen wir einen Klick von dir.
+
+[Ja, das war ich – Vorgang anlegen] → {{anlegen_link}}
+
+> Warst du das nicht? Dann ignorier diese Mail einfach. Ohne den Klick entsteht kein Vorgang, es wird niemand angeschrieben, und nach kurzer Zeit ist die Meldung von selbst weg.
+
+**Das wurde gemeldet**
+{{ausstattungsart}}
+{{artikelliste}}
+
+Der Link gilt 24 Stunden. Danach meldest du den Bedarf einfach neu.
+
+### Warum es sie gibt
+
+`/neu` steht offen im Netz. Es prüft, ob die eingetragene Adresse einem Trainer
+der Fußballsparte gehört — aber **nicht, ob der am Formular sie besitzt**. Die
+Vereinsadressen folgen dem Muster `vorname.nachname@eintrachtmunster.de`, und
+wer Trainer ist, steht auf fussball.de. Damit konnte ein Fremder einen Vorgang
+in fremdem Namen anlegen: 26 Kontakte daran und M1 an jemanden, der nichts
+gemeldet hat.
+
+Seit dem 18.09. entsteht beim Abschicken **nichts** — nur ein Entwurf
+(`src/lib/entwurf.ts`). Erst der Klick legt den Vorgang an und löst M1 aus.
+
+Die Mail muss zweierlei können: für den, der es war, ist sie ein
+Zwischenschritt; für den, der es **nicht** war, ist sie eine Warnung. Deshalb
+steht der Satz „ignorier diese Mail einfach" weit oben und nicht am Ende.
+
+Der Klick landet auf einer Seite, die erst **zeigt**, was angelegt würde, und
+einen Knopf hat. Das Öffnen allein legt nichts an: Mailprogramme und
+Virenscanner öffnen Links vorab, und dann entstünde der Vorgang, ohne dass ein
+Mensch ihn gesehen hat.
+
+Ein Entwurf trägt Name, Adresse und Telefon des Trainers. Die Tabelle steht
+hinter RLS ohne Policy, der Link gilt 24 Stunden, und der tägliche Lauf löscht,
+was älter als 72 Stunden ist.
 
 ---
 

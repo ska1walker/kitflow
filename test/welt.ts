@@ -39,6 +39,10 @@ export type Welt = {
    * das, was danach kommt.
    */
   mailsGestoert?: boolean;
+  /** Geparkte Entwürfe an `/neu` (der Bestätigungsklick). */
+  entwuerfe?: { id: string; email: string; daten: unknown; angelegt_am: string }[];
+  /** Nur `vorgang_entwurf` antwortet nicht. */
+  entwuerfeGestoert?: boolean;
 };
 
 export type Aufruf = {
@@ -339,6 +343,32 @@ function dbAntwort(
   if (pfad === "ereignis") {
     if (methode === "GET") return json(ereignisse);
     if (methode === "POST") return json([{}]);
+  }
+
+  if (pfad === "vorgang_entwurf") {
+    if (welt.entwuerfeGestoert) return json({ code: "PGRST000" }, 500);
+    const liste = (welt.entwuerfe ??= []);
+    if (methode === "POST") {
+      const z = koerper as { email: string; daten: unknown };
+      const neu = {
+        id: `00000000-0000-4000-8000-${String(liste.length + 1).padStart(12, "0")}`,
+        email: z.email,
+        daten: z.daten,
+        angelegt_am: new Date().toISOString(),
+      };
+      liste.push(neu);
+      return json([neu]);
+    }
+    if (methode === "GET") {
+      const id = (suche.get("id") ?? "").replace("eq.", "");
+      return json(liste.filter((e) => !id || e.id === id));
+    }
+    if (methode === "DELETE") {
+      const id = (suche.get("id") ?? "").replace("eq.", "");
+      const vorher = liste.length;
+      welt.entwuerfe = liste.filter((e) => (id ? e.id !== id : false));
+      return json(Array(vorher - welt.entwuerfe.length).fill({}));
+    }
   }
 
   if (pfad === "mail_versand") {
