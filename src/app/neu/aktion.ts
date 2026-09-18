@@ -8,7 +8,13 @@
  * hat ein verstecktes Feld als Honigtopf. Wer es ausfüllt, ist kein Mensch.
  */
 
-import { meldeBedarf, gueltigeTeams, type ArtikelEingabe, type BedarfErgebnis } from "@/lib/bedarf";
+import {
+  meldeBedarf,
+  gueltigeTeams,
+  kontaktPerEmail,
+  type ArtikelEingabe,
+  type BedarfErgebnis,
+} from "@/lib/bedarf";
 import { AUSSTATTUNGSARTEN, BEFLOCKUNGEN } from "@/lib/mannschaften";
 import { GROESSEN_FELD } from "@/lib/groessen";
 import type { ArtikelFuer, Groessenart } from "@/lib/typen";
@@ -81,6 +87,29 @@ export async function bedarfMelden(_bisher: Ergebnis, formular: FormData): Promi
   }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return { stand: "fehler", text: "Die E-Mail-Adresse sieht nicht richtig aus." };
+  }
+
+  // Der Riegel an der einzigen Seite ohne Token.
+  //
+  // Ohne ihn konnte jeder, der die Adresse von /neu kennt, eine Mannschaft
+  // waehlen, abschicken und bekam auf der Danke-Seite die Vor- und Nachnamen
+  // eines ganzen Jugendjahrgangs samt gueltiger Groessen-Links. Jetzt muss die
+  // Adresse als Kontakt bei Eintracht Munster stehen.
+  //
+  // Die Suche laeuft ueber die genaue Adresse: ein Treffer verraet nur dem
+  // etwas, der sie ohnehin hat.
+  const melder = await kontaktPerEmail(email);
+  if (melder.stand === "gestoert") {
+    return {
+      stand: "fehler",
+      text: "kitflow kommt gerade nicht an die Mitgliederdaten. Bitte versuch es in einer Minute noch einmal.",
+    };
+  }
+  if (melder.stand !== "da") {
+    return {
+      stand: "fehler",
+      text: "Diese E-Mail-Adresse kennt der Verein nicht. Bitte trag die Adresse ein, unter der du bei Eintracht Munster gemeldet bist — oder melde dich bei der Geschäftsstelle.",
+    };
   }
 
   const teams = gueltigeTeams(formular.getAll("teams").map(String));
