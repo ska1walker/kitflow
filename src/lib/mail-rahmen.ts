@@ -226,6 +226,9 @@ export function alsHtml(r: Rahmen): string {
     .karte{background:${INK_900} !important;border-color:${INK_800} !important;}
     .stark{color:${INK_50} !important;}
     .weich{color:${INK_300} !important;}
+    /* Bleibt INK_400: leise ist im Dunkeln schon richtig. Die Regel steht
+       trotzdem da, weil das important auch die Farbumkehr mancher Programme
+       schlaegt — ohne sie waere Metadaten-Grau das Einzige, was sie anfassen. */
     .leise{color:${INK_400} !important;}
     /* Violett auf Dunkel ist kaum zu lesen: pitch-600 wird pitch-400. */
     .akzent{color:${PITCH_400} !important;}

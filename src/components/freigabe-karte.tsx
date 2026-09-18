@@ -4,40 +4,20 @@ import { useActionState, useState } from "react";
 import { Badge, Button, Card } from "./ui";
 import { abschicken } from "./formular";
 import { IconCheck, IconStop } from "./icons";
-import { freigeben, ablehnen, type FreigabeStand } from "@/app/sparte/aktion";
+import { freigeben, ablehnen, type FreigabeAntwort } from "@/app/sparte/aktion";
+import { haendlerZahl } from "@/lib/texte";
+import type { OffeneFreigabe } from "@/lib/typen";
 
-/**
- * F9 · Die Händleranfrage freigeben.
- *
- * **Die einzige Stelle, an der ein Mensch eine Mail nach draußen auslöst.**
- * Deshalb steht hier, was rausgeht, bevor jemand klickt — und nicht erst
- * danach: Mannschaft, Stückzahl, an wie viele Händler.
- *
- * **Keine Namen.** Was in der Anfrage steht, steht auch hier nicht: die
- * Spartenleitung entscheidet über Stückzahlen, nicht über Personen. Wer die
- * Liste sehen will, öffnet die Statusseite des Vorgangs.
- *
- * Ablehnen ist gleichberechtigt und nicht versteckt. Ein Stopp ohne Grund wäre
- * für den Trainer dasselbe wie Stille, deshalb ist das Feld Pflicht.
- */
-export type OffeneFreigabe = {
-  nummer: string;
-  mannschaft: string;
-  gegenstand: string;
-  stueck: number;
-  haendler: number;
-  personen: number;
-  /** Signierter Link auf die Statusseite, falls er sich bauen ließ. */
-  href?: string;
-};
-
+/** Eine wartende Anfrage: was rausginge, und die beiden Knöpfe dazu. */
 function Zeile({ f }: { f: OffeneFreigabe }) {
-  const [stand, freigabeAbsenden, laeuftFrei] = useActionState<FreigabeStand, FormData>(freigeben, {
-    stand: "leer",
-  });
-  const [stopStand, stopAbsenden, laeuftStop] = useActionState<FreigabeStand, FormData>(ablehnen, {
-    stand: "leer",
-  });
+  const [stand, freigabeAbsenden, laeuftFrei] = useActionState<FreigabeAntwort, FormData>(
+    freigeben,
+    { stand: "leer" },
+  );
+  const [stopStand, stopAbsenden, laeuftStop] = useActionState<FreigabeAntwort, FormData>(
+    ablehnen,
+    { stand: "leer" },
+  );
   const [stoppen, setStoppen] = useState(false);
 
   const antwort = stand.stand !== "leer" ? stand : stopStand;
@@ -54,7 +34,7 @@ function Zeile({ f }: { f: OffeneFreigabe }) {
       <p className="mt-1 text-sm text-ink-600">
         {f.gegenstand} · {f.stueck} Stück für {f.personen}{" "}
         {f.personen === 1 ? "Person" : "Personen"} · an{" "}
-        {f.haendler === 1 ? "einen Händler" : `${f.haendler} Händler`}
+        {haendlerZahl(f.haendler)}
       </p>
       {f.href && (
         <p className="mt-1">
@@ -71,7 +51,7 @@ function Zeile({ f }: { f: OffeneFreigabe }) {
           </span>
           <span>
             {antwort.stand === "raus"
-              ? `Die Anfrage ist an ${antwort.anHaendler === 1 ? "einen Händler" : `${antwort.anHaendler} Händler`} gegangen. Der Trainer hat Bescheid bekommen.`
+              ? `Die Anfrage ist an ${haendlerZahl(antwort.anHaendler)} gegangen. Der Trainer hat Bescheid bekommen.`
               : "Gestoppt. Der Trainer hat den Grund per Mail bekommen."}
           </span>
         </p>
@@ -129,6 +109,20 @@ function Zeile({ f }: { f: OffeneFreigabe }) {
   );
 }
 
+/**
+ * F9 · Die Händleranfrage freigeben.
+ *
+ * **Die einzige Stelle, an der ein Mensch eine Mail nach draußen auslöst.**
+ * Deshalb steht hier, was rausgeht, bevor jemand klickt — und nicht erst
+ * danach: Mannschaft, Stückzahl, an wie viele Händler.
+ *
+ * **Keine Namen.** Was in der Anfrage steht, steht auch hier nicht: die
+ * Spartenleitung entscheidet über Stückzahlen, nicht über Personen. Wer die
+ * Liste sehen will, öffnet die Statusseite des Vorgangs.
+ *
+ * Ablehnen ist gleichberechtigt und nicht versteckt. Ein Stopp ohne Grund wäre
+ * für den Trainer dasselbe wie Stille, deshalb ist das Feld Pflicht.
+ */
 export function FreigabeKarte({ offen }: { offen: OffeneFreigabe[] }) {
   if (offen.length === 0) return null;
 

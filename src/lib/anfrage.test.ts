@@ -219,7 +219,7 @@ describe("An wen sie geht", () => {
 
     const ergebnis = await bestaetigenUndFreigeben();
 
-    expect(ergebnis.anHaendler).toBe(2);
+    expect(ergebnis).toEqual({ ok: true, anHaendler: 2 });
     const adressen = briefe(aufrufe).map((b) => b.to[0]);
     expect(adressen).toContain("hillebrecht@example.invalid");
     expect(adressen).toContain("bormann@example.invalid");
@@ -263,10 +263,7 @@ describe("Ohne hinterlegte Händler", () => {
 
     const ergebnis = await bestaetigeListe("AUS-2026-001", "Am Sportplatz 14", "");
 
-    expect(ergebnis.ok).toBe(true);
-    expect(ergebnis.ohneHaendler).toBe(true);
-    expect(ergebnis.anHaendler).toBe(0);
-    expect(ergebnis.wartetAufFreigabe).toBe(false);
+    expect(ergebnis).toEqual({ ok: true, wie: "ohne_haendler" });
     expect(briefe(aufrufe)).toHaveLength(0);
   });
 
@@ -323,7 +320,7 @@ describe("Nach dem Versand", () => {
 
     const ergebnis = await bestaetigenUndFreigeben();
 
-    expect(ergebnis.anHaendler).toBe(0);
+    expect(ergebnis).toEqual({ ok: false, grund: "versand" });
     const stufe = aufrufe.find(
       (a) =>
         a.pfad === "vorgang" &&
@@ -352,9 +349,7 @@ describe("Nach dem Versand", () => {
 
     const ergebnis = await bestaetigeListe("AUS-2026-001", "", "");
 
-    expect(ergebnis.ok).toBe(true);
-    expect(ergebnis.anHaendler).toBe(0);
-    expect(ergebnis.ohneHaendler).toBe(false);
+    expect(ergebnis).toEqual({ ok: true, wie: "fertig" });
     expect(briefe(aufrufe)).toHaveLength(0);
   });
 });

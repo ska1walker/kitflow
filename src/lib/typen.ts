@@ -113,6 +113,29 @@ export type VorgangsZeile = {
   id?: string;
 };
 
+/**
+ * Eine Händleranfrage, die auf die Freigabe der Spartenleitung wartet.
+ *
+ * **Keine Namen.** Die Spartenleitung entscheidet über Stückzahlen, nicht über
+ * Personen; wer die Liste sehen will, öffnet die Statusseite.
+ *
+ * Steht hier neben `VorgangsZeile` und nicht in der Karte, die sie anzeigt:
+ * gefüllt wird sie serverseitig (`ladeFreigaben`), und eine Datenschicht darf
+ * ihren eigenen Vertrag nicht von einer Client-Komponente beziehen.
+ */
+export type OffeneFreigabe = {
+  nummer: string;
+  mannschaft: string;
+  gegenstand: string;
+  /** Wie viele Stück insgesamt angefragt würden. */
+  stueck: number;
+  /** An wie viele Händler die Anfrage ginge. */
+  haendler: number;
+  personen: number;
+  /** Signierter Link auf die Statusseite, falls er sich bauen ließ. */
+  href?: string;
+};
+
 /** Wer die Groesse einer Person haelt. Ohne Kontaktdaten, ohne Betraege. */
 export type PersonGroesse = {
   feld: string;

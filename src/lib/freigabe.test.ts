@@ -99,9 +99,7 @@ describe("Ohne Freigabe geht nichts an die Händler", () => {
 
     const ergebnis = await bestaetigeListe("AUS-2026-001", "Am Sportplatz 14", "");
 
-    expect(ergebnis.ok).toBe(true);
-    expect(ergebnis.wartetAufFreigabe).toBe(true);
-    expect(ergebnis.anHaendler).toBe(0);
+    expect(ergebnis).toEqual({ ok: true, wie: "wartet" });
     expect(anHaendler(aufrufe)).toHaveLength(0);
   });
 
@@ -132,7 +130,7 @@ describe("Ohne Freigabe geht nichts an die Händler", () => {
     const ergebnis = await bestaetigeListe("AUS-2026-001", "Am Sportplatz 14", "");
 
     // Die Auskunft steht im Rückgabewert, den F3 anzeigt – nicht in einer Mail.
-    expect(ergebnis.wartetAufFreigabe).toBe(true);
+    expect(ergebnis).toMatchObject({ ok: true, wie: "wartet" });
     expect(briefe(aufrufe)).toHaveLength(0);
   });
 });
@@ -144,8 +142,7 @@ describe("Mit Freigabe", () => {
 
     const ergebnis = await gibFrei("AUS-2026-001", WER);
 
-    expect(ergebnis.ok).toBe(true);
-    expect(ergebnis.anHaendler).toBe(1);
+    expect(ergebnis).toEqual({ ok: true, anHaendler: 1 });
     expect(anHaendler(aufrufe)).toHaveLength(1);
     expect(stufenwechsel(aufrufe)[0]?.koerper).toMatchObject({ stufe: 2 });
   });
@@ -188,8 +185,7 @@ describe("Mit Freigabe", () => {
     const zweite = await gibFrei("AUS-2026-001", WER);
 
     expect(erste.ok).toBe(true);
-    expect(zweite.ok).toBe(false);
-    expect(zweite.grund).toBe("nicht_offen");
+    expect(zweite).toEqual({ ok: false, grund: "nicht_offen" });
     expect(anHaendler(aufrufe)).toHaveLength(1);
   });
 
@@ -200,8 +196,7 @@ describe("Mit Freigabe", () => {
 
     const ergebnis = await gibFrei("AUS-2026-001", WER);
 
-    expect(ergebnis.ok).toBe(false);
-    expect(ergebnis.grund).toBe("nicht_offen");
+    expect(ergebnis).toEqual({ ok: false, grund: "nicht_offen" });
     expect(anHaendler(aufrufe)).toHaveLength(0);
   });
 
@@ -277,8 +272,7 @@ describe("Ein Stand, den niemand kennt", () => {
 
     const ergebnis = await gibFrei("AUS-2026-001", WER);
 
-    expect(ergebnis.ok).toBe(false);
-    expect(ergebnis.grund).toBe("nicht_offen");
+    expect(ergebnis).toEqual({ ok: false, grund: "nicht_offen" });
     expect(anHaendler(aufrufe)).toHaveLength(0);
   });
 });
@@ -329,8 +323,7 @@ describe("Telegram und Todoist", () => {
 
     const ergebnis = await bestaetigeListe("AUS-2026-001", "Am Sportplatz 14", "");
 
-    expect(ergebnis.ok).toBe(true);
-    expect(ergebnis.wartetAufFreigabe).toBe(true);
+    expect(ergebnis).toEqual({ ok: true, wie: "wartet" });
     expect(freigabeWechsel(aufrufe)).toContainEqual(
       expect.objectContaining({ freigabe_stand: "offen" }),
     );

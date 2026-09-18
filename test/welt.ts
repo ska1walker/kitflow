@@ -93,6 +93,20 @@ function json(wert: unknown, status = 200) {
   });
 }
 
+/**
+ * Wer hier antwortet. Alles Unbekannte ist die Datenbank.
+ *
+ * Als Tabelle und nicht als Kette von Ternären: die Zuordnung stand sonst
+ * zweimal da — einmal als Flaggen, einmal beim Einsortieren —, und ein fünfter
+ * Nachbar hätte an beiden Stellen nachgezogen werden müssen.
+ */
+const NACHBARN: Record<string, Aufruf["host"]> = {
+  "api.hubapi.com": "hubspot",
+  "api.resend.com": "resend",
+  "api.telegram.org": "telegram",
+  "api.todoist.com": "todoist",
+};
+
 /** Setzt `fetch` auf diese Welt. Gibt Spion und Mitschrift zurück. */
 export function stelleWelt(welt: Welt) {
   const kontakte = welt.kontakte ?? [];
@@ -101,46 +115,35 @@ export function stelleWelt(welt: Welt) {
 
   const netz = vi.fn(async (url: string, o?: RequestInit) => {
     const adresse = new URL(String(url));
-    const beiHubspot = adresse.host === "api.hubapi.com";
-    const beiResend = adresse.host === "api.resend.com";
-    const beiTelegram = adresse.host === "api.telegram.org";
-    const beiTodoist = adresse.host === "api.todoist.com";
-    const pfad = beiHubspot ? adresse.pathname : adresse.pathname.replace(/^\/rest\/v1\//, "");
+    const host = NACHBARN[adresse.host] ?? "db";
+    const pfad = host === "hubspot" ? adresse.pathname : adresse.pathname.replace(/^\/rest\/v1\//, "");
     const methode = o?.method ?? (o?.body ? "POST" : "GET");
     const koerper = o?.body ? JSON.parse(String(o.body)) : undefined;
 
     aufrufe.push({
-      host: beiResend
-        ? "resend"
-        : beiHubspot
-          ? "hubspot"
-          : beiTelegram
-            ? "telegram"
-            : beiTodoist
-              ? "todoist"
-              : "db",
+      host,
       methode,
       pfad,
       suche: Object.fromEntries(adresse.searchParams),
       koerper,
     });
 
-    if (beiResend) {
+    if (host === "resend") {
       if (welt.resendGestoert) return json({ message: "kaputt" }, 422);
       return json({ id: "mail-1" });
     }
 
-    if (beiTelegram) {
+    if (host === "telegram") {
       if (welt.meldenGestoert) return json({ ok: false }, 403);
       return json({ ok: true });
     }
 
-    if (beiTodoist) {
+    if (host === "todoist") {
       if (welt.meldenGestoert) return json({ error: "kaputt" }, 500);
       return json({ id: "aufgabe-1" });
     }
 
-    if (beiHubspot) {
+    if (host === "hubspot") {
       if (welt.hubspotGestoert) return json({ message: "kaputt" }, 500);
       return hubspotAntwort(pfad, methode, koerper, kontakte);
     }

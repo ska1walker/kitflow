@@ -4,7 +4,8 @@ import { useActionState } from "react";
 import { abschicken } from "./formular";
 import { Badge, Button, Card } from "./ui";
 import { IconCheck, IconStop } from "./icons";
-import { listeBestaetigen, type Ergebnis } from "@/app/b/[vorgang]/aktion";
+import { listeBestaetigen, type Ausgang, type Ergebnis } from "@/app/b/[vorgang]/aktion";
+import { haendlerZahl } from "@/lib/texte";
 import type { Pruefung } from "@/lib/pruefungen";
 import type { Liste } from "@/lib/vorgaenge";
 
@@ -39,6 +40,62 @@ function PruefZeile({ pruefung }: { pruefung: Pruefung }) {
 }
 
 /**
+ * Was nach dem Bestätigen dasteht — ein Fall je Ausgang.
+ *
+ * Vorher wurde derselbe dreistufige Ternär-Turm dreimal durchlaufen: einmal für
+ * die Überschrift, einmal für den Text, einmal für den Hinweis zu den Namen.
+ * Jetzt entscheidet ein `switch`, und TypeScript merkt es, wenn ein Ausgang
+ * dazukommt und hier keiner ihn behandelt.
+ */
+function bestaetigungsText(wie: Ausgang, vorgang: string) {
+  switch (wie.wie) {
+    case "raus":
+      return {
+        titel: "Die Anfrage ist raus",
+        ohneNamen: true,
+        text: (
+          <>
+            Die Bestätigung steht am Vorgang {vorgang}, und die Anfrage ist an{" "}
+            {haendlerZahl(wie.anHaendler)} gegangen. Die Angebote kommen in Kopie an dich.
+          </>
+        ),
+      };
+    case "wartet":
+      return {
+        titel: "Liste bestätigt – die Anfrage geht zur Freigabe",
+        ohneNamen: true,
+        text: (
+          <>
+            Die Bestätigung steht am Vorgang {vorgang}. Die Spartenleitung gibt die Anfrage an die
+            Händler frei – erst dann geht sie raus. Du bekommst Bescheid, sobald es soweit ist.
+          </>
+        ),
+      };
+    case "ohne_haendler":
+      return {
+        titel: "Liste bestätigt",
+        ohneNamen: false,
+        text: (
+          <>
+            Die Bestätigung steht am Vorgang {vorgang}. Die Anfrage schickt die Spartenleitung
+            raus.
+          </>
+        ),
+      };
+    case "fertig":
+      return {
+        titel: "Liste bestätigt",
+        ohneNamen: false,
+        text: (
+          <>
+            Die Bestätigung steht am Vorgang {vorgang}. Damit ist er fertig – bestellt wird nichts.
+          </>
+        ),
+      };
+  }
+}
+
+/**
  * F3 · Liste bestätigen (docs/formulare.md).
  *
  * Der Trainer sieht jede Person mit ihren Größen. Fehlend oder veraltet ist
@@ -58,6 +115,7 @@ export function ListeFormular({ liste, token }: { liste: Liste; token: string })
   );
 
   if (ergebnis.stand === "bestaetigt") {
+    const ausgang = bestaetigungsText(ergebnis.wie, liste.vorgang);
     return (
       <Card className="p-6">
         <div className="flex items-start gap-3.5">
@@ -66,38 +124,10 @@ export function ListeFormular({ liste, token }: { liste: Liste; token: string })
           </span>
           <div>
             <h1 className="font-display text-xl font-bold tracking-tight text-ink-900">
-              {ergebnis.anHaendler > 0
-                ? "Die Anfrage ist raus"
-                : ergebnis.wartetAufFreigabe
-                  ? "Liste bestätigt – die Anfrage geht zur Freigabe"
-                  : "Liste bestätigt"}
+              {ausgang.titel}
             </h1>
-            <p className="mt-1.5 text-sm text-ink-600">
-              {ergebnis.anHaendler > 0 ? (
-                <>
-                  Die Bestätigung steht am Vorgang {liste.vorgang}, und die Anfrage ist an{" "}
-                  {ergebnis.anHaendler === 1 ? "einen Händler" : `${ergebnis.anHaendler} Händler`}{" "}
-                  gegangen. Die Angebote kommen in Kopie an dich.
-                </>
-              ) : ergebnis.wartetAufFreigabe ? (
-                <>
-                  Die Bestätigung steht am Vorgang {liste.vorgang}. Die Spartenleitung gibt die
-                  Anfrage an die Händler frei – erst dann geht sie raus. Du bekommst Bescheid,
-                  sobald es soweit ist.
-                </>
-              ) : ergebnis.ohneHaendler ? (
-                <>
-                  Die Bestätigung steht am Vorgang {liste.vorgang}. Die Anfrage schickt die
-                  Spartenleitung raus.
-                </>
-              ) : (
-                <>
-                  Die Bestätigung steht am Vorgang {liste.vorgang}. Damit ist er fertig – bestellt
-                  wird nichts.
-                </>
-              )}
-            </p>
-            {(ergebnis.anHaendler > 0 || ergebnis.wartetAufFreigabe) && (
+            <p className="mt-1.5 text-sm text-ink-600">{ausgang.text}</p>
+            {ausgang.ohneNamen && (
               <p className="mt-3 text-sm text-ink-500">
                 In der Anfrage stehen keine Namen deiner Spielerinnen und Spieler – nur
                 Stückzahlen, Größen und Nummern.

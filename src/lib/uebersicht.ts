@@ -13,11 +13,10 @@ import "server-only";
  */
 
 import { alleVorgaenge, offeneFreigaben, type VorgangSatz } from "./vorgaenge-db";
-import { ausgeschlossene } from "./ansicht";
+import { ausgeschlossene, mannschaftsName } from "./ansicht";
 import { anfrageHaendler } from "./haendler-adressen";
 import { statusLink } from "./links";
-import type { OffeneFreigabe } from "@/components/freigabe-karte";
-import type { StufeNr, VorgangsZeile } from "./typen";
+import type { OffeneFreigabe, StufeNr, VorgangsZeile } from "./typen";
 
 /** Ganze Tage seit einem Zeitpunkt. `null`, wenn es keinen gibt. */
 function tageSeit(wert: string | undefined): number | null {
@@ -76,7 +75,7 @@ function zurZeile(satz: VorgangSatz): VorgangsZeile {
 
   return {
     nummer: satz.nummer,
-    mannschaft: satz.mannschaften.join(", ") || satz.mannschaftscode || "Ohne Mannschaft",
+    mannschaft: mannschaftsName(satz),
     gegenstand: satz.ausstattungsart,
     stufe: satz.stufe as StufeNr,
     wartetAuf: wartetAuf(satz),
@@ -120,23 +119,39 @@ export async function ladeZeilen(): Promise<VorgangsZeile[] | null> {
 export async function ladeFreigaben(): Promise<OffeneFreigabe[] | null> {
   const vorgaenge = await offeneFreigaben();
   if (vorgaenge === null) return null;
+  return vorgaenge.map((satz) => ({
+    ...freigabeUmfang(satz),
+    href: statusLink(satz.nummer) ?? undefined,
+  }));
+}
 
-  const haendler = anfrageHaendler().length;
+/**
+ * Was die Spartenleitung zum Entscheiden braucht: Zahlen, keine Namen.
+ *
+ * **Eine Definition für zwei Ausgaben.** Dieselben Zahlen stehen in der
+ * Telegram-Nachricht und auf der Karte in `/sparte`, und die eine ist die
+ * Benachrichtigung über die andere — sie dürfen nie auseinanderlaufen. Vorher
+ * rechneten beide Seiten getrennt, und der Kopfzähler sogar unterschiedlich
+ * (einmal `personenZahl`, einmal von Hand gefiltert).
+ *
+ * Die Stückzahl ist eine **Schätzung** aus Köpfen mal Artikeln, nicht
+ * `baueAnfrage().gesamtStueck`: die echte Zahl zu bauen hieße, die ganze Liste
+ * samt Namen aus HubSpot zu laden, nur um eine Zahl in eine Chatnachricht zu
+ * schreiben. Wer keine Größe eingetragen hat, fällt in der echten Anfrage
+ * später weg — die Schätzung liegt also eher zu hoch als zu niedrig.
+ */
+export function freigabeUmfang(satz: VorgangSatz): Omit<OffeneFreigabe, "href"> {
+  const koepfe = personenZahl(satz);
+  const jeKopf = satz.artikel.reduce((summe, a) => summe + Math.max(1, a.stueck), 0);
 
-  return vorgaenge.map((satz) => {
-    const koepfe = personenZahl(satz);
-    const jeKopf = satz.artikel.reduce((summe, a) => summe + Math.max(1, a.stueck), 0);
-
-    return {
-      nummer: satz.nummer,
-      mannschaft: satz.mannschaften.join(", ") || satz.mannschaftscode || "Ohne Mannschaft",
-      gegenstand: satz.ausstattungsart,
-      stueck: koepfe * jeKopf,
-      haendler,
-      personen: koepfe,
-      href: statusLink(satz.nummer) ?? undefined,
-    };
-  });
+  return {
+    nummer: satz.nummer,
+    mannschaft: mannschaftsName(satz),
+    gegenstand: satz.ausstattungsart,
+    stueck: koepfe * jeKopf,
+    haendler: anfrageHaendler().length,
+    personen: koepfe,
+  };
 }
 
 /**

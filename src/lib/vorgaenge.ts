@@ -32,6 +32,7 @@ import {
   gefragteArten,
   haendler,
   istJugend,
+  mannschaftsName,
   nurGroessen,
   pruefungen,
   rollen,
@@ -56,13 +57,8 @@ import {
 import { spiegele, spiegelePersonen } from "./spiegel";
 import { anfrageHaendler, haendlerAktiv } from "./haendler-adressen";
 import { alsCsv, baueAnfrage, summenText } from "./anfrage";
-import {
-  freigabeWeg,
-  freigeberName,
-  ruftZurFreigabe,
-  type Freigeber,
-  type FreigabeRuf,
-} from "./freigabe";
+import { freigabeWeg, freigeberName, ruftZurFreigabe, type Freigeber } from "./freigabe";
+import { freigabeUmfang } from "./uebersicht";
 import { absolut, mailAktiv, sendeM2a, sendeM4, sendeM4b, sendeM5 } from "./mail";
 import { kontakteDerMannschaft } from "./bedarf";
 import { bestaetigenLink, groessenLink, statusLink, trainerLink } from "./links";
@@ -508,15 +504,25 @@ const BEFLOCKUNG = [
   "Torwartartikel wie Trikots, Nummer laut Tabelle",
 ];
 
-export type BestaetigungsErgebnis = {
-  ok: boolean;
-  /** An wie viele Haendler die Anfrage ging. */
-  anHaendler: number;
-  /** Kein Haendler hinterlegt – die Anfrage bleibt liegen. */
-  ohneHaendler: boolean;
-  /** Die Anfrage wartet auf die Freigabe der Spartenleitung. */
-  wartetAufFreigabe: boolean;
-};
+/**
+ * Wie die Bestaetigung ausging — genau eines von fuenf, nie zwei davon.
+ *
+ * Vorher waren es drei Flaggen nebeneinander (`anHaendler`, `ohneHaendler`,
+ * `wartetAufFreigabe`). Die beschreiben ein und denselben Ausgang, lassen aber
+ * acht Kombinationen zu, von denen vier unsinnig sind, und zwangen jeden
+ * Aufrufer, den Ausgang aus den Flaggen wieder zusammenzusetzen. Als Union
+ * steht er einmal da und die Oberflaeche liest ihn in einem `switch`.
+ */
+export type BestaetigungsErgebnis =
+  | { ok: false }
+  /** Reiner Groessencheck: es gibt nichts zu bestellen, der Vorgang ist fertig. */
+  | { ok: true; wie: "fertig" }
+  /** Kein Haendler hinterlegt – es gibt nichts freizugeben. */
+  | { ok: true; wie: "ohne_haendler" }
+  /** Die Anfrage liegt jetzt bei der Spartenleitung. */
+  | { ok: true; wie: "wartet" }
+  /** Eine Regel hat sofort freigegeben, die Anfrage ging raus. */
+  | { ok: true; wie: "raus"; anHaendler: number };
 
 /**
  * Nimmt die Bestaetigung des Trainers entgegen und beantragt die Freigabe.
@@ -537,15 +543,8 @@ export async function bestaetigeListe(
   lieferadresse: string,
   hinweis: string,
 ): Promise<BestaetigungsErgebnis> {
-  const misserfolg = {
-    ok: false,
-    anHaendler: 0,
-    ohneHaendler: false,
-    wartetAufFreigabe: false,
-  };
-
   const ergebnis = await vorgangPerNummer(nummer);
-  if (ergebnis.stand !== "da") return misserfolg;
+  if (ergebnis.stand !== "da") return { ok: false };
   const satz = ergebnis.vorgang;
 
   const ok = await aendereVorgang(satz.id, {
@@ -553,7 +552,7 @@ export async function bestaetigeListe(
     ...(lieferadresse ? { lieferadresse } : {}),
     ...(hinweis ? { hinweisHaendler: hinweis } : {}),
   });
-  if (!ok) return misserfolg;
+  if (!ok) return { ok: false };
 
   await vermerke(satz.id, {
     art: "liste_bestaetigt",
@@ -563,24 +562,26 @@ export async function bestaetigeListe(
 
   // Ein reiner Groessencheck geht an keinen Haendler: es gibt nichts zu
   // bestellen. Er endet mit der Bestaetigung, und das ist richtig so.
-  if (nurGroessen(satz)) {
-    return { ok: true, anHaendler: 0, ohneHaendler: false, wartetAufFreigabe: false };
-  }
+  if (nurGroessen(satz)) return { ok: true, wie: "fertig" };
 
   // Ohne hinterlegte Haendler gibt es nichts freizugeben. Das jetzt schon zu
   // sagen ist ehrlicher, als eine Freigabe zu erbitten, die ins Leere liefe.
   if (!haendlerAktiv()) {
-    await vermerke(satz.id, {
-      art: "anfrage_offen",
-      text: "Anfrage nicht vorbereitet: kein Händler hinterlegt",
-      intern: true,
-      abStufe: 1,
-    });
-    return { ok: true, anHaendler: 0, ohneHaendler: true, wartetAufFreigabe: false };
+    await vermerke(satz.id, { art: "anfrage_offen", text: OHNE_HAENDLER, intern: true, abStufe: 1 });
+    return { ok: true, wie: "ohne_haendler" };
   }
 
   return beantrageFreigabe(satz);
 }
+
+/**
+ * Der eine Satz fuer „kein Haendler hinterlegt“.
+ *
+ * Er stand zweimal im Code, in zwei Fassungen („nicht vorbereitet“ und „nicht
+ * verschickt“) — wer spaeter nach `anfrage_offen` sucht, fand zwei Schreiber
+ * und konnte nicht sagen, welcher gefeuert hat.
+ */
+const OHNE_HAENDLER = "Anfrage nicht möglich: kein Händler hinterlegt (HAENDLER)";
 
 /**
  * Stellt den Vorgang auf „Freigabe offen“ und ruft die Spartenleitung.
@@ -592,9 +593,7 @@ export async function bestaetigeListe(
  */
 async function beantrageFreigabe(satz: VorgangSatz): Promise<BestaetigungsErgebnis> {
   const gesetzt = await setzeFreigabe(satz.id, "offen");
-  if (!gesetzt) {
-    return { ok: false, anHaendler: 0, ohneHaendler: false, wartetAufFreigabe: false };
-  }
+  if (!gesetzt) return { ok: false };
 
   await vermerke(satz.id, {
     art: "freigabe_offen",
@@ -604,46 +603,61 @@ async function beantrageFreigabe(satz: VorgangSatz): Promise<BestaetigungsErgebn
   });
 
   // Laeuft es automatisch, ist der Antrag im selben Atemzug erledigt.
-  const regel = freigabeWeg(satz);
+  const regel = freigabeWeg();
   if (regel) {
     const frei = await gibFrei(satz.nummer, regel);
-    return {
-      ok: frei.ok,
-      anHaendler: frei.anHaendler,
-      ohneHaendler: frei.ohneHaendler,
-      wartetAufFreigabe: false,
-    };
+    return frei.ok ? { ok: true, wie: "raus", anHaendler: frei.anHaendler } : { ok: false };
   }
 
-  await ruftZurFreigabe(satz.id, rufVon(satz));
-  return { ok: true, anHaendler: 0, ohneHaendler: false, wartetAufFreigabe: true };
+  // Dieselben Zahlen, die auch auf der Karte in /sparte stehen — die Nachricht
+  // ist die Benachrichtigung ueber die Karte, sie duerfen nie auseinanderlaufen.
+  await ruftZurFreigabe(satz.id, { ...freigabeUmfang(satz), link: absolut("/sparte") ?? "" });
+  return { ok: true, wie: "wartet" };
 }
 
-/** Was in der Telegram-Nachricht und der Todoist-Aufgabe steht. Ohne Namen. */
-function rufVon(satz: VorgangSatz): FreigabeRuf {
-  // Die Stueckzahl wird aus Artikeln und Personen geschaetzt, nicht aus der
-  // fertigen Anfrage: die zu bauen hiesse, die Liste samt Namen zu laden, nur
-  // um eine Zahl in eine Chatnachricht zu schreiben.
-  const koepfe = satz.personen.filter((p) => !p.ausgeschlossen).length;
-  const jeKopf = satz.artikel.reduce((summe, a) => summe + Math.max(1, a.stueck), 0);
+/**
+ * Wie die Entscheidung ausging.
+ *
+ * Als Union und nicht als Beutel mit `ok`/`anHaendler`/`ohneHaendler`/`grund`:
+ * dort waren auf jedem Zweig drei der vier Felder bedeutungslos, `ohneHaendler`
+ * sagte dasselbe wie `grund === "ohne_haendler"`, und `grund` war ein freier
+ * String — die Oberflaeche konnte einen Grund uebersehen, ohne dass es auffiel.
+ * Genau das war passiert: fuer `"versand"` gab es keinen Text.
+ *
+ * Dieselbe Form wie `Abruf` in `vorgaenge-db.ts` und `VersandErgebnis` weiter
+ * unten in dieser Datei.
+ */
+export type FreigabeGrund =
+  | "gestoert"
+  | "unbekannt"
+  | "nicht_offen"
+  | "ohne_haendler"
+  | "versand";
 
-  return {
-    nummer: satz.nummer,
-    mannschaft: satz.mannschaften.join(", ") || satz.mannschaftscode || "Ohne Mannschaft",
-    gegenstand: satz.ausstattungsart,
-    stueck: koepfe * jeKopf,
-    haendler: anfrageHaendler().length,
-    link: absolut("/sparte") ?? "",
-  };
+export type FreigabeErgebnis =
+  | { ok: true; anHaendler: number }
+  | { ok: false; grund: FreigabeGrund };
+
+/**
+ * Der Vorgang zu einer Nummer, sofern seine Freigabe wirklich aussteht.
+ *
+ * Freigeben und Ablehnen sind zwei Entscheidungen mit derselben Vorbedingung.
+ * Sie stand vorher zweimal wortgleich da; eine fuenfte Bedingung haette an
+ * beiden Tueren nachgezogen werden muessen.
+ */
+async function offeneFreigabeZu(
+  nummer: string,
+): Promise<{ satz: VorgangSatz } | { grund: FreigabeGrund }> {
+  const ergebnis = await vorgangPerNummer(nummer);
+  if (ergebnis.stand === "gestoert") return { grund: "gestoert" };
+  if (ergebnis.stand !== "da") return { grund: "unbekannt" };
+
+  // Nur was wirklich offen ist. Sonst gingen zwei Klicks auf denselben Vorgang
+  // als zwei Anfragen an die Haendler raus – und die zweite waere nicht zu
+  // erklaeren.
+  if (ergebnis.vorgang.freigabe.stand !== "offen") return { grund: "nicht_offen" };
+  return { satz: ergebnis.vorgang };
 }
-
-export type FreigabeErgebnis = {
-  ok: boolean;
-  anHaendler: number;
-  ohneHaendler: boolean;
-  /** Warum es nicht ging – für die Rückmeldung auf /sparte. */
-  grund?: string;
-};
 
 /**
  * Gibt die Anfrage frei und schickt sie raus.
@@ -654,44 +668,35 @@ export type FreigabeErgebnis = {
  * hinsieht.
  */
 export async function gibFrei(nummer: string, wer: Freigeber): Promise<FreigabeErgebnis> {
-  const ergebnis = await vorgangPerNummer(nummer);
-  if (ergebnis.stand === "gestoert") {
-    return { ok: false, anHaendler: 0, ohneHaendler: false, grund: "gestoert" };
-  }
-  if (ergebnis.stand !== "da") {
-    return { ok: false, anHaendler: 0, ohneHaendler: false, grund: "unbekannt" };
-  }
-  const satz = ergebnis.vorgang;
+  const zugriff = await offeneFreigabeZu(nummer);
+  if ("grund" in zugriff) return { ok: false, grund: zugriff.grund };
+  const satz = zugriff.satz;
 
-  // Nur was wirklich offen ist. Sonst gingen zwei Klicks auf denselben Vorgang
-  // als zwei Anfragen an die Haendler raus – und die zweite waere nicht zu
-  // erklaeren.
-  if (satz.freigabe.stand !== "offen") {
-    return { ok: false, anHaendler: 0, ohneHaendler: false, grund: "nicht_offen" };
-  }
-
-  const verschickt = await verschickeAnfrage(
-    nummer,
-    satz.lieferadresse ?? "",
-    satz.hinweisHaendler ?? "",
-  );
-
-  if (verschickt.verschickt === 0) {
+  // Die Haendler koennen zwischen Bestaetigung und Freigabe weggefallen sein.
+  // Hier gefragt statt aus „nichts verschickt“ erschlossen: der Grund steht am
+  // Entscheidungspunkt, nicht als Ausnahme am Ende.
+  if (!haendlerAktiv()) {
     await vermerke(satz.id, {
       art: "freigabe_ohne_versand",
-      text: verschickt.ohneHaendler
-        ? "Freigabe erteilt, aber kein Händler hinterlegt – nichts verschickt"
-        : "Freigabe erteilt, aber die Anfrage ging nicht raus",
+      text: OHNE_HAENDLER,
       sub: freigeberName(wer),
       intern: true,
       abStufe: 1,
     });
-    return {
-      ok: false,
-      anHaendler: 0,
-      ohneHaendler: verschickt.ohneHaendler,
-      grund: verschickt.ohneHaendler ? "ohne_haendler" : "versand",
-    };
+    return { ok: false, grund: "ohne_haendler" };
+  }
+
+  const verschickt = await verschickeAnfrage(satz);
+
+  if (verschickt === 0) {
+    await vermerke(satz.id, {
+      art: "freigabe_ohne_versand",
+      text: "Freigabe erteilt, aber die Anfrage ging nicht raus",
+      sub: freigeberName(wer),
+      intern: true,
+      abStufe: 1,
+    });
+    return { ok: false, grund: "versand" };
   }
 
   await setzeFreigabe(satz.id, "freigegeben", freigeberName(wer));
@@ -706,7 +711,7 @@ export async function gibFrei(nummer: string, wer: Freigeber): Promise<FreigabeE
     abStufe: 1,
   });
 
-  return { ok: true, anHaendler: verschickt.verschickt, ohneHaendler: false };
+  return { ok: true, anHaendler: verschickt };
 }
 
 /**
@@ -721,21 +726,12 @@ export async function lehneAb(
   wer: Freigeber,
   grund: string,
 ): Promise<FreigabeErgebnis> {
-  const ergebnis = await vorgangPerNummer(nummer);
-  if (ergebnis.stand === "gestoert") {
-    return { ok: false, anHaendler: 0, ohneHaendler: false, grund: "gestoert" };
-  }
-  if (ergebnis.stand !== "da") {
-    return { ok: false, anHaendler: 0, ohneHaendler: false, grund: "unbekannt" };
-  }
-  const satz = ergebnis.vorgang;
-
-  if (satz.freigabe.stand !== "offen") {
-    return { ok: false, anHaendler: 0, ohneHaendler: false, grund: "nicht_offen" };
-  }
+  const zugriff = await offeneFreigabeZu(nummer);
+  if ("grund" in zugriff) return { ok: false, grund: zugriff.grund };
+  const satz = zugriff.satz;
 
   const gesetzt = await setzeFreigabe(satz.id, "abgelehnt", freigeberName(wer), grund);
-  if (!gesetzt) return { ok: false, anHaendler: 0, ohneHaendler: false, grund: "versand" };
+  if (!gesetzt) return { ok: false, grund: "versand" };
 
   await vermerke(satz.id, {
     art: "freigabe_abgelehnt",
@@ -751,13 +747,13 @@ export async function lehneAb(
     const liste = absolut(bestaetigenLink(satz.nummer) ?? "");
     await sendeM4b(satz.trainerEmail, {
       vorgang: satz.nummer,
-      mannschaft: satz.mannschaften.join(", ") || satz.mannschaftscode || "deine Mannschaft",
+      mannschaft: mannschaftsName(satz, "deine Mannschaft"),
       grund,
       listeLink: liste ?? "",
     });
   }
 
-  return { ok: true, anHaendler: 0, ohneHaendler: false };
+  return { ok: true, anHaendler: 0 };
 }
 
 /**
@@ -766,43 +762,28 @@ export async function lehneAb(
  * Getrennt von `bestaetigeListe`, weil hier alles passiert, was nach draussen
  * geht — und weil sich das so einzeln pruefen laesst.
  */
-async function verschickeAnfrage(
-  nummer: string,
-  lieferadresse: string,
-  hinweis: string,
-): Promise<{ verschickt: number; ohneHaendler: boolean }> {
+async function verschickeAnfrage(satz: VorgangSatz): Promise<number> {
   const empfaenger = anfrageHaendler();
-  if (empfaenger.length === 0) {
-    const ergebnis = await vorgangPerNummer(nummer);
-    if (ergebnis.stand === "da") {
-      await vermerke(ergebnis.vorgang.id, {
-        art: "anfrage_offen",
-        text: "Anfrage nicht verschickt: kein Händler hinterlegt",
-        intern: true,
-        abStufe: 1,
-      });
-    }
-    return { verschickt: 0, ohneHaendler: true };
-  }
-  if (!mailAktiv()) return { verschickt: 0, ohneHaendler: false };
+  if (empfaenger.length === 0 || !mailAktiv()) return 0;
 
-  const abruf = await ladeListe(nummer);
-  if (abruf.stand !== "da") return { verschickt: 0, ohneHaendler: false };
+  const abruf = await ladeListe(satz.nummer);
+  if (abruf.stand !== "da") return 0;
   const liste = abruf.daten;
-
-  const ergebnis = await vorgangPerNummer(nummer);
-  if (ergebnis.stand !== "da") return { verschickt: 0, ohneHaendler: false };
-  const satz = ergebnis.vorgang;
 
   const anfrage = baueAnfrage(liste, satz.artikel);
   // Ohne eine einzige Zeile gibt es nichts anzufragen. Das faengt schon
   // `pruefeVorgang` ab; hier steht es, damit kein leeres Blatt rausgeht.
-  if (anfrage.zeilen.length === 0) return { verschickt: 0, ohneHaendler: false };
+  if (anfrage.zeilen.length === 0) return 0;
 
   const csv = alsCsv(anfrage, liste.trikotsatz, liste.initialenNoetig);
   const antwortAn = process.env.MAIL_ANTWORT || "kai.boehm@eintrachtmunster.de";
 
+  // Nacheinander und nicht parallel: Resend laesst im Standard zwei Anfragen je
+  // Sekunde durch. Mit zwei Haendlern plus M5 in derselben Anfrage liegt
+  // paralleler Versand genau auf der Kante, und ein 429 hiesse hier, dass ein
+  // Haendler still nichts bekommt.
   let verschickt = 0;
+  const umgeleitet: boolean[] = [];
   for (const h of empfaenger) {
     const ging = await sendeM4(h.email, {
       vorgang: satz.nummer,
@@ -812,18 +793,22 @@ async function verschickeAnfrage(
       gesamtStueck: anfrage.gesamtStueck,
       beflockung: BEFLOCKUNG,
       wunschtermin: satz.stufeFrist ?? "",
-      lieferadresse,
-      hinweisHaendler: hinweis,
+      lieferadresse: satz.lieferadresse ?? "",
+      hinweisHaendler: satz.hinweisHaendler ?? "",
       trainerEmail: satz.trainerEmail ?? "",
       antwortAn,
       csv,
     });
     if (!ging) continue;
     verschickt += 1;
-    await vermerkeMail(satz.id, MAIL_ANFRAGE, null, ging !== h.email);
+    umgeleitet.push(ging !== h.email);
   }
 
-  if (verschickt === 0) return { verschickt: 0, ohneHaendler: false };
+  if (verschickt === 0) return 0;
+
+  // Die Mailspuren erst danach: im Versandweg zwischen zwei Haendlern zu
+  // schreiben verzoegert nur den zweiten.
+  for (const war of umgeleitet) await vermerkeMail(satz.id, MAIL_ANFRAGE, null, war);
 
   await setzeStufe(satz.id, 2);
   await vermerke(satz.id, {
@@ -845,10 +830,12 @@ async function verschickeAnfrage(
     }
   }
 
-  const frisch = await vorgangPerNummer(nummer);
-  if (frisch.stand === "da") await spiegele(frisch.vorgang);
+  // Die Stufe haben wir gerade selbst gesetzt, sonst hat sich nichts geaendert —
+  // dafuer den ganzen Vorgang samt Artikeln und Personen neu zu laden waere eine
+  // Abfrage fuer eine Zahl, die wir schon kennen.
+  await spiegele({ ...satz, stufe: 2 });
 
-  return { verschickt, ohneHaendler: false };
+  return verschickt;
 }
 
 /* ------------------------------------------------------------------ *

@@ -42,6 +42,21 @@ export function nurGroessen(satz: VorgangSatz): boolean {
   return satz.ausstattungsart === NUR_GROESSEN;
 }
 
+/**
+ * Der Name der Mannschaft, wie ein Mensch ihn lesen soll.
+ *
+ * Stand vorher als Ausdruck an zehn Stellen, in drei Spielarten — und dieser
+ * Name erreicht den Händler (M4), den Trainer (M4b), Telegram und die
+ * Übersicht. Drei verschiedene Antworten auf „keine Mannschaft hinterlegt“
+ * waren schon sichtbar, bevor die Freigabe drei weitere dazustellte.
+ *
+ * `ohne` bleibt einstellbar, weil eine Mail „für **deine Mannschaft**“ schreibt,
+ * wo eine Liste „Ohne Mannschaft“ braucht.
+ */
+export function mannschaftsName(satz: VorgangSatz, ohne = "Ohne Mannschaft"): string {
+  return satz.mannschaften.join(", ") || satz.mannschaftscode || ohne;
+}
+
 /** Wer in diesem Vorgang diesmal nichts bekommt. */
 export function ausgeschlossene(satz: VorgangSatz): Set<string> {
   return new Set(satz.personen.filter((p) => p.ausgeschlossen).map((p) => p.kontaktId));

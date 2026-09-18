@@ -13,21 +13,16 @@
 
 import { pruefe } from "@/lib/links";
 import { darfBestaetigen, gefallene } from "@/lib/pruefungen";
-import { bestaetigeListe, ladeListe } from "@/lib/vorgaenge";
+import { bestaetigeListe, ladeListe, type BestaetigungsErgebnis } from "@/lib/vorgaenge";
+
+/** Wie es ausging, wenn es geklappt hat – ohne den Fehlschlag. */
+export type Ausgang = Extract<BestaetigungsErgebnis, { ok: true }>;
 
 export type Ergebnis =
   | { stand: "leer" }
-  | {
-      stand: "bestaetigt";
-      /** An wie viele Haendler die Anfrage ging. Heute immer 0: erst die
-       *  Freigabe verschickt. Bleibt im Typ, weil eine automatische Freigabe
-       *  (freigabe.ts) direkt hier zuschlagen kann. */
-      anHaendler: number;
-      /** Es ist kein Haendler hinterlegt – es gibt nichts freizugeben. */
-      ohneHaendler: boolean;
-      /** Die Anfrage liegt jetzt bei der Spartenleitung. */
-      wartetAufFreigabe: boolean;
-    }
+  /** `wie` wird durchgereicht, statt in Flaggen zerlegt und wieder
+   *  zusammengesetzt zu werden – die Seite liest es in einem `switch`. */
+  | { stand: "bestaetigt"; wie: Ausgang }
   | { stand: "fehler"; text: string };
 
 export async function listeBestaetigen(
@@ -80,10 +75,5 @@ export async function listeBestaetigen(
     };
   }
 
-  return {
-    stand: "bestaetigt",
-    anHaendler: bestaetigt.anHaendler,
-    ohneHaendler: bestaetigt.ohneHaendler,
-    wartetAufFreigabe: bestaetigt.wartetAufFreigabe,
-  };
+  return { stand: "bestaetigt", wie: bestaetigt };
 }

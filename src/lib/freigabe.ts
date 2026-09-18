@@ -19,8 +19,9 @@ import "server-only";
  * geraten, und geraten wird bei einer Mail nach draußen nicht.
  */
 
-import { vermerke, type VorgangSatz } from "./vorgaenge-db";
+import { vermerke } from "./vorgaenge-db";
 import { telegram, telegramAktiv, todoist, todoistAktiv } from "./melden";
+import { haendlerZahl } from "./texte";
 
 /**
  * Wer entschieden hat. Eine Adresse aus `SPARTE_EMAILS` oder der Name einer
@@ -43,14 +44,13 @@ export function freigeberName(wer: Freigeber): string {
  * `Freigeber` vom Typ `regel` zurück — und `beantrageFreigabe` gibt dann sofort
  * frei, statt zu fragen. Der übrige Weg bleibt, wie er ist.
  *
- * Was eine solche Regel prüfen müsste, steht in docs/freigabe.md; sie ist
- * bewusst noch nicht geschrieben, weil niemand sie bisher festgelegt hat.
+ * **Ohne Parameter**, obwohl die Regel den Vorgang brauchen wird: was genau sie
+ * ansehen muss, ist offen (docs/freigabe.md nennt den Betrag — den es zu diesem
+ * Zeitpunkt noch gar nicht gibt). Einen geratenen Parameter hereinzureichen und
+ * ungelesen wegzuwerfen sähe aus wie eine Entscheidung, die niemand getroffen
+ * hat. Es gibt genau eine Aufrufstelle; sie mitzuändern kostet eine Zeile.
  */
-export function freigabeWeg(satz: VorgangSatz): Freigeber | null {
-  // Der Vorgang wird schon hereingereicht, obwohl heute niemand ihn ansieht:
-  // die Regel wird ihn brauchen (Betrag, Mannschaft, Stückzahl), und die
-  // Aufrufer sollen dafür später nicht angefasst werden müssen.
-  void satz;
+export function freigabeWeg(): Freigeber | null {
   return null;
 }
 
@@ -81,7 +81,7 @@ export function rufText(ruf: FreigabeRuf): string {
   const zeilen = [
     `Freigabe nötig: ${ruf.nummer}`,
     `${ruf.mannschaft} · ${ruf.gegenstand}`,
-    `${ruf.stueck} Stück an ${ruf.haendler === 1 ? "einen Händler" : `${ruf.haendler} Händler`}`,
+    `${ruf.stueck} Stück an ${haendlerZahl(ruf.haendler)}`,
     "",
     "Der Trainer hat die Liste bestätigt. Ohne Freigabe geht die Anfrage nicht raus.",
   ];
@@ -110,35 +110,38 @@ export async function ruftZurFreigabe(vorgangId: string, ruf: FreigabeRuf): Prom
     return;
   }
 
-  // Nacheinander und nicht parallel: die beiden hängen nicht zusammen, aber
-  // zwei gleichzeitige Ausfälle ergäben zwei Fehlerzeilen ohne Reihenfolge.
-  if (telegramAktiv()) {
-    const ging = await telegram(text);
-    if (!ging) {
-      await vermerke(vorgangId, {
-        art: "freigabe_ruf_fehler",
-        text: "Telegram hat die Freigabe-Nachricht nicht angenommen",
-        intern: true,
-        abStufe: 1,
-      });
-    }
-  }
+  // Beide gleichzeitig: sie hängen nicht zusammen, und der Trainer wartet
+  // gerade auf seine Bestätigungsseite. Nacheinander kostete ihn eine halbe
+  // Sekunde für nichts. Keiner der beiden wirft — sie geben Ja/Nein zurück
+  // (`melden.ts`) —, also kann `Promise.all` hier nicht abbrechen.
+  const umfang = `${ruf.stueck} Stück an ${haendlerZahl(ruf.haendler)}.`;
+  const [telegramGing, todoistId] = await Promise.all([
+    telegramAktiv() ? telegram(text) : Promise.resolve(true),
+    todoistAktiv()
+      ? todoist({
+          titel: `Händleranfrage ${ruf.nummer} freigeben (${ruf.mannschaft})`,
+          beschreibung: ruf.link ? `${umfang}\n${ruf.link}` : umfang,
+          faellig: "heute",
+        })
+      : Promise.resolve<string | null>(""),
+  ]);
 
-  if (todoistAktiv()) {
-    const id = await todoist({
-      titel: `Händleranfrage ${ruf.nummer} freigeben (${ruf.mannschaft})`,
-      beschreibung: ruf.link
-        ? `${ruf.stueck} Stück an ${ruf.haendler} Händler.\n${ruf.link}`
-        : `${ruf.stueck} Stück an ${ruf.haendler} Händler.`,
-      faellig: "heute",
+  // Die Reihenfolge der Fehlerzeilen steht hier, nicht in der Reihenfolge der
+  // Aufrufe — das war der eigentliche Grund für das frühere Nacheinander.
+  if (!telegramGing) {
+    await vermerke(vorgangId, {
+      art: "freigabe_ruf_fehler",
+      text: "Telegram hat die Freigabe-Nachricht nicht angenommen",
+      intern: true,
+      abStufe: 1,
     });
-    if (id === null) {
-      await vermerke(vorgangId, {
-        art: "freigabe_ruf_fehler",
-        text: "Todoist hat die Aufgabe nicht angelegt",
-        intern: true,
-        abStufe: 1,
-      });
-    }
+  }
+  if (todoistId === null) {
+    await vermerke(vorgangId, {
+      art: "freigabe_ruf_fehler",
+      text: "Todoist hat die Aufgabe nicht angelegt",
+      intern: true,
+      abStufe: 1,
+    });
   }
 }

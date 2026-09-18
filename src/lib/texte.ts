@@ -9,6 +9,20 @@
 import { ERSTE_STUFE, LETZTE_STUFE } from "./stufen";
 import type { Ansicht, NaechsterSchritt, Vorgang } from "./typen";
 
+/**
+ * „einen Händler“ oder „3 Händler“ — nie „1 Händler“.
+ *
+ * Stand an vier Stellen, davon eine falsch: die Todoist-Aufgabe schrieb
+ * „1 Händler“, während die Mail und die Karte daneben es richtig machten. Eine
+ * Regel, ein Test, vier Aufrufer.
+ *
+ * Kein `server-only` in dieser Datei — die Freigabe-Karte im Browser braucht
+ * denselben Satz.
+ */
+export function haendlerZahl(anzahl: number): string {
+  return anzahl === 1 ? "einen Händler" : `${anzahl} Händler`;
+}
+
 function gewaehlterHaendler(v: Vorgang): string {
   return v.haendler.find((h) => h.gewaehlt)?.name ?? "der gewählte Händler";
 }

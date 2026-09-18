@@ -19,10 +19,21 @@ import { redirect } from "next/navigation";
 import { authClient, spartenLeitung } from "@/lib/anmeldung";
 import { dbAktiv } from "@/lib/db";
 import { aendereVorgang, setzeStufe, vermerke, vorgangPerNummer } from "@/lib/vorgaenge-db";
-import { gibFrei, lehneAb } from "@/lib/vorgaenge";
+import { gibFrei, lehneAb, type FreigabeGrund } from "@/lib/vorgaenge";
 import { spiegele } from "@/lib/spiegel";
 import { stufe as stufeVon } from "@/lib/stufen";
 import type { StufeNr } from "@/lib/typen";
+
+/**
+ * Zwei Sätze, die auf dieser Seite sechsmal beziehungsweise dreimal standen.
+ *
+ * Sie sagen verschiedene Dinge und dürfen nicht verschmelzen: das eine heißt
+ * „kitflow konnte nicht fragen“, das andere „der Schreibversuch ging schief“.
+ * Getrennt benannt, damit das beim Umformulieren so bleibt.
+ */
+const NICHT_GEKLAPPT = "Das hat gerade nicht geklappt. Bitte versuch es später.";
+const NICHT_ERREICHBAR =
+  "kitflow kommt gerade nicht an die Daten. Bitte versuch es in einer Minute noch einmal.";
 
 export type StufenStand =
   | { stand: "leer" }
@@ -50,16 +61,11 @@ export async function stufeSetzen(_bisher: StufenStand, formular: FormData): Pro
   if (!nummer) return { stand: "fehler", text: "Bitte einen Vorgang wählen." };
   if (ziel === null) return { stand: "fehler", text: "Bitte eine Stufe wählen." };
 
-  if (!dbAktiv()) {
-    return { stand: "fehler", text: "Das hat gerade nicht geklappt. Bitte versuch es später." };
-  }
+  if (!dbAktiv()) return { stand: "fehler", text: NICHT_GEKLAPPT };
 
   const abruf = await vorgangPerNummer(nummer);
   if (abruf.stand === "gestoert") {
-    return {
-      stand: "fehler",
-      text: "kitflow kommt gerade nicht an die Daten. Bitte versuch es in einer Minute noch einmal.",
-    };
+    return { stand: "fehler", text: NICHT_ERREICHBAR };
   }
   if (abruf.stand !== "da") return { stand: "fehler", text: `Vorgang ${nummer} gibt es nicht.` };
   const vorgang = abruf.vorgang;
@@ -71,9 +77,7 @@ export async function stufeSetzen(_bisher: StufenStand, formular: FormData): Pro
   // Beim Abbruch festhalten, wo der Vorgang stand – sonst lässt er sich später
   // nicht wieder aufnehmen (dieselbe Regel wie beim Abbruch einer Voranfrage).
   const gesetzt = await setzeStufe(vorgang.id, ziel, ziel === 9 ? vorgang.stufe : undefined);
-  if (!gesetzt) {
-    return { stand: "fehler", text: "Das hat gerade nicht geklappt. Bitte versuch es später." };
-  }
+  if (!gesetzt) return { stand: "fehler", text: NICHT_GEKLAPPT };
 
   // Wer es war, gehört in den Verlauf: der Sinn des Logins ist, dass das nicht
   // mehr anonym passiert. `intern`, weil es Spieler und Eltern nichts angeht.
@@ -142,16 +146,11 @@ export async function fristSetzen(_bisher: FristStand, formular: FormData): Prom
     return { stand: "fehler", text: "Dieses Datum liegt zu weit weg. Bitte noch einmal prüfen." };
   }
 
-  if (!dbAktiv()) {
-    return { stand: "fehler", text: "Das hat gerade nicht geklappt. Bitte versuch es später." };
-  }
+  if (!dbAktiv()) return { stand: "fehler", text: NICHT_GEKLAPPT };
 
   const abruf = await vorgangPerNummer(nummer);
   if (abruf.stand === "gestoert") {
-    return {
-      stand: "fehler",
-      text: "kitflow kommt gerade nicht an die Daten. Bitte versuch es in einer Minute noch einmal.",
-    };
+    return { stand: "fehler", text: NICHT_ERREICHBAR };
   }
   if (abruf.stand !== "da") return { stand: "fehler", text: `Vorgang ${nummer} gibt es nicht.` };
   const vorgang = abruf.vorgang;
@@ -166,9 +165,7 @@ export async function fristSetzen(_bisher: FristStand, formular: FormData): Prom
   }
 
   const gesetzt = await aendereVorgang(vorgang.id, { groessenFrist: frist });
-  if (!gesetzt) {
-    return { stand: "fehler", text: "Das hat gerade nicht geklappt. Bitte versuch es später." };
-  }
+  if (!gesetzt) return { stand: "fehler", text: NICHT_GEKLAPPT };
 
   await vermerke(vorgang.id, {
     art: "frist-gesetzt",
@@ -191,26 +188,51 @@ export async function fristSetzen(_bisher: FristStand, formular: FormData): Prom
  * Die Freigabe der Händleranfrage
  * ------------------------------------------------------------------ */
 
-export type FreigabeStand =
+/**
+ * Die Antwort der beiden Freigabe-Aktionen.
+ *
+ * Heißt `FreigabeAntwort` und nicht `FreigabeStand`: so hieß sie zuerst, und
+ * `FreigabeStand` gibt es in `vorgaenge-db.ts` schon — dort ist es der Wert der
+ * Spalte (`keine`/`offen`/…). Zwei Namen, zwei Bedeutungen, ein Wort.
+ */
+export type FreigabeAntwort =
   | { stand: "leer" }
   | { stand: "raus"; nummer: string; anHaendler: number }
   | { stand: "gestoppt"; nummer: string }
   | { stand: "fehler"; text: string };
 
-/** Was schiefgehen kann, in Worten für einen Menschen. */
-function freigabeFehler(grund: string | undefined, nummer: string): string {
+/**
+ * Was schiefgehen kann, in Worten für einen Menschen.
+ *
+ * Nimmt `FreigabeGrund` statt `string`: als der Grund noch ein freier String
+ * war, fehlte für `"versand"` ein Fall, und niemand merkte es — der Benutzer
+ * bekam den Auffangsatz. Jetzt deckt der `switch` die Union ab, und ein neuer
+ * Grund macht den Baum rot statt die Meldung stumpf.
+ */
+function freigabeFehler(grund: FreigabeGrund, nummer: string): string {
   switch (grund) {
     case "gestoert":
-      return "kitflow kommt gerade nicht an die Daten. Bitte versuch es in einer Minute noch einmal.";
+      return NICHT_ERREICHBAR;
     case "unbekannt":
       return `Vorgang ${nummer} gibt es nicht.`;
     case "nicht_offen":
       return `Für ${nummer} steht gerade keine Freigabe aus. Lade die Seite neu.`;
     case "ohne_haendler":
       return "Es ist kein Händler hinterlegt (HAENDLER). Die Anfrage kann nicht rausgehen.";
-    default:
+    case "versand":
       return "Die Anfrage ging nicht raus. Am Vorgang steht, woran es lag.";
   }
+}
+
+/** Angemeldet und ein Vorgang gewählt — vor jeder Entscheidung dasselbe. */
+async function werUndNummer(
+  formular: FormData,
+): Promise<{ wer: string; nummer: string } | { text: string }> {
+  const wer = await spartenLeitung();
+  if (!wer) return { text: "Dafür musst du angemeldet sein." };
+  const nummer = String(formular.get("vorgang") ?? "").trim();
+  if (!nummer) return { text: "Bitte einen Vorgang wählen." };
+  return { wer, nummer };
 }
 
 /**
@@ -221,23 +243,19 @@ function freigabeFehler(grund: string | undefined, nummer: string): string {
  * und eine Server Action ist eine eigene Adresse.
  */
 export async function freigeben(
-  _bisher: FreigabeStand,
+  _bisher: FreigabeAntwort,
   formular: FormData,
-): Promise<FreigabeStand> {
-  const wer = await spartenLeitung();
-  if (!wer) return { stand: "fehler", text: "Dafür musst du angemeldet sein." };
+): Promise<FreigabeAntwort> {
+  const zugang = await werUndNummer(formular);
+  if ("text" in zugang) return { stand: "fehler", text: zugang.text };
+  if (!dbAktiv()) return { stand: "fehler", text: NICHT_GEKLAPPT };
 
-  const nummer = String(formular.get("vorgang") ?? "").trim();
-  if (!nummer) return { stand: "fehler", text: "Bitte einen Vorgang wählen." };
-
-  if (!dbAktiv()) {
-    return { stand: "fehler", text: "Das hat gerade nicht geklappt. Bitte versuch es später." };
+  const ergebnis = await gibFrei(zugang.nummer, { art: "mensch", email: zugang.wer });
+  if (!ergebnis.ok) {
+    return { stand: "fehler", text: freigabeFehler(ergebnis.grund, zugang.nummer) };
   }
 
-  const ergebnis = await gibFrei(nummer, { art: "mensch", email: wer });
-  if (!ergebnis.ok) return { stand: "fehler", text: freigabeFehler(ergebnis.grund, nummer) };
-
-  return { stand: "raus", nummer, anHaendler: ergebnis.anHaendler };
+  return { stand: "raus", nummer: zugang.nummer, anHaendler: ergebnis.anHaendler };
 }
 
 /**
@@ -247,25 +265,23 @@ export async function freigeben(
  * Trainer wüsste nicht, was er ändern soll. Er geht ihm auch per Mail zu.
  */
 export async function ablehnen(
-  _bisher: FreigabeStand,
+  _bisher: FreigabeAntwort,
   formular: FormData,
-): Promise<FreigabeStand> {
-  const wer = await spartenLeitung();
-  if (!wer) return { stand: "fehler", text: "Dafür musst du angemeldet sein." };
+): Promise<FreigabeAntwort> {
+  const zugang = await werUndNummer(formular);
+  if ("text" in zugang) return { stand: "fehler", text: zugang.text };
 
-  const nummer = String(formular.get("vorgang") ?? "").trim();
   const grund = String(formular.get("grund") ?? "").trim();
-  if (!nummer) return { stand: "fehler", text: "Bitte einen Vorgang wählen." };
   if (grund.length < 5) {
     return { stand: "fehler", text: "Bitte schreib dazu, was geändert werden soll." };
   }
 
-  if (!dbAktiv()) {
-    return { stand: "fehler", text: "Das hat gerade nicht geklappt. Bitte versuch es später." };
+  if (!dbAktiv()) return { stand: "fehler", text: NICHT_GEKLAPPT };
+
+  const ergebnis = await lehneAb(zugang.nummer, { art: "mensch", email: zugang.wer }, grund);
+  if (!ergebnis.ok) {
+    return { stand: "fehler", text: freigabeFehler(ergebnis.grund, zugang.nummer) };
   }
 
-  const ergebnis = await lehneAb(nummer, { art: "mensch", email: wer }, grund);
-  if (!ergebnis.ok) return { stand: "fehler", text: freigabeFehler(ergebnis.grund, nummer) };
-
-  return { stand: "gestoppt", nummer };
+  return { stand: "gestoppt", nummer: zugang.nummer };
 }
