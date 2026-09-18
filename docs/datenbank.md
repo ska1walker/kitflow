@@ -93,10 +93,14 @@ supabase db push
 Die Datei ist wiederholbar: sie legt nur an, was fehlt, und löscht nichts. Bricht sie
 mittendrin ab, ist das Nachziehen nach der Korrektur deshalb gefahrlos.
 
-Danach `supabase/pruefung.sql` im SQL-Editor: sechs Tabellen, RLS überall an und keine einzige
-Policy, keine Rechte für `anon` und `authenticated`, die Nummernfunktion zählt hoch, der
-Trigger steht. Das Skript setzt den Zähler danach zurück, damit der erste echte Vorgang die
-001 bekommt.
+Danach `supabase/pruefung.sql` im SQL-Editor. Acht Zeilen, alle „ok“: sechs Tabellen, RLS
+überall an und keine einzige Policy, keine Rechte für `anon` und `authenticated`,
+Nummernfunktion und Trigger vorhanden, die 27 Spalten aus Migration 002 und die acht
+Bedingungen gegen negative Beträge. Die Abfrage ändert nichts und ruft auch die
+Nummernfunktion nicht auf — der erste echte Vorgang soll die 001 bekommen.
+
+Beide Richtungen sind geprüft: gegen eine Datenbank ohne Migration meldet sie sechsmal, dass
+etwas fehlt.
 
 Danach in Vercel und `.env.local`:
 
