@@ -213,6 +213,7 @@ export async function ergaenzeVorgang(
     statusToken: signiere("status", nummer) ?? "",
     bestaetigen: bestaetigenLink(nummer) ?? "",
     ergaenzen: "",
+    anzahl: kontakte.length,
     personen: kontakte.map((k) => ({
       id: k.id,
       name: `${k.properties.firstname ?? ""} ${k.properties.lastname ?? ""}`.trim() || k.id,

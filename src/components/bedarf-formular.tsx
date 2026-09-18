@@ -2,7 +2,6 @@
 
 import { useActionState, useState } from "react";
 import { abschicken } from "./formular";
-import { MailKarte } from "./mail-karte";
 import { Badge, Button, Card, SelectFeld } from "./ui";
 import { IconCheck } from "./icons";
 import { bedarfMelden, type Ergebnis } from "@/app/neu/aktion";
@@ -285,7 +284,7 @@ function Fertig({ ergebnis }: { ergebnis: Extract<Ergebnis, { stand: "fertig" }>
 
   // Ein Vorgang fuer genau eine Person bekommt denselben Weg, aber nicht
   // denselben Satz: „deine 1 Spielerinnen und Spieler“ waere schlicht falsch.
-  const eine = ergebnis.personen.length === 1;
+  const eine = ergebnis.anzahl === 1;
 
   return (
     <Card className="p-6">
@@ -299,22 +298,26 @@ function Fertig({ ergebnis }: { ergebnis: Extract<Ergebnis, { stand: "fertig" }>
           </h1>
           <p className="mt-1.5 text-sm text-ink-600">
             {ergebnis.nurGroessen
-              ? `Bitte gib die Nummer bei allen Rückfragen an. Unten ${
-                  eine ? "steht der persönliche Link" : "stehen die persönlichen Links"
-                } für die Größen. Wenn alle eingetragen haben, prüfst du die Liste – damit ist der Vorgang fertig. Bestellt wird nichts.`
+              ? `Bitte gib die Nummer bei allen Rückfragen an. Wenn alle ihre Größe eingetragen haben, prüfst du die Liste – damit ist der Vorgang fertig. Bestellt wird nichts.`
               : eine
-                ? "Bitte gib die Nummer bei allen Rückfragen an. Unten steht der persönliche Link für die Größen. Sobald sie eingetragen sind, prüfst du die Liste, danach geht die Anfrage an beide Händler."
-                : `Bitte gib die Nummer bei allen Rückfragen an. Unten stehen die persönlichen Links für deine ${ergebnis.personen.length} Spielerinnen und Spieler. Wenn alle eingetragen haben, prüfst du die Liste, danach geht die Anfrage an beide Händler.`}
+                ? "Bitte gib die Nummer bei allen Rückfragen an. Sobald die Größe eingetragen ist, prüfst du die Liste, danach geht die Anfrage an beide Händler."
+                : `Bitte gib die Nummer bei allen Rückfragen an. Es geht um ${ergebnis.anzahl} Spielerinnen und Spieler. Wenn alle eingetragen haben, prüfst du die Liste, danach geht die Anfrage an beide Händler.`}
           </p>
+
+          {/* Diese Seite hat kein Token: sie ist über /neu für jeden erreichbar.
+              Deshalb stehen hier keine Namen und keine persönlichen Links —
+              die gehen ausschließlich per Mail an die Adresse, die vorher als
+              Kontakt bestätigt wurde. */}
           {ergebnis.mailAn ? (
             <p className="mt-3 rounded-xl bg-pitch-50 px-3.5 py-3 text-sm text-ink-700">
-              Die Mail mit allen Links ist an {ergebnis.mailAn} unterwegs. Unten stehen sie
-              trotzdem, falls sie nicht ankommt.
+              Die Mail mit allen persönlichen Links ist an {ergebnis.mailAn} unterwegs. Aus
+              Datenschutzgründen stehen die Namen und die Links nur dort und nicht auf dieser
+              Seite.
             </p>
           ) : (
             <p className="mt-3 rounded-xl bg-amber-50 px-3.5 py-3 text-sm text-ink-700">
-              Es ist keine Mail rausgegangen. Kopier dir diese Seite, die Links stehen sonst
-              nirgends.
+              Es ist keine Mail rausgegangen. Über deinen Status-Link unten kommst du trotzdem an
+              alles heran — heb ihn dir auf.
             </p>
           )}
 
@@ -327,40 +330,10 @@ function Fertig({ ergebnis }: { ergebnis: Extract<Ergebnis, { stand: "fertig" }>
             </a>
           </div>
 
-          {/* Die Mails gleich von hier aus, statt 24 Links von Hand zu
-              verteilen. Vorausgewählt ist, wer eine Adresse hat – verschickt
-              wurde für diesen Vorgang noch nichts. */}
-          {ergebnis.statusToken && ergebnis.personen.length > 0 && (
-            <div className="mt-5">
-              <MailKarte
-                vorgang={ergebnis.vorgang}
-                token={ergebnis.statusToken}
-                frist=""
-                empfaenger={ergebnis.personen.map((p) => ({
-                  person: p.id,
-                  name: p.name,
-                  hatAdresse: p.hatAdresse,
-                  zuletzt: "",
-                  hatGroesse: false,
-                }))}
-              />
-            </div>
-          )}
-
-          <h2 className="font-display mt-5 mb-2 text-base font-bold text-ink-900">
-            {eine ? "Der Größen-Link" : "Größen-Links für die Mannschaft"}
-          </h2>
-          <ul className="flex flex-col gap-1.5">
-            {ergebnis.personen.map((p) => (
-              <li key={p.groessen} className="min-w-0 text-sm">
-                <b>{p.name}</b>
-                <br />
-                <a href={p.groessen} className="break-all text-xs text-pitch-700 underline">
-                  {p.groessen}
-                </a>
-              </li>
-            ))}
-          </ul>
+          <p className="mt-4 text-sm text-ink-500">
+            Über den Status-Link verschickst du die Größen-Mail an die Leute, die du auswählst —
+            dort stehen auch die Namen.
+          </p>
         </div>
       </div>
     </Card>

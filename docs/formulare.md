@@ -69,6 +69,24 @@ Entwurf: prototyp/statusseite.html. Drei Ansichten:
 
 ## F1 · Bedarf melden (Trainer, öffentlicher Link)
 
+**Wer hier etwas anlegen darf** (18.09.2026). Die Seite hat als einzige kein Token. Bis hierher
+konnte jeder, der die Adresse kennt, „2014“ wählen, abschicken und bekam die Vor- und Nachnamen
+eines ganzen Jugendjahrgangs samt gültiger Größen-Links auf die Danke-Seite. Zwei Riegel:
+
+1. **Die E-Mail-Adresse muss als Kontakt bei Eintracht Munster stehen.** Gesucht wird über die
+   genaue Adresse, nicht über den Namen — ein Treffer verrät nur dem etwas, der die Adresse schon
+   hat. Kein Treffer heißt: es entsteht nichts.
+2. **Die Danke-Seite trägt keine Namen und keine persönlichen Links mehr.** Sie zeigt die
+   Vorgangsnummer, die Personenzahl und die beiden Links des Trainers. Alles andere geht per Mail
+   an genau die Adresse, die unter 1. bestätigt wurde. Die Namen verlassen den Server gar nicht:
+   die Server Action leert `personen`, bevor sie antwortet.
+
+Eine Störung bei HubSpot heißt dabei nie „kenne ich nicht“ — sonst sperrte ein Rate-Limit jeden
+Trainer aus und sagte ihm auch noch, er sei kein Mitglied.
+
+F1b (`/e/{vorgang}`) hängt an einem signierten Link und zeigt die Namen und Links weiterhin: dort
+steht schon fest, wer den Link bekommen hat.
+
 **Zwei Modi.** Ganz oben wählt der Trainer, wie weit er ist. Die Vorauswahl ist der einfache Modus –
 er ist der häufigere Fall, weil vor dem Sponsor noch nichts feststeht. Der Modus steht als verstecktes
 Feld `modus` im Formular; die Server Action fällt bei fehlendem oder unbekanntem Wert auf den strengen

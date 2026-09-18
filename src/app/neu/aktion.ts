@@ -112,6 +112,10 @@ function bereichLesen(
   return { groesseVon: von, groesseBis: bis };
 }
 
+/** Eine Stoerung ist kein „kenne ich nicht“ — der Unterschied entscheidet hier. */
+const NICHT_ERREICHBAR =
+  "kitflow kommt gerade nicht an die Mitgliederdaten. Bitte versuch es in einer Minute noch einmal.";
+
 export async function bedarfMelden(_bisher: Ergebnis, formular: FormData): Promise<Ergebnis> {
   // Honigtopf: das Feld ist im Formular versteckt und für Menschen unerreichbar.
   if (String(formular.get("webseite") ?? "") !== "") {
@@ -133,6 +137,22 @@ export async function bedarfMelden(_bisher: Ergebnis, formular: FormData): Promi
     return { stand: "fehler", text: "Die E-Mail-Adresse sieht nicht richtig aus." };
   }
 
+  // Der Riegel an der einzigen Seite ohne Token.
+  //
+  // Bis hierher konnte jeder, der die Adresse von `/neu` kannte, eine
+  // Mannschaft waehlen, abschicken und bekam die Namen einer ganzen
+  // Jugendmannschaft samt gueltiger Groessen-Links auf die Danke-Seite. Jetzt
+  // muss die Adresse als Kontakt bei Eintracht Munster stehen — und die
+  // Antwort traegt keine Namen mehr, die Links gehen nur per Mail dorthin.
+  const trainer = await kontaktPerEmail(email);
+  if (trainer.stand === "gestoert") return { stand: "fehler", text: NICHT_ERREICHBAR };
+  if (trainer.stand !== "da") {
+    return {
+      stand: "fehler",
+      text: "Diese E-Mail-Adresse kennt der Verein nicht. Bitte trag die Adresse ein, unter der du bei Eintracht Munster gemeldet bist — oder melde dich bei der Geschäftsstelle.",
+    };
+  }
+
   // Fuer wen? Die Voranfrage kennt nur Mannschaften: dort geht es um einen
   // Richtpreis fuer eine Gruppe, und F1b wuerde spaeter wieder die ganze
   // Mannschaft laden. Ein manipuliertes Formular faellt deshalb hierher zurueck.
@@ -147,13 +167,14 @@ export async function bedarfMelden(_bisher: Ergebnis, formular: FormData): Promi
       return { stand: "fehler", text: "Bitte die E-Mail-Adresse der Person angeben." };
     }
     const gefunden = await kontaktPerEmail(adresse);
-    if (!gefunden) {
+    if (gefunden.stand === "gestoert") return { stand: "fehler", text: NICHT_ERREICHBAR };
+    if (gefunden.stand !== "da") {
       return {
         stand: "fehler",
         text: "Zu dieser E-Mail-Adresse gibt es in HubSpot keinen Kontakt. Bitte lass die Person erst von der Geschäftsstelle anlegen.",
       };
     }
-    person = gefunden;
+    person = gefunden.kontakt;
   } else if (teams.length === 0) {
     return { stand: "fehler", text: "Bitte mindestens eine Mannschaft wählen." };
   }
@@ -265,5 +286,11 @@ export async function bedarfMelden(_bisher: Ergebnis, formular: FormData): Promi
     })),
   });
 
-  return { stand: "fertig", ergebnis: { ...ergebnis, mailAn: mailAn ?? undefined } };
+  // `/neu` hat kein Token. Die Namen und die persoenlichen Links bleiben
+  // deshalb serverseitig: sie stehen in M1 und gehen an genau die Adresse, die
+  // oben als Kontakt bestaetigt wurde. Die Zahl reicht fuer die Danke-Seite.
+  return {
+    stand: "fertig",
+    ergebnis: { ...ergebnis, personen: [], mailAn: mailAn ?? undefined },
+  };
 }

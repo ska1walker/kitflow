@@ -159,8 +159,13 @@ export const ABBRUCH_EREIGNIS: Ereignis = {
   sub: "Sponsor hat abgesagt, kein Spartenbudget freigegeben",
 };
 
-/** Erwachsenen-Mannschaft, deshalb stehen hier Beispielnamen. */
-const FEHLENDE_GROESSEN = ["Oliver Brandt", "Kevin Stolte", "Timo Bartels", "Patrick Wulf"];
+/**
+ * Das Schaufenster unter `/` steht offen im Netz. Hier standen vier erfundene
+ * Namen, die wie eine echte Ue40-Mannschaft aus Munster aussahen — niemand von
+ * aussen konnte erkennen, dass sie erfunden sind. Platzhalter, die auch wie
+ * Platzhalter aussehen, sagen dasselbe ueber die Oberflaeche aus.
+ */
+const FEHLENDE_GROESSEN = ["Spieler 3", "Spieler 7", "Spieler 12", "Spieler 15"];
 
 export const BEISPIEL_VORGANG: Vorgang = {
   nummer: VORGANG_NUMMER,
@@ -191,7 +196,7 @@ export const BEISPIEL_VORGANG: Vorgang = {
   ],
   meinHinweis:
     "Trikot mit Vereinslogo, „EINTRACHT MUNSTER“ und deiner Nummer. Du zahlst nichts, der Sponsor VGH übernimmt.",
-  spielerGruss: "Hallo Jonas, hier siehst du, wo deine neue Ausstattung gerade steckt.",
+  spielerGruss: "Hallo Spieler 7, hier siehst du, wo deine neue Ausstattung gerade steckt.",
   quelle: "beispiel",
 };
 

@@ -102,8 +102,13 @@ export type BedarfErgebnis = {
   modus: Modus;
   /** Der Vorgang bestellt nichts, er sammelt nur Groessen ein. */
   nurGroessen: boolean;
-  /** Leer, wenn zur Mannschaft niemand gefunden wurde oder noch keiner gesucht. */
+  /**
+   * Leer, wenn zur Mannschaft niemand gefunden wurde — oder wenn die Antwort
+   * an eine Seite ohne Token geht: `/neu` bekommt die Namen nicht zu sehen.
+   */
   personen: PersonLink[];
+  /** Wie viele es wirklich sind, auch wenn `personen` leer bleibt. */
+  anzahl: number;
   trainerStatus: string;
   /** Das Token des Trainer-Links, damit die Danke-Seite die Mails verschicken kann. */
   statusToken: string;
@@ -160,9 +165,14 @@ function alsEmpfaenger(k: HsObjekt): Empfaenger {
  * waere dort ein Mitgliederverzeichnis fuer jeden, der die Seite kennt; ein
  * Treffer auf die genaue Adresse verraet nur dem etwas, der sie schon hat.
  */
-export async function kontaktPerEmail(email: string): Promise<Empfaenger | null> {
+export type KontaktTreffer =
+  | { stand: "da"; kontakt: Empfaenger }
+  | { stand: "unbekannt" }
+  | { stand: "gestoert" };
+
+export async function kontaktPerEmail(email: string): Promise<KontaktTreffer> {
   const adresse = email.trim().toLowerCase();
-  if (!adresse) return null;
+  if (!adresse) return { stand: "unbekannt" };
 
   const treffer = await hubspot<HsListe<HsObjekt>>({
     pfad: "/crm/v3/objects/contacts/search",
@@ -172,8 +182,14 @@ export async function kontaktPerEmail(email: string): Promise<Empfaenger | null>
       limit: 1,
     },
   });
-  const kontakt = treffer?.results[0];
-  return kontakt ? alsEmpfaenger(kontakt) : null;
+
+  // `hubspot()` gibt bei einer Stoerung `null` zurueck. Das darf hier nie
+  // „kenne ich nicht" heissen: seit F1 nur noch bekannte Adressen annimmt,
+  // sperrte ein Rate-Limit sonst jeden Trainer aus.
+  if (treffer === null) return { stand: "gestoert" };
+
+  const kontakt = treffer.results[0];
+  return kontakt ? { stand: "da", kontakt: alsEmpfaenger(kontakt) } : { stand: "unbekannt" };
 }
 
 /**
@@ -303,6 +319,7 @@ export async function meldeBedarf(eingabe: BedarfEingabe): Promise<BedarfErgebni
     statusToken: signiere("status", satz.nummer) ?? "",
     bestaetigen: voranfrage ? "" : (bestaetigenLink(satz.nummer) ?? ""),
     ergaenzen: voranfrage ? (ergaenzenLink(satz.nummer) ?? "") : "",
+    anzahl: kontakte.length,
     personen: kontakte.map((k) => ({
       id: k.id,
       name: k.name,

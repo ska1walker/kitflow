@@ -14,7 +14,7 @@ import { expect, test } from "@playwright/test";
  */
 
 const TRAINER_TEXT = "18 Personen · Sponsor VGH · Händler Intersport Uelzen und 11teamsports";
-const SPIELER_TEXT = "Hallo Jonas, hier siehst du, wo deine neue Ausstattung gerade steckt.";
+const SPIELER_TEXT = "Hallo Spieler 7, hier siehst du, wo deine neue Ausstattung gerade steckt.";
 const SPARTE_TITEL = "Alle Ausstattungs-Vorgänge";
 
 test.beforeEach(async ({ page }) => {
