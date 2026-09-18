@@ -17,7 +17,7 @@ Stand 18.09.2026
 - ~~kitflow schreibt HubSpot direkt oder über Make-Webhooks~~ – entschieden: direkt, `src/lib/hubspot.ts` ist der einzige Weg nach außen
 - ~~Vorgänge bleiben in HubSpot oder bekommen eine eigene Datenbank~~ – entschieden: eigene Datenbank (Supabase), der Deal bleibt als **dünner Spiegel** im CRM. Der Spiegel wird nie zurückgelesen. **Folge: eine Stufe, die in HubSpot von Hand verschoben wird, kommt nicht mehr bei kitflow an** — dafür bekommt `/sparte` einen Stufenwechsel. Umgesetzt am 18.09.2026: F1, F1b, F2, F3, Statusseite und Übersicht lesen und schreiben gegen die Datenbank (docs/datenbank.md).
 - ~~Fristen und Erinnerungen über Vercel Cron oder weiter Make (AUS-W)~~ – entschieden: **Vercel Cron**. Mit eigener Datenbank liegt der Lauf im selben Projekt wie die Daten. Gebaut am 18.09.2026: `/api/erinnerungen`, täglich 16:00 UTC (`vercel.json`), Grenzen und Prüfungen in docs/mails.md. **Neu zu setzen: `CRON_SECRET`** (mind. 16 Zeichen) – fehlt es, antwortet der Endpunkt 503.
-- Händler-XLSX in kitflow erzeugen oder Make
+- Händler-XLSX in kitflow erzeugen oder Make — vorläufig entschieden: kitflow hängt eine **CSV** an M4 (Semikolon, BOM, öffnet in Excel auf Deutsch in Spalten). Sobald `Anfrage_Vorlage.xlsx` vorliegt, lässt sich die gewohnte Vorlage nachrüsten.
 
 ## Mail
 - Die Bestätigungsmail an `/neu` ist gebaut (`sendeBestaetigung`): ohne den Klick darin entsteht kein Vorgang.
@@ -27,10 +27,9 @@ Stand 18.09.2026
 - M2a (der persönliche Größen-Link) und **M2 (die Erinnerung)** sind gebaut. Die Erinnerung läuft täglich über Vercel Cron; ihre Grenzen stehen in docs/mails.md.
 - **M3 (Größenliste zum Prüfen) ist gebaut** und läuft im täglichen Lauf mit: alle da oder Frist erreicht, höchstens eine je Vorgang.
 - **M6 entfällt** — die Prüfungen weisen eine unvollständige Liste schon auf der Seite ab, bevor etwas geschrieben wird.
-- **M4 und M5 bleiben ungebaut, bis Kai sie ausdrücklich freigibt.** M4 geht an zwei echte Geschäftspartner und ist nicht zurückzuholen; M5 folgt ihr.
+- **M4 und M5 sind gebaut** — auf Kais ausdrückliche Freigabe am 18.09.2026, mit seiner Auflage: **keine Spielernamen nach draußen**. Die Anfrage nennt nur Artikel, Größe, Stückzahl, Rückennummer und Initialen (`src/lib/anfrage.ts`). **Neu zu setzen: `HAENDLER`** — fehlt die Variable, geht keine Anfrage raus, die Bestätigung gilt trotzdem und der Vorgang bleibt auf Stufe 1 liegen.
 - M7 offen: der Fall steht heute auf der Seite. Eine Mail wäre für den, der sie zu früh schließt.
 - Noch offen: der Anhang Merkblatt_Zahlwege.pdf.
-- Die Händler-Mail M4 bleibt bis zu Kais ausdrücklicher Freigabe ungebaut.
 
 ## Vor Phase 2
 - Mit den Händlern: Rechnung auf Sponsor oder Mannschaft möglich, Vorkasserechnung, Bestätigung per Link

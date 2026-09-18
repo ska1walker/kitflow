@@ -66,12 +66,33 @@ export function ListeFormular({ liste, token }: { liste: Liste; token: string })
           </span>
           <div>
             <h1 className="font-display text-xl font-bold tracking-tight text-ink-900">
-              Liste bestätigt
+              {ergebnis.anHaendler > 0 ? "Die Anfrage ist raus" : "Liste bestätigt"}
             </h1>
             <p className="mt-1.5 text-sm text-ink-600">
-              Die Bestätigung steht am Vorgang {liste.vorgang}. Die Anfrage an Intersport Uelzen und
-              11teamsports verschickt kitflow noch nicht selbst — das kommt mit dem Mailversand.
+              {ergebnis.anHaendler > 0 ? (
+                <>
+                  Die Bestätigung steht am Vorgang {liste.vorgang}, und die Anfrage ist an{" "}
+                  {ergebnis.anHaendler === 1 ? "einen Händler" : `${ergebnis.anHaendler} Händler`}{" "}
+                  gegangen. Die Angebote kommen in Kopie an dich.
+                </>
+              ) : ergebnis.ohneHaendler ? (
+                <>
+                  Die Bestätigung steht am Vorgang {liste.vorgang}. Die Anfrage schickt die
+                  Spartenleitung raus.
+                </>
+              ) : (
+                <>
+                  Die Bestätigung steht am Vorgang {liste.vorgang}. Damit ist er fertig – bestellt
+                  wird nichts.
+                </>
+              )}
             </p>
+            {ergebnis.anHaendler > 0 && (
+              <p className="mt-3 text-sm text-ink-500">
+                In der Anfrage stehen keine Namen deiner Spielerinnen und Spieler – nur
+                Stückzahlen, Größen und Nummern.
+              </p>
+            )}
           </div>
         </div>
       </Card>

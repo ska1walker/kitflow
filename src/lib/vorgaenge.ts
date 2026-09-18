@@ -43,6 +43,7 @@ import {
   aendereVorgang,
   haengePersonAn,
   setzePersonAngaben,
+  setzeStufe,
   verlauf as verlaufLesen,
   mailsJePerson,
   vermerke,
@@ -51,10 +52,12 @@ import {
   type Abruf,
   type VorgangSatz,
 } from "./vorgaenge-db";
-import { spiegelePersonen } from "./spiegel";
-import { absolut, mailAktiv, sendeM2a } from "./mail";
+import { spiegele, spiegelePersonen } from "./spiegel";
+import { anfrageHaendler } from "./haendler-adressen";
+import { alsCsv, baueAnfrage, summenText } from "./anfrage";
+import { absolut, mailAktiv, sendeM2a, sendeM4, sendeM5 } from "./mail";
 import { kontakteDerMannschaft } from "./bedarf";
-import { groessenLink, trainerLink } from "./links";
+import { groessenLink, statusLink, trainerLink } from "./links";
 import type { Pruefung } from "./pruefungen";
 import { pruefeInitialen } from "./typen";
 import type { Groessenart, StufeNr, Vorgang } from "./typen";
@@ -484,20 +487,53 @@ export async function ladeListe(nummer: string): Promise<Abruf<Liste>> {
   return { stand: "da", daten };
 }
 
+/** Die Art in `mail_versand` fuer die Haendleranfrage. Eine je Haendler. */
+export const MAIL_ANFRAGE = "anfrage";
+
+/** Der Beflockungsstandard des Vereins, wie er in M4 steht (docs/mails.md). */
+const BEFLOCKUNG = [
+  "Vereinslogo vorne, Brust links, ca. 8 cm breit, Transferdruck mehrfarbig",
+  "„EINTRACHT MUNSTER“ hinten oben mittig, Blockschrift, ca. 5 cm hoch, Flexdruck",
+  "Rückennummer hinten darunter, 20 cm bei Erwachsenengrößen, 15 cm bei Kindergrößen 116–164, Flexdruck",
+  "Farbe weiß, auf hellen Artikeln schwarz",
+  "Hosen, Shorts und Stutzen ohne Beflockung",
+  "Torwartartikel wie Trikots, Nummer laut Tabelle",
+];
+
+export type BestaetigungsErgebnis = {
+  ok: boolean;
+  /** An wie viele Haendler die Anfrage ging. */
+  anHaendler: number;
+  /** Kein Haendler hinterlegt – die Anfrage bleibt liegen. */
+  ohneHaendler: boolean;
+};
+
 /**
- * Nimmt die Bestaetigung des Trainers entgegen: Datum, Lieferadresse und der
- * Hinweis an die Haendler.
+ * Nimmt die Bestaetigung des Trainers entgegen und schickt die Anfrage raus.
  *
- * Die Stufe bleibt, wo sie ist. „Anfrage raus“ hiesse, dass eine Anfrage
- * rausgegangen ist; solange kitflow keine verschickt, waere das eine Behauptung.
+ * Bis zur Freigabe von M4 endete die Kette hier: die Stufe blieb stehen, weil
+ * „Anfrage raus“ ohne verschickte Anfrage eine Behauptung gewesen waere.
+ * Jetzt geht sie wirklich raus — an die Haendler aus `HAENDLER`, ohne einen
+ * einzigen Spielernamen (`anfrage.ts`), und der Trainer bekommt M5.
+ *
+ * **Ohne hinterlegte Haendler bleibt die Stufe stehen.** Die Bestaetigung
+ * selbst gilt trotzdem: der Trainer hat seinen Teil getan, und ihn dafuer
+ * scheitern zu lassen waere falsch. Die Spartenleitung sieht den Vorgang dann
+ * auf Stufe 1 liegen, und der Verlauf sagt, warum.
+ *
+ * **Die Stufe wandert erst, wenn wirklich etwas rausging.** Schlaegt der
+ * Versand an alle Haendler fehl, bleibt der Vorgang, wo er ist — sonst stuende
+ * „Anfrage raus“ an einem Vorgang, zu dem kein Haendler je etwas bekam.
  */
 export async function bestaetigeListe(
   nummer: string,
   lieferadresse: string,
   hinweis: string,
-): Promise<boolean> {
+): Promise<BestaetigungsErgebnis> {
+  const misserfolg = { ok: false, anHaendler: 0, ohneHaendler: false };
+
   const ergebnis = await vorgangPerNummer(nummer);
-  if (ergebnis.stand !== "da") return false;
+  if (ergebnis.stand !== "da") return misserfolg;
   const satz = ergebnis.vorgang;
 
   const ok = await aendereVorgang(satz.id, {
@@ -505,14 +541,111 @@ export async function bestaetigeListe(
     ...(lieferadresse ? { lieferadresse } : {}),
     ...(hinweis ? { hinweisHaendler: hinweis } : {}),
   });
-  if (!ok) return false;
+  if (!ok) return misserfolg;
 
   await vermerke(satz.id, {
     art: "liste_bestaetigt",
     text: "Der Trainer hat die Liste bestätigt",
     abStufe: 1,
   });
-  return true;
+
+  // Ein reiner Groessencheck geht an keinen Haendler: es gibt nichts zu
+  // bestellen. Er endet mit der Bestaetigung, und das ist richtig so.
+  if (nurGroessen(satz)) return { ok: true, anHaendler: 0, ohneHaendler: false };
+
+  const anHaendler = await verschickeAnfrage(nummer, lieferadresse || satz.lieferadresse || "", hinweis || satz.hinweisHaendler || "");
+  return { ok: true, anHaendler: anHaendler.verschickt, ohneHaendler: anHaendler.ohneHaendler };
+}
+
+/**
+ * Schickt M4 an jeden hinterlegten Haendler und M5 an den Trainer.
+ *
+ * Getrennt von `bestaetigeListe`, weil hier alles passiert, was nach draussen
+ * geht — und weil sich das so einzeln pruefen laesst.
+ */
+async function verschickeAnfrage(
+  nummer: string,
+  lieferadresse: string,
+  hinweis: string,
+): Promise<{ verschickt: number; ohneHaendler: boolean }> {
+  const empfaenger = anfrageHaendler();
+  if (empfaenger.length === 0) {
+    const ergebnis = await vorgangPerNummer(nummer);
+    if (ergebnis.stand === "da") {
+      await vermerke(ergebnis.vorgang.id, {
+        art: "anfrage_offen",
+        text: "Anfrage nicht verschickt: kein Händler hinterlegt",
+        intern: true,
+        abStufe: 1,
+      });
+    }
+    return { verschickt: 0, ohneHaendler: true };
+  }
+  if (!mailAktiv()) return { verschickt: 0, ohneHaendler: false };
+
+  const abruf = await ladeListe(nummer);
+  if (abruf.stand !== "da") return { verschickt: 0, ohneHaendler: false };
+  const liste = abruf.daten;
+
+  const ergebnis = await vorgangPerNummer(nummer);
+  if (ergebnis.stand !== "da") return { verschickt: 0, ohneHaendler: false };
+  const satz = ergebnis.vorgang;
+
+  const anfrage = baueAnfrage(liste, satz.artikel);
+  // Ohne eine einzige Zeile gibt es nichts anzufragen. Das faengt schon
+  // `pruefeVorgang` ab; hier steht es, damit kein leeres Blatt rausgeht.
+  if (anfrage.zeilen.length === 0) return { verschickt: 0, ohneHaendler: false };
+
+  const csv = alsCsv(anfrage, liste.trikotsatz, liste.initialenNoetig);
+  const antwortAn = process.env.MAIL_ANTWORT || "kai.boehm@eintrachtmunster.de";
+
+  let verschickt = 0;
+  for (const h of empfaenger) {
+    const ging = await sendeM4(h.email, {
+      vorgang: satz.nummer,
+      anrede: h.anrede,
+      mannschaft: liste.mannschaft,
+      summen: summenText(anfrage),
+      gesamtStueck: anfrage.gesamtStueck,
+      beflockung: BEFLOCKUNG,
+      wunschtermin: satz.stufeFrist ?? "",
+      lieferadresse,
+      hinweisHaendler: hinweis,
+      trainerEmail: satz.trainerEmail ?? "",
+      antwortAn,
+      csv,
+    });
+    if (!ging) continue;
+    verschickt += 1;
+    await vermerkeMail(satz.id, MAIL_ANFRAGE, null, ging !== h.email);
+  }
+
+  if (verschickt === 0) return { verschickt: 0, ohneHaendler: false };
+
+  await setzeStufe(satz.id, 2);
+  await vermerke(satz.id, {
+    art: "anfrage_raus",
+    text: `Anfrage an ${empfaenger.map((h) => h.name).join(" und ")} verschickt`,
+    abStufe: 1,
+  });
+
+  if (satz.trainerEmail) {
+    const status = absolut(statusLink(satz.nummer) ?? "");
+    if (status) {
+      await sendeM5(satz.trainerEmail, {
+        vorgang: satz.nummer,
+        vorname: "",
+        mannschaft: liste.mannschaft,
+        haendler: empfaenger.map((h) => h.name),
+        statusLink: status,
+      });
+    }
+  }
+
+  const frisch = await vorgangPerNummer(nummer);
+  if (frisch.stand === "da") await spiegele(frisch.vorgang);
+
+  return { verschickt, ohneHaendler: false };
 }
 
 /* ------------------------------------------------------------------ *

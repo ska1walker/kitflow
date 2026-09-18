@@ -42,14 +42,35 @@ export function mailAktiv(): boolean {
   return Boolean(process.env.RESEND_API_KEY) && basis() !== null;
 }
 
-type Mail = { an: string; betreff: string; text: string; html: string };
+export type Anhang = {
+  dateiname: string;
+  /** Der Inhalt als Text. Base64 macht `sendeMail` daraus. */
+  inhalt: string;
+};
+
+type Mail = {
+  an: string;
+  betreff: string;
+  text: string;
+  html: string;
+  /** Antworten sollen zum Verein, nicht an die Absenderadresse. */
+  antwortAn?: string;
+  anhaenge?: Anhang[];
+};
 
 /**
  * Verschickt eine Mail. Zurück kommt die Adresse, an die sie ging, oder `null`
  * – der Aufrufer soll daraus nie einen Abbruch machen: ein Vorgang ist auch
  * ohne Mail gültig, die Links stehen auf der Seite.
  */
-export async function sendeMail({ an, betreff, text, html }: Mail): Promise<string | null> {
+export async function sendeMail({
+  an,
+  betreff,
+  text,
+  html,
+  antwortAn,
+  anhaenge,
+}: Mail): Promise<string | null> {
   if (!mailAktiv()) return null;
 
   const umleitung = process.env.MAIL_NUR_AN;
@@ -64,9 +85,17 @@ export async function sendeMail({ an, betreff, text, html }: Mail): Promise<stri
       },
       body: JSON.stringify({
         from: process.env.MAIL_ABSENDER || ABSENDER_STANDARD,
-        reply_to: process.env.MAIL_ANTWORT || ANTWORT_STANDARD,
+        reply_to: antwortAn || process.env.MAIL_ANTWORT || ANTWORT_STANDARD,
         to: [empfaenger],
         subject: betreff,
+        ...(anhaenge && anhaenge.length > 0
+          ? {
+              attachments: anhaenge.map((a) => ({
+                filename: a.dateiname,
+                content: Buffer.from(a.inhalt, "utf8").toString("base64"),
+              })),
+            }
+          : {}),
         text: umleitung && umleitung !== an ? `[Testumleitung, eigentlich an ${an}]\n\n${text}` : text,
         html:
           umleitung && umleitung !== an
@@ -515,6 +544,149 @@ export async function sendeM2(an: string, d: M2Daten): Promise<string | null> {
     betreff: letzte
       ? `Letzte Erinnerung: Größe für ${d.mannschaft} bis ${frist}`
       : `Erinnerung: Größe für ${d.mannschaft} bis ${frist}`,
+    text: alsText(rahmen),
+    html: alsHtml(rahmen),
+  });
+}
+
+export type M4Daten = {
+  vorgang: string;
+  /** „Sehr geehrter Herr Bormann“ oder die neutrale Anrede. */
+  anrede: string;
+  mannschaft: string;
+  /** Die Summen in Worten: „12× adidas Trainingsjacke · Größe M“. */
+  summen: { name: string; detail: string }[];
+  gesamtStueck: number;
+  beflockung: string[];
+  wunschtermin: string;
+  lieferadresse: string;
+  hinweisHaendler: string;
+  /** Die Angebote gehen in Kopie an den Trainer. */
+  trainerEmail: string;
+  antwortAn: string;
+  csv: string;
+};
+
+/**
+ * M4 · die Angebotsanfrage an einen Händler (docs/mails.md).
+ *
+ * Die einzige Mail, die das Haus verlässt, und die einzige, die niemand
+ * zurückholt. Zwei Dinge unterscheiden sie deshalb von allen anderen:
+ *
+ * 1. **Sie trägt keinen einzigen Spielernamen.** Kais Auflage bei der
+ *    Freigabe. Der Anhang zählt Stück, Größe, Rückennummer und Initialen —
+ *    alles, was ein Händler zum Kalkulieren und Beflocken braucht, und nichts
+ *    darüber hinaus (`anfrage.ts`).
+ * 2. **Sie siezt.** Trainer, Eltern und Spieler per du, Händler per Sie
+ *    (CLAUDE.md).
+ *
+ * Antworten sollen zum Verein gehen, nicht an die Absenderadresse der
+ * Anwendung — deshalb ein eigenes Reply-To.
+ */
+export async function sendeM4(an: string, d: M4Daten): Promise<string | null> {
+  const rahmen: Rahmen = {
+    eyebrow: `Anfrage ${d.vorgang}`,
+    titel: `Angebotsanfrage ${d.mannschaft}`,
+    vorschau: `${d.gesamtStueck} Stück, Eintracht Munster 2020 e.V.`,
+    bloecke: [
+      {
+        art: "absatz",
+        text: `${d.anrede},`,
+      },
+      {
+        art: "absatz",
+        text: `für unsere Mannschaft ${d.mannschaft} bitten wir um ein Angebot über die folgenden Artikel. Die vollständige Aufstellung mit Größen${d.summen.length > 0 ? ", Rückennummern" : ""} und Beflockung liegt als Tabelle bei.`,
+      },
+      { art: "titel", text: `Was angefragt wird (${d.gesamtStueck} Stück)` },
+      { art: "artikel", zeilen: d.summen },
+      { art: "titel", text: "Bitte im Angebot angeben" },
+      {
+        art: "schritte",
+        punkte: [
+          "Preis je Position, einschließlich Beflockung durch Sie",
+          "Gültigkeit des Angebots",
+          "Lieferzeit ab Bestellung",
+          `Die Vorgangsnummer ${d.vorgang} im Betreff oder auf dem Angebot`,
+        ],
+      },
+      { art: "titel", text: "Beflockung" },
+      { art: "schritte", punkte: d.beflockung },
+      {
+        art: "absatz",
+        text: "Wenn Sie davon abweichen würden oder etwas nicht passt, geben Sie es bitte im Angebot an.",
+      },
+      { art: "titel", text: "Liefern" },
+      {
+        art: "absatz",
+        text: `Wunschtermin: ${d.wunschtermin || "nach Absprache"}. Lieferadresse: ${d.lieferadresse || "nach Absprache"}.`,
+      },
+      ...(d.hinweisHaendler
+        ? ([{ art: "absatz", text: d.hinweisHaendler }] as Rahmen["bloecke"])
+        : ([] as Rahmen["bloecke"])),
+      {
+        art: "hinweis",
+        text: `Bitte schicken Sie das Angebot als PDF an ${d.antwortAn}${d.trainerEmail ? ` und in Kopie an ${d.trainerEmail}` : ""}. Dieselbe Anfrage geht an einen zweiten Händler.`,
+      },
+      {
+        art: "absatz",
+        text: "In der Tabelle stehen keine Namen. Wer welches Stück bekommt, ordnet der Verein bei der Ausgabe zu.",
+      },
+    ],
+  };
+
+  return sendeMail({
+    an,
+    betreff: `Angebotsanfrage ${d.vorgang} · Eintracht Munster · ${d.mannschaft}`,
+    text: alsText(rahmen),
+    html: alsHtml(rahmen),
+    antwortAn: d.antwortAn,
+    anhaenge: [{ dateiname: `${d.vorgang}_Anfrage.csv`, inhalt: d.csv }],
+  });
+}
+
+export type M5Daten = {
+  vorgang: string;
+  vorname: string;
+  mannschaft: string;
+  haendler: string[];
+  statusLink: string;
+};
+
+/** M5 · „die Anfrage ist raus“ an den Trainer (docs/mails.md). */
+export async function sendeM5(an: string, d: M5Daten): Promise<string | null> {
+  const wohin =
+    d.haendler.length === 1
+      ? d.haendler[0]
+      : `${d.haendler.slice(0, -1).join(", ")} und ${d.haendler[d.haendler.length - 1]}`;
+
+  const rahmen: Rahmen = {
+    eyebrow: `Vorgang ${d.vorgang}`,
+    titel: "Die Anfrage ist raus",
+    vorschau: `${d.mannschaft}: Angebote angefragt bei ${wohin}.`,
+    bloecke: [
+      {
+        art: "absatz",
+        text: `${anrede(d.vorname)} die Anfrage für ${d.mannschaft} ist heute an ${wohin} gegangen. Die Angebote kommen in Kopie an dich.`,
+      },
+      {
+        art: "absatz",
+        text: "Sind beide da, wählt die Spartenleitung aus, und du bekommst den Betrag und das Sponsorpaket.",
+      },
+      {
+        art: "hinweis",
+        text: "Bis dahin muss nichts bezahlt und nichts bestellt werden. Bestellt wird erst, wenn das Geld da ist.",
+      },
+      {
+        art: "absatz",
+        text: "In der Anfrage stehen keine Namen deiner Spielerinnen und Spieler – nur Stückzahlen, Größen und Nummern.",
+      },
+      { art: "links", zeilen: [{ name: "Deine Statusseite", href: d.statusLink }] },
+    ],
+  };
+
+  return sendeMail({
+    an,
+    betreff: `${d.vorgang} · Anfrage an die Händler verschickt`,
     text: alsText(rahmen),
     html: alsHtml(rahmen),
   });

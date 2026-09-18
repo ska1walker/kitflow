@@ -238,13 +238,49 @@ keine: „alle haben eingetragen" wäre dort eine Lüge.
 
 ## M4 · Angebotsanfrage (→ Intersport Uelzen und 11teamsports, je eine Mail)
 
-**Ungebaut, und zwar mit Absicht.** Sie geht nach draußen, an zwei echte
-Geschäftspartner, und sie ist die einzige Mail, die niemand zurückholen kann.
-CLAUDE.md: bis zu Kais ausdrücklicher Freigabe bleibt sie ungebaut — eine
-allgemeine Ansage wie „bau es fertig“ ist diese Freigabe nicht.
+Gebaut am 18.09.2026 auf Kais Freigabe, mit **einer Auflage: es gehen keine
+Spielernamen raus.** Verschickt aus `bestaetigeListe`, sobald der Trainer die
+Liste bestätigt (`src/lib/vorgaenge.ts`).
 
-Vorher zu klären: ob die Händler auf eine Voranfrage ohne Personenzeilen
-überhaupt antworten (mit Jens Bormann und Michael Hillebrecht besprechen).
+### Die Auflage
+
+Der ursprüngliche Entwurf sah ein Blatt „Positionen“ vor: je eine Zeile pro
+Person mit Vorname, Nachname, Größe und Trikotnummer. Das hätte die Namen und
+Maße einer ganzen Jugendmannschaft an zwei Firmen gegeben — dauerhaft, außerhalb
+des Vereins, ohne Möglichkeit zur Rücknahme.
+
+Gebraucht wird es nicht. Ein Händler kalkuliert und produziert aus **Stück,
+Größe, Rückennummer und Initialen**; kein Schritt davon braucht einen Namen. Die
+Tabelle ist deshalb nach Artikel und Größe sortiert, nicht nach Person, und die
+Mail sagt ausdrücklich: „In der Tabelle stehen keine Namen. Wer welches Stück
+bekommt, ordnet der Verein bei der Ausgabe zu."
+
+### Wohin sie geht
+
+`HAENDLER` in den Umgebungsvariablen, Format `Firma|Ansprechpartner|Adresse`, je
+Händler mit Komma getrennt. **Fehlt die Variable, geht keine Anfrage raus** — die
+Bestätigung des Trainers gilt trotzdem, der Vorgang bleibt auf Stufe 1 liegen,
+und der Verlauf sagt warum. Dieselbe Regel wie bei `LINK_SECRET` und
+`SPARTE_EMAILS`, und hier wiegt sie am schwersten.
+
+**Die Stufe wandert erst, wenn wirklich etwas rausging.** Schlägt der Versand an
+alle Händler fehl, bleibt der Vorgang, wo er ist: „Anfrage raus" an einem
+Vorgang, zu dem kein Händler je etwas bekam, wäre eine Lüge im CRM.
+
+### Der Anhang
+
+CSV statt XLSX, mit BOM und Semikolon, damit Excel auf Deutsch Spalten erkennt.
+kitflow hat keine Tabellenbibliothek, und eine erfundene XLSX-Struktur wäre
+nicht die Vorlage, die die Händler kennen. **Liegt `Anfrage_Vorlage.xlsx` vor,
+lässt sich das gewohnte Format nachrüsten** — bis dahin ist die CSV das
+Ehrlichere.
+
+### Noch offen
+
+Ob die Händler auch auf eine **Voranfrage** ohne Personenzeilen antworten
+(docs/konzept.md sieht dafür nur das Blatt Summen vor). Das ist ein Gespräch mit
+Jens Bormann und Michael Hillebrecht, kein Code — und es blockiert den normalen
+Weg nicht: dort gibt es immer vollständige Zeilen.
 
 **An:** {{haendler_email}}
 **Reply-To:** kai.boehm@eintrachtmunster.de
@@ -289,8 +325,9 @@ Spartenleiter Fußball · Eintracht Munster 2020 e.V.
 
 ## M5 · Anfrage ist raus (→ Trainer)
 
-**Ungebaut, weil sie ohne M4 lügen würde**: sie meldet, dass die Anfrage
-rausgegangen ist. Sie folgt M4 unmittelbar und wird mit ihr zusammen gebaut.
+Gebaut: `sendeM5` in `src/lib/mail.ts`, verschickt direkt nach M4. Sie nennt die
+Händler beim Namen, sagt, dass die Angebote in Kopie kommen — und dass in der
+Anfrage keine Namen seiner Spielerinnen und Spieler standen.
 
 **Betreff:** {{vorgang}} · Anfrage an beide Händler verschickt
 
