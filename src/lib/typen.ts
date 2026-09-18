@@ -104,8 +104,13 @@ export type VorgangsZeile = {
   warnung?: string;
   /** Die Spartenleitung selbst ist am Zug. */
   du?: boolean;
-  /** Im Entwurf ist nur der gesteuerte Vorgang anklickbar. */
-  verlinkt?: boolean;
+  /**
+   * Signierter Link auf die Statusseite, in der Trainer-Ansicht. Fehlt er,
+   * fehlt `LINK_SECRET` – dann ist die Zeile lesbar, aber nicht zu oeffnen.
+   */
+  href?: string;
+  /** Die Kennung in der Datenbank – die Stufe wird darueber gesetzt. */
+  id?: string;
 };
 
 /** Wer die Groesse einer Person haelt. Ohne Kontaktdaten, ohne Betraege. */

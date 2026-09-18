@@ -40,7 +40,8 @@ Umgebungsvariablen: `HUBSPOT_TOKEN`, `RESEND_API_KEY`, `LINK_SECRET`, `MAKE_WEBH
 - Keine erfundenen Artikeldaten. Artikel kommen von den Händlern oder aus echten Anfragen. Beispieldaten in Entwürfen immer als Beispieldaten markieren.
 - Daten von Kindern (Namen, Größen) nur serverseitig lesen, nie in den Code, nie in Logs. Spieler sehen nur sich selbst und den Mannschaftsstand ohne Beträge. Kontaktdaten nie offen anzeigen.
 - **`/neu` ist offen im Netz** (kein Token). Dort nie Namen, Größen oder persönliche Links anzeigen — auch nicht auf der Danke-Seite, auch nicht im Antwortobjekt der Server Action. Anlegen darf nur, wer als Kontakt in HubSpot steht **und** dort „Funktion im Verein“ = Trainer oder Spartenleiter mit Sparte Fußball hat (`darfMelden` in `bedarf.ts`).
-- **Die Startseite `/` steht ebenfalls offen** und trägt deshalb gar nichts Echtes mehr: keine Händler, keine Ansprechpartner, keine Artikelnummern, keinen Sponsor, keinen Beispiel-Kader. Das Schaufenster zum Durchklicken zieht mit dem Login nach `/sparte` (`browser/startseite.spec.ts` hält das fest).
+- **Die Startseite `/` steht ebenfalls offen** und trägt deshalb gar nichts Echtes mehr: keine Händler, keine Ansprechpartner, keine Artikelnummern, keinen Sponsor, keinen Beispiel-Kader (`browser/startseite.spec.ts` hält das fest).
+- **`/sparte` ist die einzige Seite mit echtem Login** (Supabase Magic Link, docs/anmeldung.md). Sie zeigt **alle** Vorgänge und setzt Stufen von Hand. Die Prüfung im `proxy` ist **optimistisch** und darf nie die einzige sein: `spartenLeitung()` steht in der Seite **und** in jeder Server Action — eine Action ist eine eigene Adresse. Wer hinein darf, steht in `SPARTE_EMAILS` (`src/lib/sparte.ts`); fehlt die Variable, kommt **niemand** hinein, nicht jeder. Eine Seite hinter Anmeldung nie vorrendern lassen (`export const dynamic = "force-dynamic"`).
 - Die bestehende Make-HubSpot-Verbindung 2981268 und die Szenarien für Spartenzuordnung und Passantrag nicht anfassen.
 - Keine Mail an die Geschäftsstelle ohne Kais ausdrückliche Freigabe.
 - Aussagen zu Steuern immer mit dem Hinweis „ich bin kein Steuerberater“.
@@ -94,6 +95,7 @@ ohnehin näher an Vercel ist.
 - docs/konzept.md – Ablauf, Rollen, Stufen, Regeln, Nummern, Händlerformat
 - docs/datenmodell.md – HubSpot-Objekte, Eigenschaften, Größenwerte, Zuordnung
 - docs/datenbank.md – eigene Datenbank für Vorgänge: Schnitt, Tabellen, RLS, wie geprüft wurde
+- docs/anmeldung.md – Login der Spartenleitung: Verfahren, die zwei Prüfungen, was in Supabase eingerichtet sein muss
 - docs/formulare.md – Seiten und Formulare mit Feldern, Logik und Texten
 - docs/mails.md – Mailvorlagen M1–M7
 - docs/design-coachbase.md – Tokens, Rollen, Rezepte

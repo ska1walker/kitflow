@@ -1,27 +1,19 @@
-"use client";
-
 import { Badge } from "./ui";
 import { LETZTE_STUFE, stufe as stufeVon } from "@/lib/stufen";
 import type { VorgangsZeile } from "@/lib/typen";
 import { MiniLeiste } from "./schrittleiste";
 
-function Zeile({
-  vorgang,
-  onOeffnen,
-  onDemo,
-}: {
-  vorgang: VorgangsZeile;
-  onOeffnen: () => void;
-  onDemo: (text: string) => void;
-}) {
+/**
+ * Eine Zeile ist ein Link auf die Statusseite des Vorgangs — in der
+ * Trainer-Ansicht, denn dort liegen die Karten, die die Spartenleitung braucht.
+ * Der Link wird serverseitig signiert (`uebersicht.ts`): auch die
+ * Spartenleitung kommt an eine Statusseite nur mit gültigem Token, es gibt
+ * keinen zweiten Weg hinein.
+ */
+function Zeile({ vorgang }: { vorgang: VorgangsZeile }) {
   return (
-    <button
-      type="button"
-      onClick={
-        vorgang.verlinkt
-          ? onOeffnen
-          : () => onDemo("Dieser Vorgang bekommt seine eigene Seite, sobald HubSpot ihn liefert.")
-      }
+    <a
+      href={vorgang.href ?? "#"}
       className="grid w-full grid-cols-1 items-center gap-2 rounded-2xl border border-ink-200 bg-white px-[18px] py-3.5 text-left shadow-soft transition-colors hover:border-pitch-300 md:grid-cols-[132px_minmax(0,1.3fr)_minmax(0,1.4fr)_minmax(0,1fr)] md:gap-4"
     >
       <span className="tnum font-mono text-xs text-ink-600">{vorgang.nummer}</span>
@@ -54,7 +46,7 @@ function Zeile({
           )
         )}
       </span>
-    </button>
+    </a>
   );
 }
 
@@ -62,15 +54,7 @@ function Zeile({
  * Übersicht der Spartenleitung: alle Vorgänge auf einen Blick, mit der einzigen
  * Frage, die hier zählt – wo hängt es und wer ist am Zug.
  */
-export function SpartenAnsicht({
-  zeilen,
-  onOeffnen,
-  onDemo,
-}: {
-  zeilen: VorgangsZeile[];
-  onOeffnen: (nummer: string) => void;
-  onDemo: (text: string) => void;
-}) {
+export function SpartenAnsicht({ zeilen }: { zeilen: VorgangsZeile[] }) {
   const laufen = zeilen.filter((v) => v.stufe < LETZTE_STUFE).length;
   const fuerDich = zeilen.filter((v) => v.du).length;
   const haengen = zeilen.filter((v) => v.warnung).length;
@@ -103,12 +87,7 @@ export function SpartenAnsicht({
 
       <div className="flex flex-col gap-2.5">
         {zeilen.map((v) => (
-          <Zeile
-            key={v.nummer}
-            vorgang={v}
-            onOeffnen={() => onOeffnen(v.nummer)}
-            onDemo={onDemo}
-          />
+          <Zeile key={v.nummer} vorgang={v} />
         ))}
       </div>
     </>

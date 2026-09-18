@@ -46,7 +46,7 @@ export default async function TrainerStatus(props: PageProps<"/v/[vorgang]">) {
   return (
     <Statusseite
       vorgang={vorgang}
-      zeilen={[]}
+     
       ansicht="trainer"
       voranfrage={voranfrage}
       nachtrag={nachtrag ? { token: t, personen: nachtrag.personen } : undefined}

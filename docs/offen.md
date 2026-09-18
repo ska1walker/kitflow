@@ -1,6 +1,6 @@
 # Offen
 
-Stand 17.09.2026
+Stand 18.09.2026
 
 ## Kai
 - Resend: Konto mit Domain hubsport.club (Region eu-west-1), API-Key für kitflow und Make
@@ -8,7 +8,9 @@ Stand 17.09.2026
 - Vercel-Projekt, Subdomain für kitflow (DNS bei Kai)
 - 10–15 Standardartikel von Jens Bormann und Michael Hillebrecht; bei Intersport eigene Artikelnummern erfragen
 - Standard-Beflockung mit beiden Händlern bestätigen
-- Login für die Spartenleitung festlegen (wer außer Kai: Sebastian?) → als `SPARTE_EMAILS`, eine Liste wie `ADMIN_EMAILS` bei coachbase
+- **`SPARTE_EMAILS` setzen.** Die Anmeldung ist gebaut (docs/anmeldung.md), die Liste fehlt. Entschieden: Kai **und Sebastian** — dessen Adresse ist noch nicht genannt. Fehlt die Variable, kommt niemand hinein; das ist Absicht, heißt aber auch, dass `/sparte` bis dahin stillsteht.
+- **`NEXT_PUBLIC_SUPABASE_ANON_KEY` in Vercel.** Neu und Pflicht für die Anmeldung — der Dienst-Schlüssel taugt dafür nicht.
+- **In Supabase**: Custom SMTP auf Resend stellen (sonst zwei Mails pro Stunde aus einer Supabase-Domain) und `https://<domain>/auth/callback` als Redirect-URL freigeben. Beides steht in docs/anmeldung.md.
 - **Supabase-Projekt für kitflow, Region EU.** Von der Entwicklungsumgebung aus ist genau eines sichtbar (`wcnnetngzcyidnteiril`, eu-central-1, **inaktiv**) — und das ist weder das Coachbase-Projekt noch erkennbar für kitflow gedacht. Welches Konto kitflow bekommt, entscheidet Kai. Gebraucht werden danach `NEXT_PUBLIC_SUPABASE_URL` und `SUPABASE_SERVICE_ROLE_KEY`, und die Migration `supabase/migrations/001_vorgaenge.sql` muss einmal im SQL-Editor laufen (docs/datenbank.md).
 
 ## Entscheidungen

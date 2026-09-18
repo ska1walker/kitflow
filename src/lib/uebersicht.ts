@@ -7,12 +7,14 @@ import "server-only";
  * über die HubSpot-Pipeline weg: die Stufe steht als Zahl am Vorgang und muss
  * nicht mehr über den Namen einer Stufe zurückübersetzt werden.
  *
- * Die Seite `/sparte`, die das anzeigen soll, ist noch nicht gebaut
- * (docs/offen.md). Bis dahin ruft niemand `ladeZeilen` auf.
+ * Angezeigt wird das auf `/sparte`, hinter der Anmeldung (`anmeldung.ts`).
+ * Jede Zeile trägt ihren signierten Link auf die Statusseite: auch die
+ * Spartenleitung kommt dort nur mit gültigem Token hinein.
  */
 
 import { alleVorgaenge, type VorgangSatz } from "./vorgaenge-db";
 import { ausgeschlossene } from "./ansicht";
+import { statusLink } from "./links";
 import type { StufeNr, VorgangsZeile } from "./typen";
 
 /** Ganze Tage seit einem Zeitpunkt. `null`, wenn es keinen gibt. */
@@ -80,7 +82,11 @@ function zurZeile(satz: VorgangSatz): VorgangsZeile {
     frist,
     warnung: ueberfaellig && frist ? `${frist} überschritten` : undefined,
     du: satz.stufe === 3 || satz.stufe === 5,
-    verlinkt: true,
+    // Auch die Spartenleitung kommt an eine Statusseite nur mit gültigem Token.
+    // Es gibt keinen zweiten Weg hinein, und das soll so bleiben: dann gibt es
+    // auch nur eine Stelle, die falsch sein kann.
+    href: statusLink(satz.nummer) ?? undefined,
+    id: satz.id,
   };
 }
 
