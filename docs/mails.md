@@ -1,6 +1,34 @@
 # Mailvorlagen M0–M7
 
-Stand: 10.09.2026 · Versand über Resend (Domain hubsport.club), aus kitflow als React-Email-Vorlagen im Coachbase-Design; Hintergrund-Mails ggf. aus Make (Modul resend:sendAnEmail). Links auf die Statusseite in jede Mail aufnehmen.
+Stand: 18.09.2026 · Versand über Resend (Domain hubsport.club), aus kitflow.
+Hintergrund-Mails ggf. aus Make (Modul resend:sendAnEmail). Links auf die
+Statusseite in jede Mail aufnehmen.
+
+**Alle Mails tragen denselben Rahmen** (`src/lib/mail-rahmen.ts`). Eine Mail wird
+als Liste von Blöcken beschrieben, nie als HTML; daraus entstehen beide
+Fassungen, die gestaltete und die reine Textfassung. So können sie nicht
+auseinanderlaufen.
+
+**Der Verein steht oben, kitflow klein daneben** (Kai, 18.09.2026). Vorher war es
+umgekehrt: „kitflow“ groß in Neon, der Verein klein. Bei einer Mail an einen
+Händler ist das verkehrt herum — der kennt kitflow nicht. Die Farben bleiben die
+aus docs/design-coachbase.md.
+
+**Der Platz für das Vereinswappen ist vorbereitet, aber leer.** Kommt es, wird es
+als Anhang mit Content-ID eingebunden (`cid:`) und nicht als externe Adresse:
+Outlook und Gmail blockieren fremde Bilder standardmäßig, und ein blockiertes
+Logo hinterlässt ein leeres Loch im Kopf.
+
+Was am Rahmen sonst noch steckt, weil es sonst beim Empfänger schiefgeht:
+
+| | Warum |
+|---|---|
+| VML-Knopf für Outlook | die Word-Engine kennt weder `border-radius` noch `padding` an einem `<a>`; ohne VML ist der Knopf dort ein blauer Textlink |
+| Dunkelmodus mit eigenen Farben | sonst dreht Apple Mail selbst um und macht aus dunklem Text auf Weiß hellgrauen auf Hellgrau |
+| Knopf dreht im Dunkeln um | ein schwarzer Knopf auf dunkler Karte ist kein Knopf mehr |
+| Kopf bekommt im Dunkeln eine Kante | sonst schwarz auf Schwarz und damit weg |
+| Vorschauzeile aufgefüllt | sonst hängt Gmail den Anfang des ersten Absatzes an die Vorschau |
+| `kitflow` fällt unter 480 px weg | es stieß auf dem Handy an den Vereinsnamen; im Fuß steht es ohnehin |
 
 Platzhalter in doppelten geschweiften Klammern kommen aus HubSpot bzw. dem Formular, z. B. `{{vorgang}}`.
 Anrede: Trainer, Eltern und Spieler per du, Händler per Sie.
