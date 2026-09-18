@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { spiegele } from "./spiegel";
 import { raeumeUmgebung, stelleUmgebung, vorgangZeile } from "../../test/db-fake";
-import type { VorgangSatz } from "./vorgaenge-db";
+import { satz } from "../../test/satz";
 
 /**
  * Der Spiegel steht zwischen zwei Systemen, deshalb steht hier auch ein
@@ -60,29 +60,6 @@ const PIPELINE = {
     },
   ],
 };
-
-function satz(mehr: Partial<VorgangSatz> = {}): VorgangSatz {
-  return {
-    id: "v1",
-    nummer: "AUS-2026-001",
-    mannschaften: ["Ü40 Team 3"],
-    ausstattungsart: "Weitere Ausstattung",
-    stufe: 1,
-    stufeSeit: "2026-09-18T06:00:00+00:00",
-    trainerEmail: "kai@example.org",
-    groessenarten: [],
-    groessenFrist: "2026-09-30",
-    initialenNoetig: false,
-    angelegtAm: "2026-09-18T06:00:00+00:00",
-    aktualisiertAm: "2026-09-18T06:00:00+00:00",
-    artikel: [],
-    personen: [],
-    angebote: { intersport: {}, elfteamsports: {} },
-    finanzen: {},
-    erstattung: {},
-    ...mehr,
-  };
-}
 
 beforeEach(() => {
   stelleUmgebung();
