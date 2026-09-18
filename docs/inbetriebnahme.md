@@ -99,7 +99,7 @@ Development**.
 | Variable | Wert | wofür |
 | --- | --- | --- |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase → Settings → API → **anon public** | die Anmeldung. Darf in den Browser, anders als der Dienst-Schlüssel |
-| `SPARTE_EMAILS` | `kai.boehm@eintrachtmunster.de` — Sebastians Adresse mit Komma dahinter, sobald du sie hast | wer sich anmelden darf |
+| `SPARTE_EMAILS` | deine Adresse und die von Sebastian Hebisch, mit Komma getrennt | wer sich anmelden darf |
 | `CRON_SECRET` | 32 zufällige Zeichen, siehe unten | der tägliche Erinnerungslauf |
 
 Ein Geheimnis erzeugen:
@@ -194,7 +194,6 @@ Nichts davon ist dringend, und nichts davon fange ich ohne dein Wort an.
 | **M3 · Größenliste zum Prüfen** | die Mail an den Trainer, wenn alle eingetragen haben |
 | **M4 · Anfrage an die Händler** | **bleibt ungebaut bis zu deiner ausdrücklichen Freigabe** |
 | **Foto-Upload** | meine Empfehlung: harte Größengrenze *und* serverseitig verkleinern, nur Trainer, erst nach dem echten Durchlauf |
-| **Sebastians Adresse** | für `SPARTE_EMAILS` |
 | **Frist für die Sponsorensuche** | Stufe 0 hat noch keinen Wecker (docs/offen.md) |
 | **Zwei lose HubSpot-Kontakte** | `kai.boehm@eintrachtmunster.de` ohne Name und Funktion, zweiter „Kai Böhm" unter `fussball@eintrachtmunster.de` |
 
