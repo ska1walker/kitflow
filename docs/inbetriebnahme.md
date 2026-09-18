@@ -195,9 +195,15 @@ Am besten mit einem **Wegwerf-Vorgang** üben, nicht mit AUS-2026-002:
 7. **Sieh dir die CSV im Anhang an.** Dort darf **kein einziger Name** stehen —
    nur Artikel, Größe, Stück, Nummer, Initialen.
 
-**Gegenprobe:** einen zweiten Wegwerf-Vorgang bis zur Freigabe bringen und dort
-**Stoppen** mit einem Grund. Erwartet: keine Händlermail, stattdessen M4b an dich
-mit dem Grund im Text.
+**Gegenprobe 1:** einen zweiten Wegwerf-Vorgang bis zur Freigabe bringen und
+dort **Stoppen** mit einem Grund. Erwartet: keine Händlermail, stattdessen M4b an
+dich mit dem Grund im Text.
+
+**Gegenprobe 2:** einen dritten anlegen und die Liste bestätigen, **ohne eine
+Größe einzutragen**. Erwartet: „Liste bestätigt – aber es fehlen alle Größen",
+keine Telegram-Nachricht, keine Todoist-Aufgabe, keine Karte auf `/sparte`. Das
+ist der Fall, der vorher eine Freigabe erzeugt hat, die niemand erteilen
+konnte.
 
 Danach beide Wegwerf-Vorgänge auf `/sparte` **abbrechen** und das Nachlesen nicht
 vergessen.
