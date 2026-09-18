@@ -10,39 +10,36 @@ import "server-only";
  *
  * Danach hebt der Vorgang von Stufe 0 auf Stufe 1, die Kontakte der Mannschaft
  * kommen dazu und die Größenabfrage läuft wie bei jedem anderen Vorgang.
+ *
+ * Seit dem Umzug ist das erheblich weniger Arbeit: die Artikel sind Zeilen am
+ * Vorgang und werden geändert. Der ganze Apparat aus Platzhalter-Nummern,
+ * Produkten und Positionen — und die Sortierung, die nötig war, weil HubSpot
+ * Positionen in beliebiger Reihenfolge herausgab — fällt ersatzlos weg.
  */
 
-import {
-  hubspot,
-  hubspotAktiv,
-  pipelineStufen,
-  PIPELINE_NAME,
-  assoziierteIds,
-  batchLesen,
-  type HsListe,
-  type HsObjekt,
-} from "./hubspot";
-import {
-  beflockungText,
-  kontakteDerMannschaft,
-  verknuepfen,
-  type BedarfErgebnis,
-} from "./bedarf";
+import { kontakteDerMannschaft } from "./bedarf";
 import { GROESSEN_LABEL } from "./groessen";
 import { groessenLink, statusLink, bestaetigenLink } from "./links";
+import { spiegele, spiegelePersonen } from "./spiegel";
+import {
+  aendereArtikel,
+  aendereVorgang,
+  haengePersonenAn,
+  setzeStufe,
+  vermerke,
+  vorgangPerNummer,
+} from "./vorgaenge-db";
+import type { BedarfErgebnis } from "./bedarf";
 import type { ArtikelFuer, Groessenart } from "./typen";
 
 /** Ein Artikel der Voranfrage, so wie ihn das Formular anzeigt. */
 export type VoranfrageArtikel = {
-  positionId: string;
-  produktId: string;
+  artikelId: string;
   hersteller: string;
   bezeichnung: string;
   groessenart: Groessenart;
   groessenartLabel: string;
-  /** Der SKU, wie er am Produkt steht – echte Nummer oder Platzhalter. */
-  sku: string;
-  /** Der SKU ist nur ein Platzhalter, die echte Artikelnummer fehlt noch. */
+  /** Die Artikelnummer fehlt noch – im einfachen Modus kennt sie der Trainer oft nicht. */
   platzhalter: boolean;
   herstellernummer: string;
   farbe: string;
@@ -53,7 +50,7 @@ export type VoranfrageArtikel = {
 
 export type Voranfrage = {
   vorgang: string;
-  dealId: string;
+  vorgangId: string;
   trainerEmail: string;
   mannschaft: string;
   teams: string[];
@@ -65,8 +62,7 @@ export type Voranfrage = {
 };
 
 export type ErgaenzungArtikel = {
-  positionId: string;
-  produktId: string;
+  artikelId: string;
   herstellernummer: string;
   farbe: string;
   fuer: ArtikelFuer;
@@ -84,191 +80,59 @@ export type ErgaenzungEingabe = {
   artikel: ErgaenzungArtikel[];
 };
 
-const DEAL_FELDER = [
-  "vorgangsnummer",
-  "dealstage",
-  "mannschaft",
-  "mannschaftscode",
-  "ausstattungsart",
-  "personen_geschaetzt",
-  "trainer_email",
-  "hinweis_haendler",
-  "hs_lastmodifieddate",
-];
-
-const POSITION_FELDER = ["hs_product_id", "quantity", "sponsor", "groesse_von", "groesse_bis"];
-
-const PRODUKT_FELDER = ["name", "hs_sku", "hersteller", "farbe", "groessenart", "fuer", "aktiv"];
-
-/** Ob ein SKU nur der Platzhalter aus dem einfachen Modus ist. */
-export function istPlatzhalter(sku: string): boolean {
-  return sku.startsWith("VOR-");
-}
-
 /**
- * Die Nummer, die im Platzhalter-SKU steckt – die Reihenfolge, in der der
- * Trainer die Artikel gemeldet hat.
+ * Die Voranfrage zu einer Nummer. `null` heisst: gibt es nicht, ist keine
+ * Voranfrage mehr, oder die Datenbank antwortet nicht.
  *
- * HubSpot gibt Positionen in beliebiger Reihenfolge zurueck. Ohne das stuenden
- * die Artikel im Formular anders als in F1, und der Trainer traegt die
- * Artikelnummer beim falschen Artikel ein.
- */
-function meldeRang(sku: string): number {
-  const treffer = /-(\d+)$/.exec(sku);
-  return istPlatzhalter(sku) && treffer ? Number(treffer[1]) : Number.MAX_SAFE_INTEGER;
-}
-
-function text(o: HsObjekt, feld: string): string {
-  return o.properties[feld] ?? "";
-}
-
-async function dealDerNummer(nummer: string): Promise<HsObjekt | null> {
-  const treffer = await hubspot<HsListe<HsObjekt>>({
-    pfad: "/crm/v3/objects/deals/search",
-    koerper: {
-      filterGroups: [
-        { filters: [{ propertyName: "vorgangsnummer", operator: "EQ", value: nummer }] },
-      ],
-      properties: DEAL_FELDER,
-      limit: 1,
-    },
-  });
-  const deal = treffer?.results[0];
-  if (!deal || text(deal, "vorgangsnummer") !== nummer) return null;
-  return deal;
-}
-
-/**
- * Die Voranfrage zum Formular. `null` heisst: es gibt sie nicht, oder der
- * Vorgang ist über die Voranfrage hinaus – dann ist hier nichts mehr zu tun.
+ * Nur Stufe 0: ein Vorgang, bei dem die Groessen schon laufen, wird nicht noch
+ * einmal ergaenzt – sonst wechselte die Stufe ein zweites Mal und die Kontakte
+ * kaemen doppelt dazu.
  */
 export async function ladeVoranfrage(nummer: string): Promise<Voranfrage | null> {
-  if (!hubspotAktiv()) return null;
-
-  const stufen = await pipelineStufen();
-  if (!stufen) return null;
-
-  const deal = await dealDerNummer(nummer);
-  if (!deal) return null;
-  if (stufen.get(text(deal, "dealstage")) !== "Voranfrage") return null;
-
-  const positionsIds = await assoziierteIds("deals", deal.id, "line_items");
-  const positionen = await batchLesen("line_items", positionsIds, POSITION_FELDER);
-  const produktIds = [...new Set(positionen.map((p) => text(p, "hs_product_id")).filter(Boolean))];
-  const produkte = new Map(
-    (await batchLesen("products", produktIds, PRODUKT_FELDER)).map((p) => [p.id, p]),
-  );
-
-  const artikel: VoranfrageArtikel[] = [];
-  for (const position of positionen) {
-    const produkt = produkte.get(text(position, "hs_product_id"));
-    if (!produkt) continue;
-
-    const sku = text(produkt, "hs_sku");
-    const art = (text(produkt, "groessenart") || "ohne") as Groessenart;
-    const hersteller = text(produkt, "hersteller");
-    const name = text(produkt, "name");
-
-    artikel.push({
-      positionId: position.id,
-      produktId: produkt.id,
-      hersteller,
-      // Der Produktname ist „Hersteller Bezeichnung“; der Hersteller steht
-      // zusaetzlich in einem eigenen Feld und wird hier wieder abgeschnitten.
-      bezeichnung: hersteller && name.startsWith(`${hersteller} `)
-        ? name.slice(hersteller.length + 1)
-        : name,
-      groessenart: art,
-      groessenartLabel: GROESSEN_LABEL[art] ?? art,
-      sku,
-      platzhalter: istPlatzhalter(sku),
-      herstellernummer: istPlatzhalter(sku) ? "" : sku,
-      farbe: text(produkt, "farbe"),
-      stueck: Number(text(position, "quantity")) || 1,
-      groesseVon: text(position, "groesse_von"),
-      groesseBis: text(position, "groesse_bis"),
-    });
-  }
-
-  artikel.sort((a, b) => meldeRang(a.sku) - meldeRang(b.sku));
+  const ergebnis = await vorgangPerNummer(nummer);
+  if (ergebnis.stand !== "da") return null;
+  const satz = ergebnis.vorgang;
+  if (satz.stufe !== 0) return null;
 
   return {
-    vorgang: nummer,
-    dealId: deal.id,
-    trainerEmail: text(deal, "trainer_email"),
-    mannschaft: text(deal, "mannschaft").split(";").filter(Boolean).join(", "),
-    teams: text(deal, "mannschaft").split(";").filter(Boolean),
-    ausstattungsart: text(deal, "ausstattungsart"),
-    personenGeschaetzt: Number(text(deal, "personen_geschaetzt")) || 0,
-    // Der Sponsor steht an jeder Position; eine reicht zum Anzeigen.
-    sponsor: positionen.length > 0 ? text(positionen[0], "sponsor") : "",
-    hinweise: text(deal, "hinweis_haendler"),
-    artikel,
+    vorgang: satz.nummer,
+    vorgangId: satz.id,
+    trainerEmail: satz.trainerEmail ?? "",
+    mannschaft: satz.mannschaften.join(", ") || (satz.mannschaftscode ?? ""),
+    teams: satz.mannschaften,
+    ausstattungsart: satz.ausstattungsart,
+    personenGeschaetzt: satz.personenGeschaetzt ?? 0,
+    sponsor: satz.sponsor ?? "",
+    hinweise: satz.hinweisHaendler ?? "",
+    artikel: satz.artikel.map((a) => ({
+      artikelId: a.id,
+      hersteller: a.hersteller ?? "",
+      bezeichnung: a.bezeichnung,
+      groessenart: a.groessenart,
+      groessenartLabel: GROESSEN_LABEL[a.groessenart],
+      platzhalter: !a.herstellernummer,
+      herstellernummer: a.herstellernummer ?? "",
+      farbe: a.farbe ?? "",
+      stueck: a.stueck,
+      groesseVon: a.groesseVon ?? "",
+      groesseBis: a.groesseBis ?? "",
+    })),
   };
 }
 
-/**
- * Setzt die echte Artikelnummer am Produkt.
- *
- * Gibt es zu der Nummer schon ein Produkt, wird auf dieses umgehängt und das
- * Platzhalter-Produkt stillgelegt: sonst stünden zwei Produkte mit derselben
- * Nummer im Stamm. Zurück kommt die ID des Produkts, das jetzt gilt.
- */
-async function produktRichtigstellen(
-  artikel: VoranfrageArtikel,
-  eingabe: ErgaenzungArtikel,
-): Promise<string | null> {
-  const nummer = eingabe.herstellernummer.trim();
-  const eigenschaften = {
-    hs_sku: nummer,
-    farbe: eingabe.farbe,
-    fuer: eingabe.fuer,
-    beflockung_standard: beflockungText(eingabe),
-    aktiv: "true",
-  };
-
-  const treffer = await hubspot<HsListe<HsObjekt>>({
-    pfad: "/crm/v3/objects/products/search",
-    koerper: {
-      filterGroups: [{ filters: [{ propertyName: "hs_sku", operator: "EQ", value: nummer }] }],
-      properties: ["hs_sku"],
-      limit: 2,
-    },
-  });
-  const fremd = treffer?.results.find((p) => p.id !== artikel.produktId);
-
-  if (!fremd) {
-    const ok = await hubspot<HsObjekt>({
-      pfad: `/crm/v3/objects/products/${artikel.produktId}`,
-      methode: "PATCH",
-      koerper: { properties: eigenschaften },
-    });
-    return ok ? artikel.produktId : null;
-  }
-
-  // Das Produkt gibt es schon. Der Platzhalter wird stillgelegt statt
-  // geloescht: was einmal in HubSpot stand, verschwindet hier nicht spurlos.
-  if (artikel.platzhalter) {
-    await hubspot({
-      pfad: `/crm/v3/objects/products/${artikel.produktId}`,
-      methode: "PATCH",
-      koerper: { properties: { aktiv: "false", name: `${artikel.bezeichnung} (ersetzt)` } },
-    });
-  }
-  await hubspot({
-    pfad: `/crm/v3/objects/products/${fremd.id}`,
-    methode: "PATCH",
-    koerper: { properties: eigenschaften },
-  });
-  return fremd.id;
+/** Der Text, der als Beflockung am Artikel steht. */
+function beflockung(artikel: ErgaenzungArtikel): string {
+  if (artikel.beflockung === "Abweichend") return artikel.beflockungAbweichend;
+  if (artikel.beflockung === "Ohne") return "ohne Beflockung";
+  return "Standard";
 }
 
 /**
- * Schreibt die fehlenden Angaben und startet die Größenabfrage.
+ * Macht aus der Voranfrage einen laufenden Vorgang.
  *
- * `null` heisst: HubSpot war nicht erreichbar oder der Vorgang passt nicht
- * mehr. Findet sich zur Mannschaft kein Kontakt, endet der Vorgang hier auf
- * Abgebrochen – jetzt ist der Fall aus docs/formulare.md (M7) wirklich da.
+ * `null` heisst: nichts geaendert. Auch hier gilt, dass eine gescheiterte
+ * Kontaktsuche keine leere Mannschaft ist – hier haengt sogar mehr daran als
+ * in F1, weil der Vorgang schon existiert und die Stufe wechselt.
  */
 export async function ergaenzeVorgang(
   nummer: string,
@@ -277,58 +141,58 @@ export async function ergaenzeVorgang(
   const voranfrage = await ladeVoranfrage(nummer);
   if (!voranfrage) return null;
 
-  const pipelines = await hubspot<
-    HsListe<{ id: string; label: string; stages: { id: string; label: string }[] }>
-  >({ pfad: "/crm/v3/pipelines/deals" });
-  const pipeline = pipelines?.results.find((p) => p.label === PIPELINE_NAME);
-  const stufe1 = pipeline?.stages.find((s) => s.label === "Größen laufen");
-  const stufe9 = pipeline?.stages.find((s) => s.label === "Abgebrochen");
-  if (!pipeline || !stufe1 || !stufe9) return null;
-
   for (const artikel of voranfrage.artikel) {
-    const dazu = eingabe.artikel.find((a) => a.positionId === artikel.positionId);
+    const dazu = eingabe.artikel.find((a) => a.artikelId === artikel.artikelId);
     if (!dazu) continue;
 
-    const produktId = await produktRichtigstellen(artikel, dazu);
-    if (produktId && produktId !== artikel.produktId) {
-      await hubspot({
-        pfad: `/crm/v3/objects/line_items/${artikel.positionId}`,
-        methode: "PATCH",
-        koerper: { properties: { hs_product_id: produktId } },
-      });
-    }
-    if (eingabe.sponsor !== voranfrage.sponsor) {
-      await hubspot({
-        pfad: `/crm/v3/objects/line_items/${artikel.positionId}`,
-        methode: "PATCH",
-        koerper: { properties: { sponsor: eingabe.sponsor } },
-      });
-    }
+    const ok = await aendereArtikel(artikel.artikelId, {
+      herstellernummer: dazu.herstellernummer,
+      farbe: dazu.farbe,
+      fuer: dazu.fuer,
+      beflockung: beflockung(dazu),
+    });
+    if (!ok) return null;
   }
 
   const kontakte = await kontakteDerMannschaft(voranfrage.teams);
-  // Wie in F1: eine gescheiterte Suche ist keine leere Mannschaft. Hier haengt
-  // sogar mehr daran, weil der Vorgang schon existiert und die Stufe wechselt.
   if (kontakte === null) return null;
   const ohnePersonen = kontakte.length === 0;
 
-  const gesetzt = await hubspot<HsObjekt>({
-    pfad: `/crm/v3/objects/deals/${voranfrage.dealId}`,
-    methode: "PATCH",
-    koerper: {
-      properties: {
-        dealstage: ohnePersonen ? stufe9.id : stufe1.id,
-        groessen_frist: eingabe.groessenFrist,
-        lieferadresse: eingabe.lieferadresse,
-        initialen_noetig: eingabe.initialenNoetig ? "true" : "false",
-        hinweis_haendler: eingabe.hinweise,
-      },
-    },
+  const geaendert = await aendereVorgang(voranfrage.vorgangId, {
+    groessenFrist: eingabe.groessenFrist,
+    lieferadresse: eingabe.lieferadresse,
+    initialenNoetig: eingabe.initialenNoetig,
+    sponsor: eingabe.sponsor,
+    hinweisHaendler: eingabe.hinweise,
   });
-  if (!gesetzt) return null;
+  if (!geaendert) return null;
 
-  for (const kontakt of kontakte) {
-    await verknuepfen("deals", voranfrage.dealId, "contacts", kontakt.id);
+  // Erst die Personen, dann die Stufe: ein Vorgang auf „Groessen laufen“ ohne
+  // die Leute, die eintragen sollen, waere fuer einen Moment eine Luege.
+  const angehaengt = await haengePersonenAn(
+    voranfrage.vorgangId,
+    kontakte.map((k) => k.id),
+  );
+  if (!angehaengt) return null;
+
+  // Ohne Personen gibt es nichts anzufragen: der Vorgang endet sofort
+  // (docs/formulare.md, M7).
+  if (!(await setzeStufe(voranfrage.vorgangId, ohnePersonen ? 9 : 1, ohnePersonen ? 0 : undefined))) {
+    return null;
+  }
+
+  await vermerke(voranfrage.vorgangId, {
+    art: "ergaenzt",
+    text: ohnePersonen
+      ? "Angaben ergänzt, aber zur Mannschaft ist niemand hinterlegt"
+      : "Angaben ergänzt, die Größenabfrage läuft",
+    abStufe: 0,
+  });
+
+  const frisch = await vorgangPerNummer(nummer);
+  if (frisch.stand === "da") {
+    await spiegele(frisch.vorgang);
+    await spiegelePersonen(frisch.vorgang);
   }
 
   return {

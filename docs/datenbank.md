@@ -164,3 +164,33 @@ einem Aufruf, das Array `mannschaften`, `is.null` und `is.false`, `order`, `limi
 die Rücknahme eines halben Vorgangs bei verletzter Bedingung (23514), und die Nummernfunktion
 über `rpc/`. **anon bekommt auch hier 401 „permission denied“** — RLS greift durch den echten
 Stapel, nicht nur in psql.
+
+
+## Der Umzug (18.09.2026)
+
+F1, F1b, F2, F3, die Statusseite und die Übersicht lesen und schreiben jetzt gegen die
+Datenbank. Kai hat den **harten Schnitt** gewählt: fehlen die beiden Umgebungsvariablen,
+findet kitflow keinen Vorgang mehr und sagt das auch — statt einen zweiten Pfad zu pflegen,
+der stillschweigend auseinanderläuft.
+
+**Was dabei ersatzlos verschwindet:** Positionen, Produkte mit Platzhalter-Nummern (`VOR-…`),
+die Sortierung, die nötig war, weil HubSpot Positionen in beliebiger Reihenfolge herausgab,
+die Pipeline-Suche für jede einzelne Seite, und die Record-IDs in Freitextfeldern.
+
+**Sechs Stellen ändern ihr Verhalten**, nicht nur ihre Quelle:
+
+| | vorher | jetzt |
+|---|---|---|
+| Rückennummer | am Kontakt, galt für alle Vorgänge | am Vorgang, gilt für diese Runde |
+| Torwart / Ausschluss | Record-IDs im Freitextfeld | Spalten an `vorgang_person` |
+| Eigene Ausstattung | aus Positionen — wohin nie jemand schrieb, also immer leer | aus dem Kontakt, nur die gefragten Arten |
+| Prüfung 1 | Produkt aktiv, mit SKU und Farbe | Artikel mit Herstellernummer und Farbe |
+| Betrag für die Deckung | `amount` am Deal, das nie jemand setzte | das Angebot des gewählten Händlers |
+| „Wartet seit“ | letzte Änderung am Deal | `stufe_seit`, gesetzt vom Trigger |
+
+**Die Rückennummern, die heute an Kontakten stehen** (Kai hat die 99), bleiben in HubSpot
+stehen, werden aber nicht mehr gelesen. Der erste Vorgang vergibt sie neu.
+
+**Was HubSpot behält:** die Kontakte mit Größen und Initialen, die Firmen der beiden Händler,
+und am gespiegelten Deal die Personen des Vorgangs — damit im CRM sichtbar bleibt, wer
+dazugehört (`spiegelePersonen`). Auch das wird nie zurückgelesen.

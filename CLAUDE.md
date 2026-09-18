@@ -7,8 +7,9 @@ Verantwortlich und einziger Betreiber: Kai Böhm, Spartenleiter Fußball (kai.bo
 ## Was kitflow ist und was nicht
 
 - kitflow ist die Oberfläche: Formulare, Statusseite, Übersicht für die Spartenleitung, Mails im selben Design.
-- HubSpot ist die Datenbasis (Deals = Vorgänge, Produkte = Artikelstamm, Positionen = Person × Artikel, Kontakte = Größen).
-- Daneben steht seit 17.09.2026 eine **eigene Datenbank für Vorgänge** (Supabase, `docs/datenbank.md`). Sie ist **an keiner Seite angeschlossen**: alles läuft weiter über HubSpot. Was der Person gehört — Name, Mitgliedschaft, Größen, Initialen —, bleibt dauerhaft in HubSpot.
+- **Vorgänge leben in der eigenen Datenbank** (Supabase, `docs/datenbank.md`): Stufe, Artikel, Fristen, wer dazugehört, wer ausgeschlossen ist, wer im Tor steht, Rückennummern, Verlauf.
+- **Personen leben in HubSpot**: Name, Mitgliedschaft, Größen, Initialen. Dort pflegt es die Geschäftsstelle, dort hängt die Passantrag-Kette.
+- Der Deal im CRM ist seit dem Umzug nur noch ein **dünner Spiegel** (`src/lib/spiegel.ts`) und wird nie zurückgelesen. Eine Stufe, die in HubSpot von Hand verschoben wird, kommt nicht mehr bei kitflow an.
 - Make.com erledigt Hintergrundabläufe, die nicht an eine Seite gebunden sind (Gmail-Wächter für Angebote/Rechnungen mit Claude, Todoist, Telegram, Fristen). Siehe docs/konzept.md.
 - Tally ist abgelöst. Die drei Tally-Entwürfe (kdoMYe, Zj7qVo, eqJkAe) sind nur noch Spezifikation, siehe docs/formulare.md.
 

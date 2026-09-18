@@ -1,162 +1,207 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import {
+  ladeGroessenAbfrage,
+  ladeTrainerAbfrage,
   speichereGroessen,
   speichereTrainerAngaben,
-  type GroessenAbfrage,
-  type TrainerAbfrage,
 } from "./vorgaenge";
+import { artikel, kontakt, person, satz } from "../../test/satz";
+import { raeumeUmgebung, stelleUmgebung, stelleWelt } from "../../test/welt";
 
 /**
- * Die beiden Stellen, an denen kitflow an einen Kontakt schreibt — und die
- * einzigen, die ein Fremder erreichen kann, wenn er einen Link in die Hände
- * bekommt.
+ * Die beiden Wege, auf denen ein Fremder etwas schreiben kann.
  *
- * Ein Formular lässt sich nachbauen. Deshalb entscheidet nicht das Formular,
- * was geschrieben wird, sondern die Abfrage, die vorher rausging: nur ihre
- * Felder, nur ihre Werte. Genau das halten diese Tests fest.
+ * Beide hängen nur an einem signierten Link — einen Login gibt es nicht. Ein
+ * Formular lässt sich nachbauen, deshalb wird hier nichts übernommen, was
+ * nicht vorher als Frage rausging.
+ *
+ * Seit dem Umzug geht die Schreiberei in zwei Richtungen: Größen und Initialen
+ * gehören der Person und bleiben in HubSpot; Rückennummer, Ausschluss und
+ * Torwart gelten nur für diesen Vorgang und stehen in der Datenbank.
  */
 
-const HEUTE = "2026-09-17";
+const HEUTE = "2026-09-18";
 
-function abfrage(mehr: Partial<GroessenAbfrage> = {}): GroessenAbfrage {
-  return {
-    vorgang: "AUS-2026-001",
-    person: "111",
-    anrede: "ZZ",
-    mannschaft: "Ü40 Team 3",
-    gegenstand: "Weitere Ausstattung",
-    jugend: false,
-    fragen: [
-      {
-        art: "oberteil",
-        label: "Oberteil",
-        feld: "trainingsanzug_oberteil",
-        werte: ["M", "L", "XL"],
-        wert: "",
-        bisher: "",
-        veraltet: false,
-      },
-    ],
-    initialenNoetig: false,
-    nurGroessen: false,
-    initialen: "",
-    offen: true,
+function welt(mehr: Parameters<typeof stelleWelt>[0] = {}) {
+  return stelleWelt({
+    vorgang: satz({
+      ausstattungsart: "Trikotsatz",
+      artikel: [artikel({ groessenart: "trikot" })],
+      personen: [person()],
+    }),
+    kontakte: [kontakt("111")],
     ...mehr,
-  };
-}
-
-function trainerAbfrage(mehr: Partial<TrainerAbfrage> = {}): TrainerAbfrage {
-  return {
-    ...abfrage(),
-    name: "ZZ Person",
-    nummer: "",
-    ausgeschlossen: false,
-    torwart: false,
-    belegteNummern: [],
-    ...mehr,
-  };
-}
-
-let geschrieben: ReturnType<typeof vi.fn>;
-
-/** Sammelt die PATCHes an Kontakte, damit sich nachlesen lässt, was ankam. */
-function kontaktPatches() {
-  return geschrieben.mock.calls
-    .filter(([url, o]) => String(url).includes("/objects/contacts/") && (o as RequestInit)?.method === "PATCH")
-    .map(([, o]) => JSON.parse(String((o as RequestInit).body)).properties as Record<string, string>);
+  });
 }
 
 beforeEach(() => {
-  process.env.HUBSPOT_TOKEN = "zz-test";
+  stelleUmgebung();
   vi.useFakeTimers();
   vi.setSystemTime(new Date(`${HEUTE}T12:00:00Z`));
-  geschrieben = vi.fn(async (url: string) => {
-    if (String(url).includes("/objects/deals/search")) {
-      return Response.json({ results: [{ id: "d1", properties: { vorgangsnummer: "AUS-2026-001" } }] });
-    }
-    return Response.json({ id: "1", properties: {} });
-  });
-  vi.stubGlobal("fetch", geschrieben);
   vi.spyOn(console, "error").mockImplementation(() => {});
 });
 
 afterEach(() => {
-  delete process.env.HUBSPOT_TOKEN;
+  raeumeUmgebung();
   vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
 
-describe("F2 · Größen speichern", () => {
-  test("schreibt die Größe und das Bestätigungsdatum", async () => {
-    const e = await speichereGroessen(abfrage(), { trainingsanzug_oberteil: "L" });
+/** Die PATCHes am Kontakt in HubSpot. */
+function kontaktPatches(aufrufe: { host: string; methode: string; pfad: string; koerper: unknown }[]) {
+  return aufrufe
+    .filter((a) => a.host === "hubspot" && a.methode === "PATCH" && a.pfad.includes("/contacts/"))
+    .map((a) => (a.koerper as { properties: Record<string, string> }).properties);
+}
 
-    expect(e).toEqual({ ok: true });
-    expect(kontaktPatches()[0]).toEqual({
-      trainingsanzug_oberteil: "L",
+describe("Der Spieler trägt seine Größe ein", () => {
+  test("die gefragte Größe landet am Kontakt, mit Bestätigungsdatum", async () => {
+    const { aufrufe } = welt();
+    const abfrage = (await ladeGroessenAbfrage("AUS-2026-001", "111"))!;
+
+    expect(await speichereGroessen(abfrage, { trikot: "L" })).toEqual({ ok: true });
+
+    expect(kontaktPatches(aufrufe)[0]).toEqual({
+      trikot: "L",
       groesse_zuletzt_bestaetigt_am: HEUTE,
     });
   });
 
-  test("ein Feld, das nie gefragt wurde, wird nicht übernommen", async () => {
-    // Der Angriff: das Formular nachbauen und ein weiteres Feld dazuschreiben.
-    await speichereGroessen(abfrage(), {
-      trainingsanzug_oberteil: "L",
-      schuhgroesse: "47",
-      trikotnummer: "1",
+  test("eine Größe, die es nicht gibt, wird abgewiesen – ohne zu schreiben", async () => {
+    const { aufrufe } = welt();
+    const abfrage = (await ladeGroessenAbfrage("AUS-2026-001", "111"))!;
+
+    expect(await speichereGroessen(abfrage, { trikot: "Riesig" })).toEqual({ ok: false });
+    expect(kontaktPatches(aufrufe)).toHaveLength(0);
+  });
+
+  test("ein Feld, das gar nicht gefragt wurde, wird nicht übernommen", async () => {
+    // Ein Formular laesst sich nachbauen.
+    const { aufrufe } = welt();
+    const abfrage = (await ladeGroessenAbfrage("AUS-2026-001", "111"))!;
+
+    await speichereGroessen(abfrage, { trikot: "L", schuhgroesse: "47" });
+
+    expect(kontaktPatches(aufrufe)[0]).not.toHaveProperty("schuhgroesse");
+  });
+
+  test("gar nichts eingetragen schreibt gar nichts", async () => {
+    const { aufrufe } = welt();
+    const abfrage = (await ladeGroessenAbfrage("AUS-2026-001", "111"))!;
+
+    expect(await speichereGroessen(abfrage, {})).toEqual({ ok: false });
+    expect(kontaktPatches(aufrufe)).toHaveLength(0);
+  });
+
+  test("wer ausgeschlossen ist, kommt gar nicht erst zum Formular", async () => {
+    welt({
+      vorgang: satz({
+        artikel: [artikel()],
+        personen: [person({ ausgeschlossen: true })],
+      }),
     });
-
-    const patch = kontaktPatches()[0];
-    expect(patch).not.toHaveProperty("schuhgroesse");
-    expect(patch).not.toHaveProperty("trikotnummer");
+    expect(await ladeGroessenAbfrage("AUS-2026-001", "111")).toBeNull();
   });
 
-  test("ein Wert, der nicht zur Auswahl gehört, schreibt gar nichts", async () => {
-    const e = await speichereGroessen(abfrage(), { trainingsanzug_oberteil: "XXXXL" });
-
-    expect(e.ok).toBe(false);
-    // Nicht „das eine Feld weglassen", sondern nichts schreiben.
-    expect(kontaktPatches()).toHaveLength(0);
-  });
-
-  test("ohne Eingabe wird nichts geschrieben", async () => {
-    expect((await speichereGroessen(abfrage(), {})).ok).toBe(false);
-    expect(kontaktPatches()).toHaveLength(0);
+  test("wer nicht am Vorgang hängt, auch nicht", async () => {
+    welt();
+    expect(await ladeGroessenAbfrage("AUS-2026-001", "999")).toBeNull();
   });
 });
 
-describe("F2 · Initialen", () => {
-  test("werden nur gefragt, wenn der Vorgang sie aufdruckt", async () => {
-    await speichereGroessen(abfrage(), { trainingsanzug_oberteil: "L", initialen: "ZZ" });
-    // Ohne Häkchen stand das Feld gar nicht im Formular.
-    expect(kontaktPatches()[0]).not.toHaveProperty("initialen");
+describe("Initialen", () => {
+  test("werden verlangt, wenn der Vorgang sie aufdruckt", async () => {
+    const { aufrufe } = welt({
+      vorgang: satz({
+        initialenNoetig: true,
+        artikel: [artikel({ groessenart: "trikot" })],
+        personen: [person()],
+      }),
+    });
+    const abfrage = (await ladeGroessenAbfrage("AUS-2026-001", "111"))!;
+
+    expect(abfrage.initialenNoetig).toBe(true);
+    expect(await speichereGroessen(abfrage, { trikot: "L" })).toMatchObject({ ok: false });
+    expect(kontaktPatches(aufrufe)).toHaveLength(0);
+
+    expect(await speichereGroessen(abfrage, { trikot: "L", initialen: "KB" })).toEqual({ ok: true });
+    expect(kontaktPatches(aufrufe)[0].initialen).toBe("KB");
   });
 
-  test("mit Häkchen werden sie übernommen", async () => {
-    await speichereGroessen(abfrage({ initialenNoetig: true }), {
-      trainingsanzug_oberteil: "L",
-      initialen: " z z ",
+  test("zu lang oder mit Sonderzeichen wird abgewiesen – die Grenze kommt von HubSpot", async () => {
+    const { aufrufe } = welt({
+      vorgang: satz({
+        initialenNoetig: true,
+        artikel: [artikel({ groessenart: "trikot" })],
+        personen: [person()],
+      }),
     });
-    expect(kontaktPatches()[0].initialen).toBe("z z");
+    const abfrage = (await ladeGroessenAbfrage("AUS-2026-001", "111"))!;
+
+    expect(await speichereGroessen(abfrage, { trikot: "L", initialen: "ZZZZ" })).toMatchObject({ ok: false });
+    expect(await speichereGroessen(abfrage, { trikot: "L", initialen: "K.B" })).toMatchObject({ ok: false });
+    expect(kontaktPatches(aufrufe)).toHaveLength(0);
   });
 
-  test.for(["", "Z.Z", "ZZZZ"])("ungültige Initialen (%s) schreiben gar nichts", async (roh) => {
-    const e = await speichereGroessen(abfrage({ initialenNoetig: true }), {
-      trainingsanzug_oberteil: "L",
-      initialen: roh,
-    });
+  test("ohne Häkchen werden sie auch nicht übernommen", async () => {
+    const { aufrufe } = welt();
+    const abfrage = (await ladeGroessenAbfrage("AUS-2026-001", "111"))!;
 
-    expect(e.ok).toBe(false);
-    // Die Meldung sagt, was falsch ist – nicht nur, dass etwas ist.
-    expect("fehler" in e && e.fehler).toBeTruthy();
-    expect(kontaktPatches()).toHaveLength(0);
+    await speichereGroessen(abfrage, { trikot: "L", initialen: "KB" });
+    expect(kontaktPatches(aufrufe)[0]).not.toHaveProperty("initialen");
   });
 });
 
-describe("F2 als Trainer", () => {
-  test("eine Nummer ohne Größe setzt kein Bestätigungsdatum", async () => {
-    // Sonst sähe eine alte Größe durch eine fremde Bestätigung frisch aus.
-    const e = await speichereTrainerAngaben(trainerAbfrage(), {
+describe("Der Trainer trägt für jemanden nach", () => {
+  test("die Rückennummer steht am Vorgang, nicht am Menschen", async () => {
+    // Naechste Runde kann sie jemand anders tragen.
+    const { aufrufe } = welt();
+    const abfrage = (await ladeTrainerAbfrage("AUS-2026-001", "111"))!;
+
+    const ergebnis = await speichereTrainerAngaben(abfrage, {
+      groessen: {},
+      nummer: "7",
+      initialen: "",
+      ausgeschlossen: false,
+      torwart: true,
+    });
+
+    expect(ergebnis.ok).toBe(true);
+    const angaben = aufrufe.find((a) => a.pfad === "vorgang_person" && a.methode === "PATCH");
+    expect(angaben?.koerper).toMatchObject({ trikotnummer: "7", torwart: true, ausgeschlossen: false });
+    // Ohne Groesse wird am Kontakt gar nichts angefasst.
+    expect(kontaktPatches(aufrufe)).toHaveLength(0);
+  });
+
+  test("eine Nummer außerhalb von 1 bis 99 wird abgewiesen", async () => {
+    const { aufrufe } = welt();
+    const abfrage = (await ladeTrainerAbfrage("AUS-2026-001", "111"))!;
+
+    const ergebnis = await speichereTrainerAngaben(abfrage, {
+      groessen: {},
+      nummer: "100",
+      initialen: "",
+      ausgeschlossen: false,
+      torwart: false,
+    });
+
+    expect(ergebnis).toMatchObject({ ok: false });
+    expect(aufrufe.some((a) => a.pfad === "vorgang_person" && a.methode === "PATCH")).toBe(false);
+  });
+
+  test("eine doppelte Nummer nennt, wer sie schon hat", async () => {
+    welt({
+      vorgang: satz({
+        ausstattungsart: "Trikotsatz",
+        artikel: [artikel({ groessenart: "trikot" })],
+        personen: [person(), person({ id: "p2", kontaktId: "222", trikotnummer: "7" })],
+      }),
+      kontakte: [kontakt("111"), kontakt("222", { firstname: "Uwe", lastname: "Christiani" })],
+    });
+    const abfrage = (await ladeTrainerAbfrage("AUS-2026-001", "111"))!;
+
+    const ergebnis = await speichereTrainerAngaben(abfrage, {
       groessen: {},
       nummer: "7",
       initialen: "",
@@ -164,75 +209,48 @@ describe("F2 als Trainer", () => {
       torwart: false,
     });
 
-    expect(e.ok).toBe(true);
-    const patch = kontaktPatches()[0];
-    expect(patch.trikotnummer).toBe("7");
-    expect(patch).not.toHaveProperty("groesse_zuletzt_bestaetigt_am");
+    expect(ergebnis.fehler).toContain("Uwe Christiani");
   });
 
-  test("mit Größe wird das Datum gesetzt", async () => {
-    await speichereTrainerAngaben(trainerAbfrage(), {
-      groessen: { trainingsanzug_oberteil: "L" },
+  test("das Bestätigungsdatum nur, wenn wirklich eine Größe angefasst wurde", async () => {
+    // Sonst liesse eine fremde Bestaetigung eine alte Groesse frisch aussehen.
+    const { aufrufe } = welt();
+    const abfrage = (await ladeTrainerAbfrage("AUS-2026-001", "111"))!;
+
+    await speichereTrainerAngaben(abfrage, {
+      groessen: { trikot: "L" },
       nummer: "",
       initialen: "",
       ausgeschlossen: false,
       torwart: false,
     });
-    expect(kontaktPatches()[0].groesse_zuletzt_bestaetigt_am).toBe(HEUTE);
-  });
 
-  test.for(["0", "100", "-1", "7,5", "abc"])("die Nummer %s wird abgewiesen", async (nummer) => {
-    const e = await speichereTrainerAngaben(trainerAbfrage(), {
-      groessen: {},
-      nummer,
-      initialen: "",
-      ausgeschlossen: false,
-      torwart: false,
+    expect(kontaktPatches(aufrufe)[0]).toMatchObject({
+      trikot: "L",
+      groesse_zuletzt_bestaetigt_am: HEUTE,
     });
-
-    expect(e.ok).toBe(false);
-    expect(kontaktPatches()).toHaveLength(0);
   });
 
-  test("eine schon vergebene Nummer wird abgewiesen und nennt den Träger", async () => {
-    const e = await speichereTrainerAngaben(
-      trainerAbfrage({ belegteNummern: [{ nummer: "7", name: "ZZ Andere" }] }),
-      { groessen: {}, nummer: "7", initialen: "", ausgeschlossen: false, torwart: false },
-    );
+  test("ein Ausschluss lässt sich zurücknehmen", async () => {
+    const { aufrufe } = welt({
+      vorgang: satz({
+        artikel: [artikel({ groessenart: "trikot" })],
+        personen: [person({ ausgeschlossen: true })],
+      }),
+    });
+    // Der Trainer kommt an das Formular, auch wenn die Person ausgeschlossen ist.
+    const abfrage = (await ladeTrainerAbfrage("AUS-2026-001", "111"))!;
+    expect(abfrage.ausgeschlossen).toBe(true);
 
-    expect(e.ok).toBe(false);
-    expect(e.fehler).toContain("ZZ Andere");
-    expect(kontaktPatches()).toHaveLength(0);
-  });
-
-  test("eine leere Nummer löscht sie", async () => {
-    await speichereTrainerAngaben(trainerAbfrage({ nummer: "7" }), {
+    await speichereTrainerAngaben(abfrage, {
       groessen: {},
       nummer: "",
       initialen: "",
       ausgeschlossen: false,
       torwart: false,
     });
-    expect(kontaktPatches()[0].trikotnummer).toBe("");
-  });
 
-  test("Ausschluss und Torwart landen am Vorgang, nicht am Kontakt", async () => {
-    await speichereTrainerAngaben(trainerAbfrage(), {
-      groessen: {},
-      nummer: "",
-      initialen: "",
-      ausgeschlossen: true,
-      torwart: true,
-    });
-
-    // Beides gilt nur für diesen Vorgang, nicht für die nächste Runde.
-    expect(kontaktPatches()[0]).not.toHaveProperty("ausgeschlossene_spieler");
-
-    const dealPatch = geschrieben.mock.calls.find(
-      ([url, o]) => String(url).includes("/objects/deals/d1") && (o as RequestInit)?.method === "PATCH",
-    );
-    const eigenschaften = JSON.parse(String((dealPatch![1] as RequestInit).body)).properties;
-    expect(eigenschaften.ausgeschlossene_spieler).toContain("111");
-    expect(eigenschaften.torwarte).toContain("111");
+    const angaben = aufrufe.find((a) => a.pfad === "vorgang_person" && a.methode === "PATCH");
+    expect(angaben?.koerper).toMatchObject({ ausgeschlossen: false });
   });
 });

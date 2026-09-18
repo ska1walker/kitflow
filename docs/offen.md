@@ -13,7 +13,7 @@ Stand 17.09.2026
 
 ## Entscheidungen
 - ~~kitflow schreibt HubSpot direkt oder über Make-Webhooks~~ – entschieden: direkt, `src/lib/hubspot.ts` ist der einzige Weg nach außen
-- ~~Vorgänge bleiben in HubSpot oder bekommen eine eigene Datenbank~~ – entschieden: eigene Datenbank (Supabase), der Deal bleibt als **dünner Spiegel** im CRM. Der Spiegel wird nie zurückgelesen. **Folge: eine Stufe, die in HubSpot von Hand verschoben wird, kommt nicht mehr bei kitflow an** — dafür bekommt `/sparte` einen Stufenwechsel. Schicht und Schema stehen (docs/datenbank.md), angeschlossen ist noch nichts.
+- ~~Vorgänge bleiben in HubSpot oder bekommen eine eigene Datenbank~~ – entschieden: eigene Datenbank (Supabase), der Deal bleibt als **dünner Spiegel** im CRM. Der Spiegel wird nie zurückgelesen. **Folge: eine Stufe, die in HubSpot von Hand verschoben wird, kommt nicht mehr bei kitflow an** — dafür bekommt `/sparte` einen Stufenwechsel. Umgesetzt am 18.09.2026: F1, F1b, F2, F3, Statusseite und Übersicht lesen und schreiben gegen die Datenbank (docs/datenbank.md).
 - Fristen und Erinnerungen über Vercel Cron oder weiter Make (AUS-W)
 - Händler-XLSX in kitflow erzeugen oder Make
 

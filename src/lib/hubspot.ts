@@ -200,6 +200,20 @@ export async function assoziierteIds(
   return daten.results.map((r) => String(r.toObjectId));
 }
 
+/** `false` heisst: HubSpot hat die Verknuepfung nicht bestaetigt. */
+export async function verknuepfen(
+  vonTyp: string,
+  vonId: string,
+  zuTyp: string,
+  zuId: string,
+): Promise<boolean> {
+  const antwort = await hubspot({
+    pfad: `/crm/v4/objects/${vonTyp}/${vonId}/associations/default/${zuTyp}/${zuId}`,
+    methode: "PUT",
+  });
+  return antwort !== null;
+}
+
 /**
  * Mehrere Objekte in einem Aufruf lesen. HubSpot nimmt 100 pro Bündel, also
  * bündeln wir selbst. Eigenschaften, die es im Portal nicht gibt, laesst

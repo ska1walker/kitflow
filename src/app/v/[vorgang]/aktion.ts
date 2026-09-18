@@ -13,10 +13,12 @@
  * (docs/konzept.md).
  */
 
-import { hubspot, hubspotAktiv, PIPELINE_NAME, type HsListe, type HsObjekt } from "@/lib/hubspot";
 import { groessenLink, pruefe } from "@/lib/links";
 import { ladeVoranfrage } from "@/lib/ergaenzen";
+import { spiegele } from "@/lib/spiegel";
 import { trageNach } from "@/lib/vorgaenge";
+import { dbAktiv } from "@/lib/db";
+import { setzeStufe, vermerke, vorgangPerNummer } from "@/lib/vorgaenge-db";
 
 export type Ergebnis =
   | { stand: "leer" }
@@ -36,7 +38,7 @@ export async function voranfrageAbbrechen(
   if (formular.get("abbrechen") !== "ja") {
     return { stand: "fehler", text: "Bitte den Abbruch bestätigen." };
   }
-  if (!hubspotAktiv()) {
+  if (!dbAktiv()) {
     return { stand: "fehler", text: "Das hat gerade nicht geklappt. Bitte versuch es später." };
   }
 
@@ -47,24 +49,21 @@ export async function voranfrageAbbrechen(
     return { stand: "fehler", text: "Dieser Vorgang ist keine offene Voranfrage mehr." };
   }
 
-  const pipelines = await hubspot<
-    HsListe<{ id: string; label: string; stages: { id: string; label: string }[] }>
-  >({ pfad: "/crm/v3/pipelines/deals" });
-  const stufe9 = pipelines?.results
-    .find((p) => p.label === PIPELINE_NAME)
-    ?.stages.find((s) => s.label === "Abgebrochen");
-  if (!stufe9) {
-    return { stand: "fehler", text: "Das hat gerade nicht geklappt. Bitte versuch es später." };
-  }
-
-  const gesetzt = await hubspot<HsObjekt>({
-    pfad: `/crm/v3/objects/deals/${voranfrage.dealId}`,
-    methode: "PATCH",
-    koerper: { properties: { dealstage: stufe9.id } },
-  });
+  // Stufe 9 ist der Abbruch; `abbruchBei` haelt fest, wo der Vorgang stand.
+  // Ohne das liesse er sich spaeter nicht wieder aufnehmen.
+  const gesetzt = await setzeStufe(voranfrage.vorgangId, 9, 0);
   if (!gesetzt) {
     return { stand: "fehler", text: "Das hat gerade nicht geklappt. Bitte versuch es später." };
   }
+
+  await vermerke(voranfrage.vorgangId, {
+    art: "abgebrochen",
+    text: "Der Trainer hat die Voranfrage abgebrochen",
+    abStufe: 0,
+  });
+
+  const frisch = await vorgangPerNummer(vorgang);
+  if (frisch.stand === "da") await spiegele(frisch.vorgang);
 
   return { stand: "abgebrochen" };
 }
@@ -100,7 +99,7 @@ export async function personNachtragen(
   const person = String(formular.get("person") ?? "").trim();
   if (!person) return { stand: "fehler", text: "Bitte eine Person wählen." };
 
-  if (!hubspotAktiv()) {
+  if (!dbAktiv()) {
     return { stand: "fehler", text: "Das hat gerade nicht geklappt. Bitte versuch es später." };
   }
 

@@ -43,7 +43,7 @@ function Feld({
  */
 function ArtikelBlock({ artikel }: { artikel: VoranfrageArtikel }) {
   const [beflockung, setBeflockung] = useState("Standard");
-  const id = artikel.positionId;
+  const id = artikel.artikelId;
   const bereich =
     artikel.groesseVon && artikel.groesseBis
       ? `${artikel.groesseVon} bis ${artikel.groesseBis}`
@@ -239,7 +239,7 @@ export function ErgaenzenFormular({
           dafür meldest du einen neuen Bedarf.
         </p>
         {voranfrage.artikel.map((artikel) => (
-          <ArtikelBlock key={artikel.positionId} artikel={artikel} />
+          <ArtikelBlock key={artikel.artikelId} artikel={artikel} />
         ))}
       </Card>
 

@@ -3,28 +3,16 @@ import "server-only";
 /**
  * Die Spartenübersicht: alle Vorgänge als Zeilen (docs/formulare.md).
  *
- * Lag bis eben in `vorgaenge.ts` und trug dort einen Prototyp-Begriff mit sich
- * herum: `ladeZeilen` nahm eine „Entwurfsstufe“ entgegen, mit der das
- * Schaufenster seinen Regler durchreichte. Ein Server-Zugriff, der die Demo
- * kennt — das ist jetzt getrennt. Die Beispieldaten liefert das Schaufenster
- * selbst (`src/components/schaufenster.tsx`).
+ * Liest seit dem Umzug aus der eigenen Datenbank. Damit fällt auch der Umweg
+ * über die HubSpot-Pipeline weg: die Stufe steht als Zahl am Vorgang und muss
+ * nicht mehr über den Namen einer Stufe zurückübersetzt werden.
  *
- * Die Seite `/sparte`, die das hier anzeigen soll, ist noch nicht gebaut
+ * Die Seite `/sparte`, die das anzeigen soll, ist noch nicht gebaut
  * (docs/offen.md). Bis dahin ruft niemand `ladeZeilen` auf.
  */
 
-import {
-  hubspot,
-  hubspotAktiv,
-  kurzDatum,
-  pipelineStufen,
-  text,
-  zahl,
-  type HsListe,
-  type HsObjekt,
-} from "./hubspot";
-import { stufeAusName } from "./stufen";
-import { dealSuche } from "./vorgaenge";
+import { alleVorgaenge, type VorgangSatz } from "./vorgaenge-db";
+import { ausgeschlossene } from "./ansicht";
 import type { StufeNr, VorgangsZeile } from "./typen";
 
 /** Ganze Tage seit einem Zeitpunkt. `null`, wenn es keinen gibt. */
@@ -36,8 +24,8 @@ function tageSeit(wert: string | undefined): number | null {
 }
 
 /** Wer ist als Nächstes dran? Eine Zeile je Stufe (docs/konzept.md). */
-function wartetAuf(stufe: StufeNr, deal: HsObjekt): string {
-  switch (stufe) {
+function wartetAuf(satz: VorgangSatz): string {
+  switch (satz.stufe) {
     case 0:
       return "Sponsor";
     case 1:
@@ -48,9 +36,9 @@ function wartetAuf(stufe: StufeNr, deal: HsObjekt): string {
     case 5:
       return "dich";
     case 4:
-      return zahl(deal, "zusage_sponsor") > 0 ? "Sponsor" : "Finanzierung";
+      return (satz.finanzen.zusageSponsor ?? 0) > 0 ? "Sponsor" : "Finanzierung";
     case 6:
-      return text(deal, "lieferant_gewaehlt") ?? "Händler";
+      return satz.lieferantGewaehlt ?? "Händler";
     case 7:
       return "Trainer";
     default:
@@ -59,30 +47,39 @@ function wartetAuf(stufe: StufeNr, deal: HsObjekt): string {
 }
 
 /** Die Frist, die auf dieser Stufe zählt. Auf Stufe 1 ist es die Größenfrist. */
-function fristVon(stufe: StufeNr, deal: HsObjekt): string | undefined {
-  const roh = stufe === 1 ? text(deal, "groessen_frist") : text(deal, "stufe_frist");
-  const datum = kurzDatum(roh);
-  return datum ? `Frist ${datum}` : undefined;
+function fristVon(satz: VorgangSatz): string | undefined {
+  return satz.stufe === 1 ? satz.groessenFrist : satz.stufeFrist;
 }
 
-/** Ein Deal wird zur Zeile in der Übersicht. */
-function zurZeile(deal: HsObjekt, stufe: StufeNr): VorgangsZeile {
-  const art = text(deal, "ausstattungsart") ?? "Ausstattung";
-  const tage = tageSeit(text(deal, "hs_lastmodifieddate"));
-  const frist = fristVon(stufe, deal);
-  const fristRoh = stufe === 1 ? text(deal, "groessen_frist") : text(deal, "stufe_frist");
+/** „2026-09-30“ wird zu „30.09.“. */
+function kurz(wert: string | undefined): string | undefined {
+  if (!wert) return undefined;
+  const treffer = /^(\d{4})-(\d{2})-(\d{2})/.exec(wert);
+  return treffer ? `${treffer[3]}.${treffer[2]}.` : undefined;
+}
+
+/** Ein Vorgang wird zur Zeile in der Übersicht. */
+function zurZeile(satz: VorgangSatz): VorgangsZeile {
+  const fristRoh = fristVon(satz);
+  const datum = kurz(fristRoh);
+  const frist = datum ? `Frist ${datum}` : undefined;
   const ueberfaellig = (tageSeit(fristRoh) ?? -1) > 0;
 
+  // „Wartet seit“ fragt nach der Stufe, nicht nach der letzten Änderung: eine
+  // korrigierte Lieferadresse soll die Wartezeit nicht zurücksetzen. Dafür
+  // führt die Datenbank `stufe_seit` mit.
+  const tage = tageSeit(satz.stufeSeit);
+
   return {
-    nummer: text(deal, "vorgangsnummer") ?? deal.id,
-    mannschaft: text(deal, "mannschaft") ?? text(deal, "mannschaftscode") ?? "Ohne Mannschaft",
-    gegenstand: art,
-    stufe,
-    wartetAuf: wartetAuf(stufe, deal),
+    nummer: satz.nummer,
+    mannschaft: satz.mannschaften.join(", ") || satz.mannschaftscode || "Ohne Mannschaft",
+    gegenstand: satz.ausstattungsart,
+    stufe: satz.stufe as StufeNr,
+    wartetAuf: wartetAuf(satz),
     seit: tage === null ? "" : tage === 0 ? "heute" : `${tage} Tage`,
     frist,
     warnung: ueberfaellig && frist ? `${frist} überschritten` : undefined,
-    du: stufe === 3 || stufe === 5,
+    du: satz.stufe === 3 || satz.stufe === 5,
     verlinkt: true,
   };
 }
@@ -90,29 +87,23 @@ function zurZeile(deal: HsObjekt, stufe: StufeNr): VorgangsZeile {
 /**
  * Alle Vorgänge der Sparte.
  *
- * Eine leere Liste heißt hier wirklich „keine Vorgänge“ – ohne HubSpot, ohne
- * Pipeline oder ohne Treffer kommt nichts zurück. Früher fielen alle drei Fälle
- * auf Beispieldaten zurück; auf einer Seite hinter Login wären erfundene
- * Vorgänge schlimmer als eine ehrliche Leere.
+ * Eine leere Liste heißt hier wirklich „keine Vorgänge“, und `null` heißt
+ * „konnte nicht fragen“. Auf einer Seite hinter Login wären erfundene oder
+ * stillschweigend verschwundene Vorgänge beides schlimmer als eine ehrliche
+ * Antwort.
  */
-export async function ladeZeilen(): Promise<VorgangsZeile[]> {
-  if (!hubspotAktiv()) return [];
+export async function ladeZeilen(): Promise<VorgangsZeile[] | null> {
+  const vorgaenge = await alleVorgaenge();
+  if (vorgaenge === null) return null;
+  return vorgaenge.map(zurZeile);
+}
 
-  const stufen = await pipelineStufen();
-  if (!stufen) return [];
-
-  const treffer = await hubspot<HsListe<HsObjekt>>({
-    pfad: "/crm/v3/objects/deals/search",
-    koerper: dealSuche(undefined, 100),
-  });
-  if (!treffer) return [];
-
-  return treffer.results
-    .map((deal) => {
-      const name = stufen.get(deal.properties.dealstage ?? "");
-      const stufe = name ? stufeAusName(name) : null;
-      // Ausdruecklich gegen null pruefen: Stufe 0 (Voranfrage) ist unwahr.
-      return stufe !== null ? zurZeile(deal, stufe) : null;
-    })
-    .filter((z): z is VorgangsZeile => z !== null);
+/**
+ * Wie viele Personen an einem Vorgang hängen, ohne die Ausgeschlossenen.
+ * Steht hier, weil die Übersicht die einzige Stelle ist, die es ohne die
+ * Namen aus HubSpot braucht.
+ */
+export function personenZahl(satz: VorgangSatz): number {
+  const raus = ausgeschlossene(satz);
+  return satz.personen.filter((p) => !raus.has(p.kontaktId)).length;
 }

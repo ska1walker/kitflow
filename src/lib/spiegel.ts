@@ -26,6 +26,7 @@ import {
   hubspot,
   hubspotAktiv,
   PIPELINE_NAME,
+  verknuepfen,
   type HsListe,
   type HsObjekt,
 } from "./hubspot";
@@ -127,4 +128,34 @@ export async function spiegele(satz: VorgangSatz): Promise<boolean> {
   }
 
   return true;
+}
+
+/**
+ * Haengt die Personen des Vorgangs auch im CRM an den Deal.
+ *
+ * Nicht Teil des laufenden Spiegels, sondern nur dann aufgerufen, wenn sich
+ * die Runde aendert — beim Anlegen und beim Nachtragen. Sonst waeren es bei
+ * 26 Leuten 26 Aufrufe bei jedem Stufenwechsel, fuer nichts.
+ *
+ * Es geht dabei um eine Faehigkeit, die Kai heute hat und behalten soll: am
+ * Deal in HubSpot sehen, wer dazugehoert. Zurueckgelesen wird auch das nie.
+ */
+export async function spiegelePersonen(satz: VorgangSatz): Promise<boolean> {
+  if (!hubspotAktiv() || !satz.hsDealId) return false;
+
+  let alle = true;
+  for (const person of satz.personen) {
+    const ok = await verknuepfen("deals", satz.hsDealId, "contacts", person.kontaktId);
+    if (!ok) alle = false;
+  }
+
+  if (!alle) {
+    await vermerke(satz.id, {
+      art: "spiegel",
+      text: "Nicht alle Personen konnten im CRM an den Deal gehängt werden",
+      sub: "Der Vorgang läuft weiter; im CRM fehlt jemand an der Übersicht.",
+      intern: true,
+    });
+  }
+  return alle;
 }

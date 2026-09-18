@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { listeBestaetigen } from "@/app/b/[vorgang]/aktion";
 import { signiere } from "./links";
-import { artikel, deal, kontakt, stelleHubSpot, stufenId } from "../../test/hubspot-fake";
+import { artikel, kontakt, person, satz } from "../../test/satz";
+import { raeumeUmgebung, stelleUmgebung, stelleWelt } from "../../test/welt";
 
 /**
  * Das Ende der Kette: der Trainer bestätigt die Liste.
@@ -14,7 +15,7 @@ import { artikel, deal, kontakt, stelleHubSpot, stufenId } from "../../test/hubs
  * wird — Actions sind eigene Adressen und lassen sich ohne die Seite erreichen.
  */
 
-const HEUTE = "2026-09-17";
+const HEUTE = "2026-09-18";
 
 function formular(werte: Record<string, string> = {}) {
   const f = new FormData();
@@ -27,37 +28,32 @@ function token(vorgang = "AUS-2026-001") {
   return signiere("bestaetigen", vorgang)!;
 }
 
-const jacke = artikel("p-jacke", "oberteil");
-
 /** Ein Vorgang, an dem nichts fehlt. */
-function fertigeWelt(dealMehr: Record<string, string> = {}) {
-  return {
-    deal: deal(dealMehr),
-    positionen: [jacke.position],
-    produkte: [jacke.produkt],
+function fertigeWelt(mehr: Parameters<typeof stelleWelt>[0] = {}) {
+  return stelleWelt({
+    vorgang: satz({ artikel: [artikel()], personen: [person()] }),
     kontakte: [
       kontakt("111", { trainingsanzug_oberteil: "L", groesse_zuletzt_bestaetigt_am: HEUTE }),
     ],
-  };
+    ...mehr,
+  });
 }
 
-function dealPatches(netz: ReturnType<typeof stelleHubSpot>) {
-  return netz.mock.calls
-    .filter(([url, o]) => String(url).includes("/objects/deals/d1") && (o as RequestInit)?.method === "PATCH")
-    .map(([, o]) => JSON.parse(String((o as RequestInit).body)).properties as Record<string, string>);
+function vorgangPatches(aufrufe: { host: string; methode: string; pfad: string; koerper: unknown }[]) {
+  return aufrufe
+    .filter((a) => a.host === "db" && a.pfad === "vorgang" && a.methode === "PATCH")
+    .map((a) => a.koerper as Record<string, unknown>);
 }
 
 beforeEach(() => {
-  process.env.HUBSPOT_TOKEN = "zz-test";
-  process.env.LINK_SECRET = "x".repeat(32);
+  stelleUmgebung();
   vi.useFakeTimers();
   vi.setSystemTime(new Date(`${HEUTE}T12:00:00Z`));
   vi.spyOn(console, "error").mockImplementation(() => {});
 });
 
 afterEach(() => {
-  delete process.env.HUBSPOT_TOKEN;
-  delete process.env.LINK_SECRET;
+  raeumeUmgebung();
   vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
@@ -65,27 +61,27 @@ afterEach(() => {
 
 describe("Wer bestätigen darf", () => {
   test("mit gültigem Link und vollständiger Liste", async () => {
-    const netz = stelleHubSpot(fertigeWelt());
+    const { aufrufe } = fertigeWelt();
 
     const e = await listeBestaetigen("AUS-2026-001", token(), { stand: "leer" }, formular());
 
     expect(e.stand).toBe("bestaetigt");
-    expect(dealPatches(netz)[0].liste_bestaetigt_am).toBe(HEUTE);
+    expect(vorgangPatches(aufrufe)[0].liste_bestaetigt_am).toBe(HEUTE);
   });
 
   test("die Stufe bleibt, wo sie ist", async () => {
-    const netz = stelleHubSpot(fertigeWelt());
+    // „Anfrage raus“ hieße, dass eine rausgegangen ist. Solange kitflow keine
+    // verschickt, wäre dieser Stand eine Behauptung.
+    const { aufrufe } = fertigeWelt();
     await listeBestaetigen("AUS-2026-001", token(), { stand: "leer" }, formular());
 
-    // „Anfrage raus" hiesse, dass eine rausgegangen ist. Solange kitflow
-    // keine verschickt, waere dieser Stand eine Behauptung.
-    expect(dealPatches(netz)[0]).not.toHaveProperty("dealstage");
+    expect(vorgangPatches(aufrufe)[0]).not.toHaveProperty("stufe");
   });
 });
 
 describe("Wer nicht bestätigen darf", () => {
   test("ohne gültiges Token passiert nichts", async () => {
-    const netz = stelleHubSpot(fertigeWelt());
+    const { netz } = fertigeWelt();
 
     const e = await listeBestaetigen("AUS-2026-001", "erfunden", { stand: "leer" }, formular());
 
@@ -95,7 +91,7 @@ describe("Wer nicht bestätigen darf", () => {
   });
 
   test("ein Token für einen anderen Vorgang gilt nicht", async () => {
-    stelleHubSpot(fertigeWelt());
+    fertigeWelt();
     const e = await listeBestaetigen(
       "AUS-2026-001",
       token("AUS-2026-002"),
@@ -106,40 +102,46 @@ describe("Wer nicht bestätigen darf", () => {
   });
 
   test("ohne Häkchen nicht", async () => {
-    const netz = stelleHubSpot(fertigeWelt());
+    const { aufrufe } = fertigeWelt();
     const ohne = new FormData();
 
     const e = await listeBestaetigen("AUS-2026-001", token(), { stand: "leer" }, ohne);
 
     expect(e.stand).toBe("fehler");
-    expect(dealPatches(netz)).toHaveLength(0);
+    expect(vorgangPatches(aufrufe)).toHaveLength(0);
   });
 
   test("eine gefallene Prüfung schlägt das Häkchen", async () => {
     // Genau darum geht es: wer bestätigt, was nicht stimmt, schickt sonst eine
     // falsche Anfrage an beide Händler.
-    const netz = stelleHubSpot({ ...fertigeWelt(), kontakte: [kontakt("111")] });
+    const { aufrufe } = fertigeWelt({ kontakte: [kontakt("111")] });
 
     const e = await listeBestaetigen("AUS-2026-001", token(), { stand: "leer" }, formular());
 
     expect(e.stand).toBe("fehler");
     expect(e.stand === "fehler" && e.text).toContain("Prüfung 2");
-    expect(dealPatches(netz)).toHaveLength(0);
+    expect(vorgangPatches(aufrufe)).toHaveLength(0);
   });
 
   test.for([0, 2, 9])("auf Stufe %i nicht mehr", async (stufe) => {
-    const netz = stelleHubSpot(fertigeWelt({ dealstage: stufenId(stufe) }));
+    const { aufrufe } = fertigeWelt({
+      vorgang: satz({
+        stufe: stufe as 0 | 2 | 9,
+        artikel: [artikel()],
+        personen: [person()],
+      }),
+    });
 
     const e = await listeBestaetigen("AUS-2026-001", token(), { stand: "leer" }, formular());
 
     expect(e.stand).toBe("fehler");
-    expect(dealPatches(netz)).toHaveLength(0);
+    expect(vorgangPatches(aufrufe)).toHaveLength(0);
   });
 });
 
 describe("Was mitgeschrieben wird", () => {
   test("eine geänderte Lieferadresse und ein Hinweis", async () => {
-    const netz = stelleHubSpot(fertigeWelt());
+    const { aufrufe } = fertigeWelt();
 
     await listeBestaetigen(
       "AUS-2026-001",
@@ -148,19 +150,28 @@ describe("Was mitgeschrieben wird", () => {
       formular({ lieferadresse: "ZZ Neue Straße 2", hinweis: "bitte gesammelt liefern" }),
     );
 
-    const patch = dealPatches(netz)[0];
+    const patch = vorgangPatches(aufrufe)[0];
     expect(patch.lieferadresse).toBe("ZZ Neue Straße 2");
     expect(patch.hinweis_haendler).toBe("bitte gesammelt liefern");
   });
 
   test("leer gelassen heißt: bleibt wie es ist", async () => {
-    const netz = stelleHubSpot(fertigeWelt());
+    const { aufrufe } = fertigeWelt();
 
     await listeBestaetigen("AUS-2026-001", token(), { stand: "leer" }, formular({ lieferadresse: "  " }));
 
     // Sonst löschte ein leeres Feld die Adresse aus F1.
-    const patch = dealPatches(netz)[0];
+    const patch = vorgangPatches(aufrufe)[0];
     expect(patch).not.toHaveProperty("lieferadresse");
     expect(patch).not.toHaveProperty("hinweis_haendler");
+  });
+
+  test("und es steht im Verlauf", async () => {
+    const { aufrufe } = fertigeWelt();
+
+    await listeBestaetigen("AUS-2026-001", token(), { stand: "leer" }, formular());
+
+    const vermerk = aufrufe.find((a) => a.pfad === "ereignis" && a.methode === "POST");
+    expect((vermerk?.koerper as Record<string, unknown>).art).toBe("liste_bestaetigt");
   });
 });

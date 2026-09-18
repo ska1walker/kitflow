@@ -1,139 +1,192 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { meldeBedarf, type BedarfEingabe } from "./bedarf";
+import { kontakt } from "../../test/satz";
+import { raeumeUmgebung, stelleUmgebung, stelleWelt } from "../../test/welt";
 
 /**
- * Der Fall, um den es hier geht: die Suche nach den Kontakten einer Mannschaft
- * scheitert — Rate-Limit, Störung, abgerissene Verbindung.
+ * F1 · Bedarf melden.
  *
- * Vorher wurde daraus eine leere Liste. Der Vorgang landete sofort auf Stufe 9
- * „Abgebrochen", und der Trainer las, zu seiner Mannschaft sei niemand in
- * HubSpot hinterlegt. Das war bei einem Rate-Limit schlicht gelogen, ließ sich
- * nicht zurücknehmen und hätte ihn zur Geschäftsstelle geschickt.
+ * Der teuerste Fehler steckt hier nicht im Anlegen, sondern im Abbrechen: eine
+ * gescheiterte Kontaktsuche darf nicht als „zu dieser Mannschaft ist niemand
+ * hinterlegt“ durchgehen. Das stand einmal so im Code, schickte den Vorgang
+ * auf Stufe 9 und schrieb dem Trainer etwas, das bei einem Rate-Limit schlicht
+ * gelogen war — und nicht zurückzunehmen.
  */
 
-const STUFEN = ["Voranfrage", "Größen laufen", "Abgebrochen"];
-
-function pipelines() {
-  return {
-    results: [
-      {
-        id: "p1",
-        label: "Ausstattung",
-        stages: STUFEN.map((label, i) => ({ id: `s${i}`, label, displayOrder: i })),
-      },
-    ],
-  };
-}
-
-function eingabe(): BedarfEingabe {
+function eingabe(mehr: Partial<BedarfEingabe> = {}): BedarfEingabe {
   return {
     modus: "vollstaendig",
-    vorname: "ZZ",
-    nachname: "Test",
-    email: "zz@example.invalid",
-    telefon: "0",
-    teams: ["2007"],
+    vorname: "Kai",
+    nachname: "Böhm",
+    email: "kai@example.org",
+    telefon: "",
+    teams: ["Ü40 Team 3"],
     mannschaftscode: "",
     ausstattungsart: "Weitere Ausstattung",
-    artikel: [],
+    artikel: [
+      {
+        hersteller: "adidas",
+        bezeichnung: "Trainingsjacke",
+        herstellernummer: "10371232",
+        farbe: "schwarz",
+        groessenart: "oberteil",
+        stueck: 1,
+        fuer: "alle",
+        beflockung: "Standard",
+        beflockungAbweichend: "",
+        groesseVon: "",
+        groesseBis: "",
+      },
+    ],
     groessenarten: [],
     personenZahl: 0,
     groessenFrist: "2026-09-30",
-    lieferadresse: "ZZ 1",
+    lieferadresse: "Am Sportplatz 14",
     initialenNoetig: false,
     sponsor: "",
     hinweise: "",
+    ...mehr,
   };
 }
 
-/** Beantwortet jeden Pfad; die Kontaktsuche bekommt eine eigene Antwort. */
-function netz(kontaktsuche: () => Response) {
-  return vi.fn(async (url: string) => {
-    const pfad = String(url);
-    if (pfad.includes("/pipelines/deals")) return Response.json(pipelines());
-    if (pfad.includes("/objects/contacts/search")) return kontaktsuche();
-    if (pfad.includes("/search")) return Response.json({ results: [] });
-    return Response.json({ id: "neu", properties: {} });
-  });
-}
-
-let fetchFake: ReturnType<typeof vi.fn>;
-
-function angelegteVorgaenge() {
-  return fetchFake.mock.calls.filter(
-    ([url, o]) => String(url).endsWith("/objects/deals") && (o as RequestInit)?.method === "POST",
-  );
-}
-
 beforeEach(() => {
-  process.env.HUBSPOT_TOKEN = "zz-test";
-  process.env.LINK_SECRET = "x".repeat(32);
-  vi.spyOn(globalThis, "setTimeout").mockImplementation(((f: () => void) => {
-    f();
-    return 0 as unknown as ReturnType<typeof setTimeout>;
-  }) as typeof setTimeout);
+  stelleUmgebung();
   vi.spyOn(console, "error").mockImplementation(() => {});
 });
 
 afterEach(() => {
-  delete process.env.HUBSPOT_TOKEN;
-  delete process.env.LINK_SECRET;
+  raeumeUmgebung();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
 
-describe("wenn die Kontaktsuche scheitert", () => {
-  test.for([
-    ["dauerhaftes Rate-Limit", () => new Response("{}", { status: 429 })],
-    ["Störung bei HubSpot", () => new Response("{}", { status: 503 })],
-  ] as const)("%s: es entsteht kein Vorgang", async ([, antwort]) => {
-    fetchFake = netz(antwort);
-    vi.stubGlobal("fetch", fetchFake);
+describe("Wenn die Mannschaft Leute hat", () => {
+  test("läuft der Vorgang auf Stufe 1 und alle hängen dran", async () => {
+    const { aufrufe } = stelleWelt({
+      kontakte: [kontakt("111"), kontakt("222", { firstname: "Uwe" })],
+      naechsteNummer: "AUS-2026-007",
+    });
+
+    const ergebnis = await meldeBedarf(eingabe());
+
+    expect(ergebnis?.vorgang).toBe("AUS-2026-007");
+    expect(ergebnis?.ohnePersonen).toBe(false);
+    expect(ergebnis?.personen).toHaveLength(2);
+
+    const angelegt = aufrufe.find((a) => a.host === "db" && a.pfad === "vorgang" && a.methode === "POST");
+    expect(angelegt?.koerper).toMatchObject({
+      nummer: "AUS-2026-007",
+      stufe: 1,
+      mannschaften: ["Ü40 Team 3"],
+      trainer_email: "kai@example.org",
+      groessen_frist: "2026-09-30",
+    });
+  });
+
+  test("die Artikel stehen als Zeilen am Vorgang, mit Beflockung im Klartext", async () => {
+    const { aufrufe } = stelleWelt({ kontakte: [kontakt("111")] });
+
+    await meldeBedarf(eingabe({ artikel: [{ ...eingabe().artikel[0], beflockung: "Ohne", beflockungAbweichend: "" }] }));
+
+    const artikelZeilen = aufrufe.find((a) => a.pfad === "vorgang_artikel");
+    expect((artikelZeilen?.koerper as Record<string, unknown>[])[0]).toMatchObject({
+      bezeichnung: "Trainingsjacke",
+      herstellernummer: "10371232",
+      groessenart: "oberteil",
+      beflockung: "ohne Beflockung",
+    });
+  });
+
+  test("jede Person bekommt ihren eigenen Größen-Link", async () => {
+    stelleWelt({ kontakte: [kontakt("111")] });
+
+    const ergebnis = await meldeBedarf(eingabe());
+    expect(ergebnis?.personen[0].groessen).toContain("/g/AUS-2026-001/111");
+  });
+});
+
+describe("Wenn die Mannschaft wirklich leer ist", () => {
+  test("entsteht ein Vorgang, und er ist abgebrochen", async () => {
+    const { aufrufe } = stelleWelt({ kontakte: [] });
+
+    const ergebnis = await meldeBedarf(eingabe());
+
+    expect(ergebnis?.ohnePersonen).toBe(true);
+    const angelegt = aufrufe.find((a) => a.pfad === "vorgang" && a.methode === "POST");
+    expect((angelegt?.koerper as Record<string, unknown>).stufe).toBe(9);
+  });
+});
+
+describe("Wenn die Suche scheitert", () => {
+  test("entsteht gar nichts", async () => {
+    // Nicht „ein abgebrochener Vorgang", sondern keiner: das Formular sagt
+    // dann „bitte in einer Minute noch einmal".
+    const { aufrufe } = stelleWelt({ kontakte: [kontakt("111")], hubspotGestoert: true });
 
     expect(await meldeBedarf(eingabe())).toBeNull();
-    // Nicht „ein abgebrochener Vorgang", sondern gar keiner: das Formular
-    // sagt dann „bitte in einer Minute noch einmal".
-    expect(angelegteVorgaenge()).toHaveLength(0);
+    expect(aufrufe.some((a) => a.host === "db" && a.methode === "POST")).toBe(false);
+  });
+
+  test("und auch nicht, wenn die Datenbank schweigt", async () => {
+    stelleWelt({ kontakte: [kontakt("111")], dbGestoert: true });
+    expect(await meldeBedarf(eingabe())).toBeNull();
   });
 });
 
-describe("wenn die Mannschaft wirklich leer ist", () => {
-  test("entsteht ein Vorgang, und er ist abgebrochen", async () => {
-    fetchFake = netz(() => Response.json({ results: [] }));
-    vi.stubGlobal("fetch", fetchFake);
+describe("Die Voranfrage", () => {
+  test("legt auf Stufe 0 an und fragt noch niemanden", async () => {
+    const { aufrufe } = stelleWelt({ kontakte: [kontakt("111")] });
 
-    const ergebnis = await meldeBedarf(eingabe());
+    const ergebnis = await meldeBedarf(eingabe({ modus: "voranfrage", personenZahl: 26 }));
 
-    // Das ist der richtige Abbruch: es gibt niemanden zu fragen.
-    expect(ergebnis?.ohnePersonen).toBe(true);
-    const [, gesendet] = angelegteVorgaenge()[0];
-    const koerper = JSON.parse(String((gesendet as RequestInit).body));
-    expect(koerper.properties.dealstage).toBe("s2"); // Abgebrochen
+    const angelegt = aufrufe.find((a) => a.pfad === "vorgang" && a.methode === "POST");
+    expect((angelegt?.koerper as Record<string, unknown>).stufe).toBe(0);
+    expect((angelegt?.koerper as Record<string, unknown>).personen_geschaetzt).toBe(26);
+    // Es gibt nichts zu fragen, also wird auch niemand gesucht.
+    expect(aufrufe.some((a) => a.host === "hubspot" && a.pfad.includes("contacts/search"))).toBe(false);
+    expect(ergebnis?.personen).toEqual([]);
+    expect(ergebnis?.ergaenzen).toContain("/e/AUS-2026-001");
   });
 });
 
-describe("wenn die Mannschaft Leute hat", () => {
-  test("läuft der Vorgang auf Stufe 1 und alle hängen dran", async () => {
-    fetchFake = netz(() =>
-      Response.json({
-        results: [
-          { id: "11", properties: { firstname: "ZZ", lastname: "Eins", team: "2007" } },
-          { id: "12", properties: { firstname: "ZZ", lastname: "Zwei", team: "2007" } },
-        ],
-      }),
+describe("Ein Vorgang für genau eine Person", () => {
+  test("hängt nur sie dran und übernimmt ihre Mannschaft", async () => {
+    // Sonst gälte der Vorgang vorsichtshalber als Jugend: Größen veralteten
+    // nach vier statt zwölf Monaten und die Seite nennt keine Namen.
+    const { aufrufe } = stelleWelt({ kontakte: [kontakt("111"), kontakt("222")] });
+
+    const ergebnis = await meldeBedarf(
+      eingabe({ person: { id: "222", name: "Uwe Christiani", team: "Ü40 Team 3" } }),
     );
-    vi.stubGlobal("fetch", fetchFake);
 
-    const ergebnis = await meldeBedarf(eingabe());
+    expect(ergebnis?.personen).toHaveLength(1);
+    const angelegt = aufrufe.find((a) => a.pfad === "vorgang" && a.methode === "POST");
+    expect((angelegt?.koerper as Record<string, unknown>).mannschaften).toEqual(["Ü40 Team 3"]);
+    // Nach Mannschaft wird dann gar nicht gesucht.
+    expect(aufrufe.some((a) => a.host === "hubspot" && a.pfad.includes("contacts/search"))).toBe(false);
+  });
+});
 
-    expect(ergebnis?.ohnePersonen).toBe(false);
-    expect(ergebnis?.personen.map((p) => p.name)).toEqual(["ZZ Eins", "ZZ Zwei"]);
-    const [, gesendet] = angelegteVorgaenge()[0];
-    expect(JSON.parse(String((gesendet as RequestInit).body)).properties.dealstage).toBe("s1");
+describe("Der Spiegel im CRM", () => {
+  test("wird geschrieben, hält den Vorgang aber nicht auf", async () => {
+    const { aufrufe } = stelleWelt({ kontakte: [kontakt("111")] });
 
-    const verknuepft = fetchFake.mock.calls.filter(
-      ([url, o]) => String(url).includes("/associations/") && (o as RequestInit)?.method === "PUT",
+    await meldeBedarf(eingabe());
+
+    expect(aufrufe.some((a) => a.host === "hubspot" && a.pfad.includes("/objects/deals"))).toBe(true);
+  });
+
+  test("scheitert er, entsteht der Vorgang trotzdem", async () => {
+    // Die Datenbank ist die Wahrheit, HubSpot nur die Sicht darauf. Nur: ohne
+    // HubSpot findet die Kontaktsuche auch niemanden – deshalb hier über eine
+    // Person, die schon feststeht.
+    const { aufrufe } = stelleWelt({ kontakte: [], naechsteNummer: "AUS-2026-009" });
+
+    const ergebnis = await meldeBedarf(
+      eingabe({ person: { id: "222", name: "Uwe Christiani", team: "Ü40 Team 3" } }),
     );
-    expect(verknuepft).toHaveLength(2);
+
+    expect(ergebnis?.vorgang).toBe("AUS-2026-009");
+    expect(aufrufe.some((a) => a.pfad === "vorgang" && a.methode === "POST")).toBe(true);
   });
 });

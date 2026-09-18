@@ -1,291 +1,171 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { ergaenzeVorgang, ladeVoranfrage, type ErgaenzungEingabe } from "./ergaenzen";
+import { artikel, kontakt, satz } from "../../test/satz";
+import { raeumeUmgebung, stelleUmgebung, stelleWelt } from "../../test/welt";
 
 /**
- * F1b macht aus einer Voranfrage einen laufenden Vorgang. Hier passieren die
- * meisten Schreibvorgänge am Stück, und zwei davon sind schon einmal
- * schiefgegangen:
+ * F1b · aus einer Voranfrage wird ein laufender Vorgang.
  *
- * - HubSpot gibt Positionen in beliebiger Reihenfolge zurück. Ohne Sortierung
- *   stehen die Artikel im Formular anders als in F1, und der Trainer trägt die
- *   Artikelnummer beim falschen Artikel ein.
- * - Gibt es zur echten Nummer schon ein Produkt, muss die Position darauf
- *   umgehängt und der Platzhalter stillgelegt werden — sonst stehen zwei
- *   Produkte mit derselben Nummer im Stamm.
+ * Hier passieren die meisten Schreibvorgänge am Stück: Artikel nachbessern,
+ * Fristen setzen, die Mannschaft anhängen, die Stufe wechseln. Zwei Dinge
+ * entscheiden sich dabei:
+ *
+ * - Eine gescheiterte Kontaktsuche ist keine leere Mannschaft. Hier hängt
+ *   sogar mehr daran als in F1, weil der Vorgang schon existiert.
+ * - Die Personen müssen vor dem Stufenwechsel dran sein. Ein Vorgang auf
+ *   „Größen laufen“ ohne die Leute, die eintragen sollen, wäre für einen
+ *   Moment eine Lüge.
  */
 
-type Roh = { id: string; properties: Record<string, string | null> };
-
-const STUFEN = ["Voranfrage", "Größen laufen", "Anfrage raus", "Abgebrochen"];
-
-function deal(stufe = "Voranfrage"): Roh {
-  return {
-    id: "d1",
-    properties: {
-      vorgangsnummer: "AUS-2026-001",
-      dealstage: `s-${stufe}`,
-      mannschaft: "2007",
-      ausstattungsart: "Trikotsatz",
-      personen_geschaetzt: "16",
-      trainer_email: "zz@example.invalid",
-    },
-  };
-}
-
-function platzhalter(n: number, groessenart: string): { position: Roh; produkt: Roh } {
-  return {
-    position: { id: `li-${n}`, properties: { hs_product_id: `pr-${n}`, quantity: "1" } },
-    produkt: {
-      id: `pr-${n}`,
-      properties: {
-        name: `ZZ Artikel ${n}`,
-        hs_sku: `VOR-AUS-2026-001-${n}`,
-        hersteller: "adidas",
-        groessenart,
-        aktiv: "false",
-      },
-    },
-  };
-}
-
-type Welt = {
-  deal: Roh;
-  positionen: Roh[];
-  produkte: Roh[];
-  /** Positionen kommen in dieser Reihenfolge zurück – HubSpot sortiert nicht. */
-  reihenfolge?: string[];
-  /** Ein Produkt, das es zu einer echten Nummer schon gibt. */
-  fremdesProdukt?: Roh;
-  kontakte?: Roh[];
-};
-
-/** Ein `fetch`, das man auch selbst aufrufen kann — der letzte Test staffelt zwei. */
-type Netz = ReturnType<typeof vi.fn<(url: string, o?: RequestInit) => Promise<Response>>>;
-
-let netz: Netz;
-
-function stelle(welt: Welt) {
-  const ids = welt.reihenfolge ?? welt.positionen.map((p) => p.id);
-  const positionen = ids.map((id) => welt.positionen.find((p) => p.id === id)!);
-
-  netz = vi.fn(async (url: string, o?: RequestInit) => {
-    const pfad = String(url);
-    const koerper = o?.body ? String(o.body) : undefined;
-
-    if (pfad.includes("/pipelines/deals")) {
-      return Response.json({
-        results: [
-          {
-            id: "p1",
-            label: "Ausstattung",
-            stages: STUFEN.map((label, i) => ({ id: `s-${label}`, label, displayOrder: i })),
-          },
-        ],
-      });
-    }
-    if (pfad.includes("/objects/deals/search")) return Response.json({ results: [welt.deal] });
-    if (pfad.includes("/objects/products/search")) {
-      return Response.json({ results: welt.fremdesProdukt ? [welt.fremdesProdukt] : [] });
-    }
-    if (pfad.includes("/objects/contacts/search")) {
-      return Response.json({ results: welt.kontakte ?? [] });
-    }
-    if (pfad.includes("/associations/line_items")) {
-      return Response.json({ results: positionen.map((p) => ({ toObjectId: p.id })) });
-    }
-    if (pfad.includes("/associations/contacts")) return Response.json({ results: [] });
-
-    if (pfad.includes("/objects/line_items/batch/read")) {
-      const wunsch: string[] = koerper ? JSON.parse(koerper).inputs.map((i: { id: string }) => i.id) : [];
-      // Batch-Lesen liefert in der Reihenfolge der Anfrage – die Sortierung
-      // muss aus dem SKU kommen, nicht von HubSpot.
-      return Response.json({ results: wunsch.map((id) => positionen.find((p) => p.id === id)!) });
-    }
-    if (pfad.includes("/objects/products/batch/read")) {
-      const wunsch: string[] = koerper ? JSON.parse(koerper).inputs.map((i: { id: string }) => i.id) : [];
-      return Response.json({
-        results: welt.produkte.filter((p) => wunsch.includes(p.id)),
-      });
-    }
-    return Response.json({ id: "1", properties: {} });
+function voranfrage() {
+  return satz({
+    stufe: 0,
+    personenGeschaetzt: 26,
+    groessenFrist: undefined,
+    lieferadresse: undefined,
+    artikel: [
+      artikel({ id: "a1", bezeichnung: "Trainingsjacke", herstellernummer: undefined, farbe: undefined }),
+      artikel({ id: "a2", bezeichnung: "Trainingshose", groessenart: "trainingshose", herstellernummer: undefined, farbe: undefined }),
+    ],
   });
-
-  vi.stubGlobal("fetch", netz);
 }
 
-/** Die PATCHes an ein Objekt, als Eigenschaften. */
-function patches(teil: string): Record<string, string>[] {
-  return netz.mock.calls
-    .filter(([url, o]) => String(url).includes(teil) && (o as RequestInit)?.method === "PATCH")
-    .map(([, o]) => JSON.parse(String((o as RequestInit).body)).properties);
-}
-
-function eingabe(artikel: ErgaenzungEingabe["artikel"]): ErgaenzungEingabe {
+function eingabe(mehr: Partial<ErgaenzungEingabe> = {}): ErgaenzungEingabe {
   return {
     groessenFrist: "2026-09-30",
-    lieferadresse: "ZZ 1",
-    initialenNoetig: false,
-    sponsor: "",
-    hinweise: "",
-    artikel,
+    lieferadresse: "Am Sportplatz 14",
+    initialenNoetig: true,
+    sponsor: "Beispiel GmbH",
+    hinweise: "bitte gesammelt liefern",
+    artikel: [
+      {
+        artikelId: "a1",
+        herstellernummer: "10371232",
+        farbe: "schwarz",
+        fuer: "alle",
+        beflockung: "Standard",
+        beflockungAbweichend: "",
+      },
+      {
+        artikelId: "a2",
+        herstellernummer: "10371004",
+        farbe: "schwarz",
+        fuer: "alle",
+        beflockung: "Ohne",
+        beflockungAbweichend: "",
+      },
+    ],
+    ...mehr,
   };
 }
 
 beforeEach(() => {
-  process.env.HUBSPOT_TOKEN = "zz-test";
-  process.env.LINK_SECRET = "x".repeat(32);
+  stelleUmgebung();
   vi.spyOn(console, "error").mockImplementation(() => {});
 });
 
 afterEach(() => {
-  delete process.env.HUBSPOT_TOKEN;
-  delete process.env.LINK_SECRET;
+  raeumeUmgebung();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
 
-describe("Die Artikel stehen in der Reihenfolge der Meldung", () => {
-  test("auch wenn HubSpot sie verdreht zurückgibt", async () => {
-    const a = platzhalter(0, "trikot");
-    const b = platzhalter(1, "shorts");
-    const c = platzhalter(2, "schuhe");
-    stelle({
-      deal: deal(),
-      positionen: [a.position, b.position, c.position],
-      produkte: [a.produkt, b.produkt, c.produkt],
-      reihenfolge: ["li-2", "li-0", "li-1"],
-    });
+describe("Was F1b vorfindet", () => {
+  test("die Artikel in der Reihenfolge der Meldung, mit fehlender Nummer als Platzhalter", async () => {
+    stelleWelt({ vorgang: voranfrage() });
 
     const v = await ladeVoranfrage("AUS-2026-001");
-    // Sonst trägt der Trainer die Artikelnummer beim falschen Artikel ein.
-    expect(v?.artikel.map((x) => x.positionId)).toEqual(["li-0", "li-1", "li-2"]);
-  });
 
-  test("ein Platzhalter gilt als „Nummer fehlt noch“", async () => {
-    const a = platzhalter(0, "trikot");
-    stelle({ deal: deal(), positionen: [a.position], produkte: [a.produkt] });
-
-    const v = await ladeVoranfrage("AUS-2026-001");
+    expect(v?.artikel.map((a) => a.bezeichnung)).toEqual(["Trainingsjacke", "Trainingshose"]);
     expect(v?.artikel[0].platzhalter).toBe(true);
-    expect(v?.artikel[0].herstellernummer).toBe("");
+    expect(v?.personenGeschaetzt).toBe(26);
   });
-});
 
-describe("Ist der Vorgang über die Voranfrage hinaus", () => {
-  test.for(["Größen laufen", "Anfrage raus", "Abgebrochen"])("Stufe %s: nichts zu tun", async (stufe) => {
-    const a = platzhalter(0, "trikot");
-    stelle({ deal: deal(stufe), positionen: [a.position], produkte: [a.produkt] });
+  test("einen Vorgang, der keine Voranfrage mehr ist, gibt es hier nicht", async () => {
+    // Sonst wechselte die Stufe ein zweites Mal und die Kontakte kämen doppelt.
+    stelleWelt({ vorgang: satz({ stufe: 1 }) });
+    expect(await ladeVoranfrage("AUS-2026-001")).toBeNull();
+  });
+
+  test("und eine Störung ist kein fehlender Vorgang, sondern gar keine Antwort", async () => {
+    stelleWelt({ vorgang: voranfrage(), dbGestoert: true });
     expect(await ladeVoranfrage("AUS-2026-001")).toBeNull();
   });
 });
 
-describe("Die echte Artikelnummer nachtragen", () => {
-  const a = platzhalter(0, "trikot");
-  const artikelEingabe = [
-    {
-      positionId: "li-0",
-      produktId: "pr-0",
-      herstellernummer: "IN0410",
-      farbe: "schwarz",
-      fuer: "alle" as const,
-      beflockung: "Standard",
-      beflockungAbweichend: "",
-    },
-  ];
+describe("Was F1b schreibt", () => {
+  test("die echten Artikelnummern, Farbe und Beflockung", async () => {
+    const { aufrufe } = stelleWelt({ vorgang: voranfrage(), kontakte: [kontakt("111")] });
 
-  test("gibt es die Nummer noch nicht, wird der Platzhalter echt", async () => {
-    stelle({
-      deal: deal(),
-      positionen: [a.position],
-      produkte: [a.produkt],
-      kontakte: [{ id: "111", properties: { firstname: "ZZ", lastname: "Eins", team: "2007" } }],
-    });
+    await ergaenzeVorgang("AUS-2026-001", eingabe());
 
-    await ergaenzeVorgang("AUS-2026-001", eingabe(artikelEingabe));
-
-    const [produkt] = patches("/objects/products/pr-0");
-    expect(produkt.hs_sku).toBe("IN0410");
-    expect(produkt.aktiv).toBe("true");
-    // Die Position zeigt weiter auf dasselbe Produkt, also kein Umhängen.
-    expect(patches("/objects/line_items/li-0")).toHaveLength(0);
+    const patches = aufrufe.filter((a) => a.pfad === "vorgang_artikel" && a.methode === "PATCH");
+    expect(patches).toHaveLength(2);
+    expect(patches[0].koerper).toMatchObject({ herstellernummer: "10371232", farbe: "schwarz" });
+    // „Ohne“ wird zum Klartext, der auch in der Händleranfrage steht.
+    expect(patches[1].koerper).toMatchObject({ beflockung: "ohne Beflockung" });
   });
 
-  test("gibt es sie schon, wird umgehängt und der Platzhalter stillgelegt", async () => {
-    stelle({
-      deal: deal(),
-      positionen: [a.position],
-      produkte: [a.produkt],
-      fremdesProdukt: { id: "pr-alt", properties: { hs_sku: "IN0410" } },
-      kontakte: [{ id: "111", properties: { firstname: "ZZ", lastname: "Eins", team: "2007" } }],
+  test("Frist, Lieferadresse, Initialen-Häkchen und Hinweis", async () => {
+    const { aufrufe } = stelleWelt({ vorgang: voranfrage(), kontakte: [kontakt("111")] });
+
+    await ergaenzeVorgang("AUS-2026-001", eingabe());
+
+    const patch = aufrufe.find((a) => a.pfad === "vorgang" && a.methode === "PATCH");
+    expect(patch?.koerper).toMatchObject({
+      groessen_frist: "2026-09-30",
+      lieferadresse: "Am Sportplatz 14",
+      initialen_noetig: true,
+      hinweis_haendler: "bitte gesammelt liefern",
     });
-
-    await ergaenzeVorgang("AUS-2026-001", eingabe(artikelEingabe));
-
-    // Sonst stünden zwei Produkte mit derselben Nummer im Stamm.
-    const [platz] = patches("/objects/products/pr-0");
-    expect(platz.aktiv).toBe("false");
-    expect(platz.name).toContain("ersetzt");
-
-    const [echt] = patches("/objects/products/pr-alt");
-    expect(echt.hs_sku).toBe("IN0410");
-    expect(echt.aktiv).toBe("true");
-
-    // Und die Position zeigt jetzt auf das echte Produkt.
-    expect(patches("/objects/line_items/li-0")[0].hs_product_id).toBe("pr-alt");
   });
 });
 
 describe("Wohin der Vorgang danach geht", () => {
-  const a = platzhalter(0, "trikot");
-  const artikelEingabe = [
-    {
-      positionId: "li-0",
-      produktId: "pr-0",
-      herstellernummer: "IN0410",
-      farbe: "schwarz",
-      fuer: "alle" as const,
-      beflockung: "Standard",
-      beflockungAbweichend: "",
-    },
-  ];
-
-  test("mit Leuten auf „Größen laufen“", async () => {
-    stelle({
-      deal: deal(),
-      positionen: [a.position],
-      produkte: [a.produkt],
-      kontakte: [{ id: "111", properties: { firstname: "ZZ", lastname: "Eins", team: "2007" } }],
+  test("mit Leuten auf Stufe 1 – und die Leute sind vorher dran", async () => {
+    const { aufrufe } = stelleWelt({
+      vorgang: voranfrage(),
+      kontakte: [kontakt("111"), kontakt("222")],
     });
 
-    const e = await ergaenzeVorgang("AUS-2026-001", eingabe(artikelEingabe));
-    expect(e?.ohnePersonen).toBe(false);
-    expect(patches("/objects/deals/d1")[0].dealstage).toBe("s-Größen laufen");
-  });
+    const ergebnis = await ergaenzeVorgang("AUS-2026-001", eingabe());
 
-  test("ohne Leute auf „Abgebrochen“", async () => {
-    stelle({ deal: deal(), positionen: [a.position], produkte: [a.produkt], kontakte: [] });
+    expect(ergebnis?.ohnePersonen).toBe(false);
+    expect(ergebnis?.personen).toHaveLength(2);
 
-    const e = await ergaenzeVorgang("AUS-2026-001", eingabe(artikelEingabe));
-    expect(e?.ohnePersonen).toBe(true);
-    expect(patches("/objects/deals/d1")[0].dealstage).toBe("s-Abgebrochen");
-  });
-
-  test("scheitert die Kontaktsuche, bleibt die Stufe stehen", async () => {
-    stelle({ deal: deal(), positionen: [a.position], produkte: [a.produkt] });
-    // Die Suche antwortet nicht – das ist keine leere Mannschaft.
-    const echtesNetz = netz;
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (url: string, o?: RequestInit) => {
-        if (String(url).includes("/objects/contacts/search")) {
-          return new Response("{}", { status: 503 });
-        }
-        return echtesNetz(url, o);
-      }),
+    const personenZuerst = aufrufe.findIndex((a) => a.pfad === "vorgang_person" && a.methode === "POST");
+    const stufeDanach = aufrufe.findIndex(
+      (a) => a.pfad === "vorgang" && a.methode === "PATCH" && "stufe" in (a.koerper as object),
     );
+    expect(personenZuerst).toBeGreaterThanOrEqual(0);
+    expect(stufeDanach).toBeGreaterThan(personenZuerst);
+  });
 
-    expect(await ergaenzeVorgang("AUS-2026-001", eingabe(artikelEingabe))).toBeNull();
-    // Der Vorgang steht noch, also darf die Stufe nicht wandern.
-    expect(patches("/objects/deals/d1")).toHaveLength(0);
+  test("ohne Leute auf Abgebrochen", async () => {
+    const { aufrufe } = stelleWelt({ vorgang: voranfrage(), kontakte: [] });
+
+    const ergebnis = await ergaenzeVorgang("AUS-2026-001", eingabe());
+
+    expect(ergebnis?.ohnePersonen).toBe(true);
+    const stufe = aufrufe.find(
+      (a) => a.pfad === "vorgang" && a.methode === "PATCH" && "stufe" in (a.koerper as object),
+    );
+    expect(stufe?.koerper).toMatchObject({ stufe: 9, abbruch_bei: 0 });
+  });
+
+  test("bei gescheiterter Suche nirgendwohin", async () => {
+    // Derselbe Fix wie in F1, hier gewichtiger: der Vorgang existiert schon.
+    const { aufrufe } = stelleWelt({
+      vorgang: voranfrage(),
+      kontakte: [kontakt("111")],
+      hubspotGestoert: true,
+    });
+
+    expect(await ergaenzeVorgang("AUS-2026-001", eingabe())).toBeNull();
+
+    const stufe = aufrufe.find(
+      (a) => a.pfad === "vorgang" && a.methode === "PATCH" && "stufe" in (a.koerper as object),
+    );
+    expect(stufe).toBeUndefined();
   });
 });

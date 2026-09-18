@@ -26,7 +26,7 @@ export type Ergebnis =
 
 const FUER_WERTE = ["alle", "feldspieler", "torwart"];
 
-/** Die Zeilen kommen als pos-{positionId}-nummer, pos-{positionId}-farbe, … */
+/** Die Zeilen kommen als pos-{artikelId}-nummer, pos-{artikelId}-farbe, … */
 function artikelLesen(
   formular: FormData,
   positionsIds: string[],
@@ -48,8 +48,7 @@ function artikelLesen(
     const fuer = String(formular.get(`pos-${id}-fuer`) ?? "alle");
 
     artikel.push({
-      positionId: id,
-      produktId: "",
+      artikelId: id,
       herstellernummer: nummer,
       farbe: String(formular.get(`pos-${id}-farbe`) ?? "").trim(),
       fuer: (FUER_WERTE.includes(fuer) ? fuer : "alle") as ArtikelFuer,
@@ -86,7 +85,7 @@ export async function angabenErgaenzen(
 
   const artikel = artikelLesen(
     formular,
-    voranfrage.artikel.map((a) => a.positionId),
+    voranfrage.artikel.map((a) => a.artikelId),
   );
   if (typeof artikel === "string") return { stand: "fehler", text: artikel };
 

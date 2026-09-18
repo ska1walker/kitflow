@@ -1,141 +1,204 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { ladeVorgang } from "./vorgaenge";
+import { fuerSpieler, ladeVorgang, nachtragbarePersonen, trageNach } from "./vorgaenge";
+import { artikel, kontakt, person, satz } from "../../test/satz";
+import { raeumeUmgebung, stelleUmgebung, stelleWelt } from "../../test/welt";
 
 /**
- * Eine Störung bei HubSpot ist kein toter Link.
+ * Die Statusseite und das Nachtragen.
  *
- * Vorher gab `ladeVorgang` bei jedem Ausfall den Beispiel-Vorgang zurück; die
- * beiden Seiten verwarfen ihn und zeigten „Dieser Link funktioniert nicht".
- * Der Trainer hätte den Fehler bei sich gesucht und den Link neu angefordert,
- * obwohl mit ihm alles in Ordnung war.
- *
- * „Gibt es nicht" muss dagegen weiter dieselbe Antwort bekommen wie ein
- * falsches Token — wer rät, soll aus der Antwort nichts lernen.
+ * Die drei Stände müssen auseinandergehalten werden: `da`, `unbekannt` und
+ * `gestoert`. Eine Störung sah für den Trainer einmal aus wie ein toter Link —
+ * er suchte den Fehler bei sich, während in Wahrheit niemand antwortete.
  */
 
-const STUFEN = ["Voranfrage", "Größen laufen", "Abgebrochen"];
-
-function pipelines() {
-  return {
-    results: [
-      {
-        id: "p1",
-        label: "Ausstattung",
-        stages: STUFEN.map((label, i) => ({ id: `s${i}`, label, displayOrder: i })),
-      },
-    ],
-  };
-}
-
-function netz(dealsuche: () => Response) {
-  return vi.fn(async (url: string) => {
-    const pfad = String(url);
-    if (pfad.includes("/pipelines/deals")) return Response.json(pipelines());
-    if (pfad.includes("/objects/deals/search")) return dealsuche();
-    if (pfad.includes("/associations/")) return Response.json({ results: [] });
-    if (pfad.includes("/batch/read")) return Response.json({ results: [] });
-    return Response.json({ results: [] });
-  });
-}
-
 beforeEach(() => {
-  process.env.HUBSPOT_TOKEN = "zz-test";
-  vi.spyOn(globalThis, "setTimeout").mockImplementation(((f: () => void) => {
-    f();
-    return 0 as unknown as ReturnType<typeof setTimeout>;
-  }) as typeof setTimeout);
+  stelleUmgebung();
   vi.spyOn(console, "error").mockImplementation(() => {});
 });
 
 afterEach(() => {
-  delete process.env.HUBSPOT_TOKEN;
+  raeumeUmgebung();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
 
-describe("HubSpot antwortet nicht", () => {
-  test.for([
-    ["Rate-Limit", () => new Response("{}", { status: 429 })],
-    ["Störung", () => new Response("{}", { status: 503 })],
-    ["Verbindung weg", null],
-  ] as const)("%s ist „gestört“, nicht „unbekannt“", async ([, antwort]) => {
-    vi.stubGlobal(
-      "fetch",
-      antwort === null
-        ? vi.fn(async () => {
-            throw new Error("socket hang up");
-          })
-        : netz(antwort),
-    );
-    expect(await ladeVorgang("AUS-2026-001")).toEqual({ stand: "gestoert" });
-  });
-
-  test("ohne Anmeldung ebenfalls gestört", async () => {
-    delete process.env.HUBSPOT_TOKEN;
-    expect(await ladeVorgang("AUS-2026-001")).toEqual({ stand: "gestoert" });
-  });
-});
-
-describe("Den Vorgang gibt es nicht", () => {
-  test("eine leere Trefferliste heißt „unbekannt“", async () => {
-    vi.stubGlobal("fetch", netz(() => Response.json({ results: [] })));
-    // Dieselbe Antwort wie bei einem falschen Token – Absicht.
-    expect(await ladeVorgang("AUS-2026-999")).toEqual({ stand: "unbekannt" });
-  });
-
-  test("eine fremde Nummer im Treffer heißt „unbekannt“", async () => {
-    // Die Suche ist unscharf; der Treffer muss zur Nummer im Link passen.
-    vi.stubGlobal(
-      "fetch",
-      netz(() =>
-        Response.json({
-          results: [{ id: "1", properties: { vorgangsnummer: "AUS-2026-002", dealstage: "s1" } }],
-        }),
-      ),
-    );
-    expect(await ladeVorgang("AUS-2026-001")).toEqual({ stand: "unbekannt" });
-  });
-
-  test("eine unbekannte Stufe heißt „unbekannt“", async () => {
-    vi.stubGlobal(
-      "fetch",
-      netz(() =>
-        Response.json({
-          results: [{ id: "1", properties: { vorgangsnummer: "AUS-2026-001", dealstage: "xx" } }],
-        }),
-      ),
-    );
-    expect(await ladeVorgang("AUS-2026-001")).toEqual({ stand: "unbekannt" });
-  });
-});
-
 describe("Den Vorgang gibt es", () => {
-  test("kommt er mit Nummer und Stufe zurück", async () => {
-    vi.stubGlobal(
-      "fetch",
-      netz(() =>
-        Response.json({
-          results: [
-            {
-              id: "1",
-              properties: {
-                vorgangsnummer: "AUS-2026-001",
-                dealstage: "s1",
-                mannschaft: "2007",
-                ausstattungsart: "Weitere Ausstattung",
-              },
-            },
-          ],
-        }),
-      ),
-    );
+  test("kommt er mit Nummer, Stufe und Personenzahl zurück", async () => {
+    stelleWelt({
+      vorgang: satz({
+        artikel: [artikel()],
+        personen: [person(), person({ id: "p2", kontaktId: "222" })],
+      }),
+      kontakte: [kontakt("111"), kontakt("222", { firstname: "Uwe" })],
+    });
 
     const e = await ladeVorgang("AUS-2026-001");
+
     expect(e.stand).toBe("da");
     if (e.stand !== "da") return;
     expect(e.vorgang.nummer).toBe("AUS-2026-001");
     expect(e.vorgang.stufe).toBe(1);
-    // Kein einziges Feld aus den Beispieldaten.
-    expect(e.vorgang.quelle).toBe("hubspot");
+    expect(e.vorgang.groessenGesamt).toBe(2);
+    expect(e.vorgang.quelle).toBe("echt");
+  });
+
+  test("die Artikel kommen aus der Datenbank", async () => {
+    stelleWelt({
+      vorgang: satz({ artikel: [artikel()], personen: [person()] }),
+      kontakte: [kontakt("111")],
+    });
+
+    const e = await ladeVorgang("AUS-2026-001");
+    if (e.stand !== "da") throw new Error("kein Vorgang");
+    expect(e.vorgang.artikel[0]).toMatchObject({
+      name: "adidas Trainingsjacke",
+      herstellernummer: "10371232",
+    });
+  });
+
+  test("wer seine Größe eingetragen hat, zählt mit", async () => {
+    stelleWelt({
+      vorgang: satz({
+        artikel: [artikel()],
+        personen: [person(), person({ id: "p2", kontaktId: "222" })],
+      }),
+      kontakte: [
+        kontakt("111", { trainingsanzug_oberteil: "L" }),
+        kontakt("222", { firstname: "Uwe", lastname: "Christiani" }),
+      ],
+    });
+
+    const e = await ladeVorgang("AUS-2026-001");
+    if (e.stand !== "da") throw new Error("kein Vorgang");
+    expect(e.vorgang.groessenEingetragen).toBe(1);
+    expect(e.vorgang.fehlendeGroessen).toEqual(["Uwe Christiani"]);
+  });
+
+  test("bei einer Jugendmannschaft steht kein Name auf der Seite", async () => {
+    stelleWelt({
+      vorgang: satz({ mannschaften: ["2014"], artikel: [artikel()], personen: [person()] }),
+      kontakte: [kontakt("111", { firstname: "Ben", lastname: "Morche" })],
+    });
+
+    const e = await ladeVorgang("AUS-2026-001");
+    if (e.stand !== "da") throw new Error("kein Vorgang");
+    expect(e.vorgang.fehlendeGroessen).toEqual([]);
+  });
+});
+
+describe("Den Vorgang gibt es nicht", () => {
+  test("eine unbekannte Nummer heißt „unbekannt“", async () => {
+    stelleWelt({ vorgang: satz() });
+    expect((await ladeVorgang("AUS-2026-999")).stand).toBe("unbekannt");
+  });
+
+  test("gar keine Nummer auch", async () => {
+    stelleWelt({ vorgang: satz() });
+    expect((await ladeVorgang(undefined)).stand).toBe("unbekannt");
+  });
+});
+
+describe("Eine Störung ist kein toter Link", () => {
+  test("schweigt die Datenbank, heißt das „gestoert“", async () => {
+    stelleWelt({ vorgang: satz(), dbGestoert: true });
+    expect((await ladeVorgang("AUS-2026-001")).stand).toBe("gestoert");
+  });
+
+  test("schweigt HubSpot, ebenso", async () => {
+    // Sonst stünde da „0 von 0 eingetragen“, wo in Wahrheit 26 Leute warten.
+    stelleWelt({
+      vorgang: satz({ personen: [person()] }),
+      kontakte: [kontakt("111")],
+      hubspotGestoert: true,
+    });
+    expect((await ladeVorgang("AUS-2026-001")).stand).toBe("gestoert");
+  });
+
+  test("ein Vorgang ohne Personen ist dagegen in Ordnung", async () => {
+    // Die Voranfrage: es gibt noch niemanden zu fragen.
+    stelleWelt({ vorgang: satz({ stufe: 0, personenGeschaetzt: 26 }) });
+
+    const e = await ladeVorgang("AUS-2026-001");
+    expect(e.stand).toBe("da");
+    if (e.stand !== "da") return;
+    expect(e.vorgang.untertitel).toContain("geschätzt 26 Personen");
+  });
+});
+
+describe("Was ein Spieler sehen darf", () => {
+  test("keine anderen Namen und keine internen Einträge", async () => {
+    stelleWelt({
+      vorgang: satz({ artikel: [artikel()], personen: [person()] }),
+      kontakte: [kontakt("111")],
+      ereignisse: [
+        { zeitpunkt: "2026-09-18T09:00:00+00:00", art: "x", text: "intern", sub: null, intern: true, ab_stufe: 1 },
+        { zeitpunkt: "2026-09-18T09:05:00+00:00", art: "y", text: "offen", sub: null, intern: false, ab_stufe: 1 },
+      ],
+    });
+
+    const e = await ladeVorgang("AUS-2026-001");
+    if (e.stand !== "da") throw new Error("kein Vorgang");
+
+    const fuerIhn = fuerSpieler(e.vorgang);
+    expect(fuerIhn.fehlendeGroessen).toEqual([]);
+    // Die Größenfrist bleibt: sie betrifft ihn selbst. Der interne Eintrag
+    // dagegen ist für Trainer und Spartenleitung.
+    expect(fuerIhn.verlauf.map((v) => v.text)).toContain("offen");
+    expect(fuerIhn.verlauf.map((v) => v.text)).not.toContain("intern");
+    expect(e.vorgang.verlauf.map((v) => v.text)).toContain("intern");
+  });
+});
+
+describe("Nachtragen", () => {
+  test("zeigt nur, wer zur Mannschaft gehört und noch nicht dabei ist", async () => {
+    stelleWelt({
+      vorgang: satz({ personen: [person()] }),
+      kontakte: [kontakt("111"), kontakt("222", { firstname: "Uwe", lastname: "Christiani" })],
+    });
+
+    const nachtrag = await nachtragbarePersonen("AUS-2026-001");
+    expect(nachtrag?.personen).toEqual([{ id: "222", name: "Uwe Christiani" }]);
+  });
+
+  test("gibt es nur auf Stufe 1", async () => {
+    // Später wäre ein Nachzügler eine Zeile in einer bestätigten Liste.
+    stelleWelt({ vorgang: satz({ stufe: 2, personen: [person()] }), kontakte: [kontakt("111")] });
+    expect(await nachtragbarePersonen("AUS-2026-001")).toBeNull();
+  });
+
+  test("eine fremde ID kommt nicht durch", async () => {
+    const { aufrufe } = stelleWelt({
+      vorgang: satz({ personen: [person()] }),
+      kontakte: [kontakt("111")],
+    });
+
+    const ergebnis = await trageNach("AUS-2026-001", "999");
+
+    expect(ergebnis.ok).toBe(false);
+    expect(aufrufe.some((a) => a.pfad === "vorgang_person" && a.methode === "POST")).toBe(false);
+  });
+
+  test("wer dazugehört, wird angehängt und steht im Verlauf", async () => {
+    const { aufrufe } = stelleWelt({
+      vorgang: satz({ personen: [person()] }),
+      kontakte: [kontakt("111"), kontakt("222", { firstname: "Uwe", lastname: "Christiani" })],
+    });
+
+    const ergebnis = await trageNach("AUS-2026-001", "222");
+
+    expect(ergebnis).toEqual({ ok: true, name: "Uwe Christiani" });
+    expect(aufrufe.some((a) => a.pfad === "vorgang_person" && a.methode === "POST")).toBe(true);
+    const vermerk = aufrufe.find((a) => a.pfad === "ereignis" && a.methode === "POST");
+    expect((vermerk?.koerper as Record<string, unknown>).art).toBe("nachtrag");
+  });
+
+  test("scheitert die Suche, zeigt die Karte lieber gar nichts", async () => {
+    // Statt zu behaupten, alle hingen schon am Vorgang.
+    stelleWelt({
+      vorgang: satz({ personen: [person()] }),
+      kontakte: [kontakt("111")],
+      hubspotGestoert: true,
+    });
+    expect(await nachtragbarePersonen("AUS-2026-001")).toBeNull();
   });
 });

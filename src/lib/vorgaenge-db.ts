@@ -576,6 +576,41 @@ export async function aendereVorgang(
   return zeilen !== null && zeilen.length > 0;
 }
 
+/** Einen Artikel des Vorgangs nachbessern – das ist F1b (ergaenzen.ts). */
+export async function aendereArtikel(
+  artikelId: string,
+  werte: Partial<{
+    herstellernummer: string;
+    farbe: string;
+    fuer: ArtikelFuer;
+    beflockung: string;
+  }>,
+): Promise<boolean> {
+  const zu: Record<string, unknown> = {};
+  if (werte.herstellernummer !== undefined) zu.herstellernummer = werte.herstellernummer || null;
+  if (werte.farbe !== undefined) zu.farbe = werte.farbe || null;
+  if (werte.fuer !== undefined) zu.fuer = werte.fuer;
+  if (werte.beflockung !== undefined) zu.beflockung = werte.beflockung || null;
+  if (Object.keys(zu).length === 0) return true;
+
+  const zeilen = await aendere("vorgang_artikel", { id: `eq.${artikelId}` }, zu);
+  return zeilen !== null && zeilen.length > 0;
+}
+
+/**
+ * Mehrere Personen auf einmal an den Vorgang hängen. Das macht F1b, wenn aus
+ * einer Voranfrage ein laufender Vorgang wird.
+ */
+export async function haengePersonenAn(vorgangId: string, kontaktIds: string[]): Promise<boolean> {
+  if (kontaktIds.length === 0) return true;
+  const zeilen = await schreibe(
+    "vorgang_person",
+    kontaktIds.map((kontaktId) => ({ vorgang_id: vorgangId, hs_kontakt_id: kontaktId })),
+    { ignoriereDoppelte: EINDEUTIG_PERSON },
+  );
+  return zeilen !== null;
+}
+
 /**
  * Eine Person an den Vorgang hängen. Zweimal nachgetragen bleibt eine Person;
  * `true` heißt „gehört jetzt dazu“, nicht „war vorher nicht dabei“.

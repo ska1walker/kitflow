@@ -117,9 +117,10 @@ export type PersonGroesse = {
 /**
  * Ein vollstaendiger Vorgang, so wie die Statusseite ihn braucht.
  *
- * Zusammengesetzt aus HubSpot: Deal, Positionen und Kontakte. `quelle` sagt,
- * ob echte Daten oder Beispieldaten angezeigt werden – die Oberflaeche muss
- * Beispieldaten kennzeichnen (CLAUDE.md).
+ * Zusammengesetzt aus dem Vorgang in der Datenbank und den Kontakten in
+ * HubSpot (docs/datenbank.md). `quelle` sagt, ob echte Daten oder
+ * Beispieldaten angezeigt werden – die Oberflaeche muss Beispieldaten
+ * kennzeichnen (CLAUDE.md).
  */
 export type Vorgang = {
   nummer: string;
@@ -162,7 +163,7 @@ export type Vorgang = {
   meinHinweis: string;
   spielerGruss: string;
 
-  quelle: "hubspot" | "beispiel";
+  quelle: "echt" | "beispiel";
 };
 
 /* ------------------------------------------------------------------ *
