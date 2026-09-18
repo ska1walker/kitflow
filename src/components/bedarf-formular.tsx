@@ -2,6 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { abschicken } from "./formular";
+import { MailKarte } from "./mail-karte";
 import { Badge, Button, Card, SelectFeld } from "./ui";
 import { IconCheck } from "./icons";
 import { bedarfMelden, type Ergebnis } from "@/app/neu/aktion";
@@ -325,6 +326,26 @@ function Fertig({ ergebnis }: { ergebnis: Extract<Ergebnis, { stand: "fertig" }>
               Liste prüfen und bestätigen
             </a>
           </div>
+
+          {/* Die Mails gleich von hier aus, statt 24 Links von Hand zu
+              verteilen. Vorausgewählt ist, wer eine Adresse hat – verschickt
+              wurde für diesen Vorgang noch nichts. */}
+          {ergebnis.statusToken && ergebnis.personen.length > 0 && (
+            <div className="mt-5">
+              <MailKarte
+                vorgang={ergebnis.vorgang}
+                token={ergebnis.statusToken}
+                frist=""
+                empfaenger={ergebnis.personen.map((p) => ({
+                  person: p.id,
+                  name: p.name,
+                  hatAdresse: p.hatAdresse,
+                  zuletzt: "",
+                  hatGroesse: false,
+                }))}
+              />
+            </div>
+          )}
 
           <h2 className="font-display mt-5 mb-2 text-base font-bold text-ink-900">
             {eine ? "Der Größen-Link" : "Größen-Links für die Mannschaft"}

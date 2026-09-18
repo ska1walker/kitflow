@@ -1,3 +1,4 @@
+import { da } from "../../test/abruf";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import {
   ladeGroessenAbfrage,
@@ -58,7 +59,7 @@ function kontaktPatches(aufrufe: { host: string; methode: string; pfad: string; 
 describe("Der Spieler trägt seine Größe ein", () => {
   test("die gefragte Größe landet am Kontakt, mit Bestätigungsdatum", async () => {
     const { aufrufe } = welt();
-    const abfrage = (await ladeGroessenAbfrage("AUS-2026-001", "111"))!;
+    const abfrage = da(await ladeGroessenAbfrage("AUS-2026-001", "111"));
 
     expect(await speichereGroessen(abfrage, { trikot: "L" })).toEqual({ ok: true });
 
@@ -70,7 +71,7 @@ describe("Der Spieler trägt seine Größe ein", () => {
 
   test("eine Größe, die es nicht gibt, wird abgewiesen – ohne zu schreiben", async () => {
     const { aufrufe } = welt();
-    const abfrage = (await ladeGroessenAbfrage("AUS-2026-001", "111"))!;
+    const abfrage = da(await ladeGroessenAbfrage("AUS-2026-001", "111"));
 
     expect(await speichereGroessen(abfrage, { trikot: "Riesig" })).toEqual({ ok: false });
     expect(kontaktPatches(aufrufe)).toHaveLength(0);
@@ -79,7 +80,7 @@ describe("Der Spieler trägt seine Größe ein", () => {
   test("ein Feld, das gar nicht gefragt wurde, wird nicht übernommen", async () => {
     // Ein Formular laesst sich nachbauen.
     const { aufrufe } = welt();
-    const abfrage = (await ladeGroessenAbfrage("AUS-2026-001", "111"))!;
+    const abfrage = da(await ladeGroessenAbfrage("AUS-2026-001", "111"));
 
     await speichereGroessen(abfrage, { trikot: "L", schuhgroesse: "47" });
 
@@ -88,7 +89,7 @@ describe("Der Spieler trägt seine Größe ein", () => {
 
   test("gar nichts eingetragen schreibt gar nichts", async () => {
     const { aufrufe } = welt();
-    const abfrage = (await ladeGroessenAbfrage("AUS-2026-001", "111"))!;
+    const abfrage = da(await ladeGroessenAbfrage("AUS-2026-001", "111"));
 
     expect(await speichereGroessen(abfrage, {})).toEqual({ ok: false });
     expect(kontaktPatches(aufrufe)).toHaveLength(0);
@@ -101,12 +102,12 @@ describe("Der Spieler trägt seine Größe ein", () => {
         personen: [person({ ausgeschlossen: true })],
       }),
     });
-    expect(await ladeGroessenAbfrage("AUS-2026-001", "111")).toBeNull();
+    expect((await ladeGroessenAbfrage("AUS-2026-001", "111")).stand).toBe("unbekannt");
   });
 
   test("wer nicht am Vorgang hängt, auch nicht", async () => {
     welt();
-    expect(await ladeGroessenAbfrage("AUS-2026-001", "999")).toBeNull();
+    expect((await ladeGroessenAbfrage("AUS-2026-001", "999")).stand).toBe("unbekannt");
   });
 });
 
@@ -119,7 +120,7 @@ describe("Initialen", () => {
         personen: [person()],
       }),
     });
-    const abfrage = (await ladeGroessenAbfrage("AUS-2026-001", "111"))!;
+    const abfrage = da(await ladeGroessenAbfrage("AUS-2026-001", "111"));
 
     expect(abfrage.initialenNoetig).toBe(true);
     expect(await speichereGroessen(abfrage, { trikot: "L" })).toMatchObject({ ok: false });
@@ -137,7 +138,7 @@ describe("Initialen", () => {
         personen: [person()],
       }),
     });
-    const abfrage = (await ladeGroessenAbfrage("AUS-2026-001", "111"))!;
+    const abfrage = da(await ladeGroessenAbfrage("AUS-2026-001", "111"));
 
     expect(await speichereGroessen(abfrage, { trikot: "L", initialen: "ZZZZ" })).toMatchObject({ ok: false });
     expect(await speichereGroessen(abfrage, { trikot: "L", initialen: "K.B" })).toMatchObject({ ok: false });
@@ -146,7 +147,7 @@ describe("Initialen", () => {
 
   test("ohne Häkchen werden sie auch nicht übernommen", async () => {
     const { aufrufe } = welt();
-    const abfrage = (await ladeGroessenAbfrage("AUS-2026-001", "111"))!;
+    const abfrage = da(await ladeGroessenAbfrage("AUS-2026-001", "111"));
 
     await speichereGroessen(abfrage, { trikot: "L", initialen: "KB" });
     expect(kontaktPatches(aufrufe)[0]).not.toHaveProperty("initialen");
@@ -157,7 +158,7 @@ describe("Der Trainer trägt für jemanden nach", () => {
   test("die Rückennummer steht am Vorgang, nicht am Menschen", async () => {
     // Naechste Runde kann sie jemand anders tragen.
     const { aufrufe } = welt();
-    const abfrage = (await ladeTrainerAbfrage("AUS-2026-001", "111"))!;
+    const abfrage = da(await ladeTrainerAbfrage("AUS-2026-001", "111"));
 
     const ergebnis = await speichereTrainerAngaben(abfrage, {
       groessen: {},
@@ -176,7 +177,7 @@ describe("Der Trainer trägt für jemanden nach", () => {
 
   test("eine Nummer außerhalb von 1 bis 99 wird abgewiesen", async () => {
     const { aufrufe } = welt();
-    const abfrage = (await ladeTrainerAbfrage("AUS-2026-001", "111"))!;
+    const abfrage = da(await ladeTrainerAbfrage("AUS-2026-001", "111"));
 
     const ergebnis = await speichereTrainerAngaben(abfrage, {
       groessen: {},
@@ -199,7 +200,7 @@ describe("Der Trainer trägt für jemanden nach", () => {
       }),
       kontakte: [kontakt("111"), kontakt("222", { firstname: "Uwe", lastname: "Christiani" })],
     });
-    const abfrage = (await ladeTrainerAbfrage("AUS-2026-001", "111"))!;
+    const abfrage = da(await ladeTrainerAbfrage("AUS-2026-001", "111"));
 
     const ergebnis = await speichereTrainerAngaben(abfrage, {
       groessen: {},
@@ -215,7 +216,7 @@ describe("Der Trainer trägt für jemanden nach", () => {
   test("das Bestätigungsdatum nur, wenn wirklich eine Größe angefasst wurde", async () => {
     // Sonst liesse eine fremde Bestaetigung eine alte Groesse frisch aussehen.
     const { aufrufe } = welt();
-    const abfrage = (await ladeTrainerAbfrage("AUS-2026-001", "111"))!;
+    const abfrage = da(await ladeTrainerAbfrage("AUS-2026-001", "111"));
 
     await speichereTrainerAngaben(abfrage, {
       groessen: { trikot: "L" },
@@ -239,7 +240,7 @@ describe("Der Trainer trägt für jemanden nach", () => {
       }),
     });
     // Der Trainer kommt an das Formular, auch wenn die Person ausgeschlossen ist.
-    const abfrage = (await ladeTrainerAbfrage("AUS-2026-001", "111"))!;
+    const abfrage = da(await ladeTrainerAbfrage("AUS-2026-001", "111"));
     expect(abfrage.ausgeschlossen).toBe(true);
 
     await speichereTrainerAngaben(abfrage, {
@@ -252,5 +253,44 @@ describe("Der Trainer trägt für jemanden nach", () => {
 
     const angaben = aufrufe.find((a) => a.pfad === "vorgang_person" && a.methode === "PATCH");
     expect(angaben?.koerper).toMatchObject({ ausgeschlossen: false });
+  });
+});
+
+describe("Eine Störung ist kein toter Link", () => {
+  // Echte Uhr: die Datenschicht wiederholt einen gescheiterten GET mit Pause.
+  // Mit angehaltener Uhr feuert der Timer nie, und der Test läuft in seine
+  // Frist, statt etwas über Störungen zu sagen.
+  beforeEach(() => {
+    vi.useRealTimers();
+  });
+
+  // Der Unterschied, den die Seite daraus macht: „Dieser Link funktioniert
+  // nicht“ schickt den Spieler zum Trainer und lässt ihn den Fehler bei sich
+  // suchen. „Gerade nicht erreichbar“ sagt ihm, dass er es gleich noch einmal
+  // versuchen soll. Bis hierher bekam er bei jedem Ausfall das Erste zu lesen.
+
+  test("wenn die Datenbank schweigt, ist F2 gestört", async () => {
+    welt({ dbGestoert: true });
+    expect((await ladeGroessenAbfrage("AUS-2026-001", "111")).stand).toBe("gestoert");
+  });
+
+  test("wenn HubSpot die Person nicht hergibt, auch", async () => {
+    // Die Person hängt am Vorgang — die Datenbank sagt es gerade. Dass HubSpot
+    // sie nicht herausgibt, heißt: wir konnten nicht fragen.
+    welt({ hubspotGestoert: true });
+    expect((await ladeGroessenAbfrage("AUS-2026-001", "111")).stand).toBe("gestoert");
+  });
+
+  test("dasselbe für das Trainerformular", async () => {
+    welt({ dbGestoert: true });
+    expect((await ladeTrainerAbfrage("AUS-2026-001", "111")).stand).toBe("gestoert");
+  });
+
+  test("ein Link auf einen Vorgang, den es nicht gibt, bleibt unbekannt", async () => {
+    // Die Gegenprobe: nicht alles ist eine Störung. Sonst stünde bei jedem
+    // abgelaufenen Link „versuch es später noch einmal“, und niemand fragte je
+    // nach einem neuen Link.
+    welt();
+    expect((await ladeGroessenAbfrage("AUS-2026-999", "111")).stand).toBe("unbekannt");
   });
 });

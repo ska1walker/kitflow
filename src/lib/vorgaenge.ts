@@ -44,13 +44,17 @@ import {
   haengePersonAn,
   setzePersonAngaben,
   verlauf as verlaufLesen,
+  mailsJePerson,
   vermerke,
+  vermerkeMail,
   vorgangPerNummer,
+  type Abruf,
   type VorgangSatz,
 } from "./vorgaenge-db";
 import { spiegelePersonen } from "./spiegel";
+import { absolut, mailAktiv, sendeM2a } from "./mail";
 import { kontakteDerMannschaft } from "./bedarf";
-import { trainerLink } from "./links";
+import { groessenLink, trainerLink } from "./links";
 import type { Pruefung } from "./pruefungen";
 import { pruefeInitialen } from "./typen";
 import type { Groessenart, StufeNr, Vorgang } from "./typen";
@@ -60,6 +64,7 @@ const KONTAKT_FELDER = [
   "firstname",
   "lastname",
   "team",
+  "email",
   "initialen",
   "groesse_zuletzt_bestaetigt_am",
   ...GROESSEN_FELDER,
@@ -280,31 +285,34 @@ export type GroessenAbfrage = {
 /**
  * Alles, was die Groessenabfrage einer Person braucht.
  *
- * `null` heisst: gibt es nicht, gehoert nicht zusammen, oder die Datenbank
- * antwortet nicht. Die Seite macht daraus dieselbe Antwort wie bei einem
- * falschen Token, damit sich ueber die Antwort nichts erraten laesst.
+ * `unbekannt` heisst: gibt es nicht oder gehoert nicht zusammen — die Seite
+ * antwortet darauf genau wie auf ein falsches Token, damit sich ueber die
+ * Antwort nichts erraten laesst. `gestoert` heisst: wir konnten nicht fragen.
  */
 export async function ladeGroessenAbfrage(
   nummer: string,
   personId: string,
   alsTrainer = false,
-): Promise<GroessenAbfrage | null> {
+): Promise<Abruf<GroessenAbfrage>> {
   const ergebnis = await vorgangPerNummer(nummer);
-  if (ergebnis.stand !== "da") return null;
+  if (ergebnis.stand !== "da") return ergebnis;
   const satz = ergebnis.vorgang;
 
   // Der Token bindet die Person schon an den Vorgang. Die Zugehoerigkeit wird
   // trotzdem geprueft: wer inzwischen raus ist, soll mit einem alten Link
   // nichts mehr eintragen.
   const dabei = satz.personen.find((p) => p.kontaktId === personId);
-  if (!dabei) return null;
+  if (!dabei) return { stand: "unbekannt" };
   // Wer ausgeschlossen ist, traegt selbst nichts mehr ein. Der Trainer schon:
   // er muss den Ausschluss zuruecknehmen koennen.
-  if (!alsTrainer && dabei.ausgeschlossen) return null;
+  if (!alsTrainer && dabei.ausgeschlossen) return { stand: "unbekannt" };
 
   const kontakte = await batchLesen("contacts", [personId], KONTAKT_FELDER);
   const kontakt = kontakte[0];
-  if (!kontakt) return null;
+  // Die Person haengt am Vorgang, HubSpot gibt sie aber nicht heraus. Das ist
+  // kein toter Link, sondern ein Ausfall: `batchLesen` liefert auch bei einem
+  // Fehler eine leere Liste.
+  if (!kontakt) return { stand: "gestoert" };
 
   const jugend = istJugend(satz);
   const veraltet = istVeraltet(text(kontakt, "groesse_zuletzt_bestaetigt_am"), jugend);
@@ -326,7 +334,7 @@ export async function ladeGroessenAbfrage(
     };
   });
 
-  return {
+  const daten: GroessenAbfrage = {
     vorgang: satz.nummer,
     person: personId,
     anrede: text(kontakt, "firstname") ?? "",
@@ -343,6 +351,7 @@ export async function ladeGroessenAbfrage(
     initialen: text(kontakt, "initialen") ?? "",
     offen: satz.stufe === 1,
   };
+  return { stand: "da", daten };
 }
 
 /**
@@ -431,13 +440,13 @@ export type Liste = {
  * Bei Jugendmannschaften stehen hier Namen: der Trainer muss wissen, wessen
  * Groesse fehlt. Diese Seite haengt an seinem eigenen signierten Link.
  */
-export async function ladeListe(nummer: string): Promise<Liste | null> {
+export async function ladeListe(nummer: string): Promise<Abruf<Liste>> {
   const ergebnis = await vorgangPerNummer(nummer);
-  if (ergebnis.stand !== "da") return null;
+  if (ergebnis.stand !== "da") return ergebnis;
   const satz = ergebnis.vorgang;
 
   const kontakte = await kontakteVon(satz);
-  if (kontakte === null) return null;
+  if (kontakte === null) return { stand: "gestoert" };
 
   const jugend = istJugend(satz);
   const imTor = torwarte(satz);
@@ -457,7 +466,7 @@ export async function ladeListe(nummer: string): Promise<Liste | null> {
     aendern: trainerLink(satz.nummer, k.id) ?? "",
   }));
 
-  return {
+  const daten: Liste = {
     vorgang: satz.nummer,
     mannschaft: satz.mannschaften.join(", ") || (satz.mannschaftscode ?? ""),
     gegenstand: satz.ausstattungsart,
@@ -473,6 +482,7 @@ export async function ladeListe(nummer: string): Promise<Liste | null> {
     pruefungen: pruefungen(satz, zeilen),
     offen: satz.stufe === 1,
   };
+  return { stand: "da", daten };
 }
 
 /**
@@ -531,12 +541,12 @@ export type TrainerAbfrage = GroessenAbfrage & {
 export async function ladeTrainerAbfrage(
   nummer: string,
   personId: string,
-): Promise<TrainerAbfrage | null> {
+): Promise<Abruf<TrainerAbfrage>> {
   const abfrage = await ladeGroessenAbfrage(nummer, personId, true);
-  if (!abfrage) return null;
+  if (abfrage.stand !== "da") return abfrage;
 
   const ergebnis = await vorgangPerNummer(nummer);
-  if (ergebnis.stand !== "da") return null;
+  if (ergebnis.stand !== "da") return ergebnis;
   const satz = ergebnis.vorgang;
 
   const kontakte = await batchLesen(
@@ -545,12 +555,14 @@ export async function ladeTrainerAbfrage(
     KONTAKT_FELDER,
   );
   const ich = kontakte.find((k) => k.id === personId);
-  if (!ich) return null;
+  // Dass es die Person gibt, steht schon fest — die Abfrage oben hat sie
+  // gelesen. Fehlt sie hier, hat HubSpot diesmal nicht geantwortet.
+  if (!ich) return { stand: "gestoert" };
 
   const eigene = satz.personen.find((p) => p.kontaktId === personId);
 
-  return {
-    ...abfrage,
+  const daten: TrainerAbfrage = {
+    ...abfrage.daten,
     name: personName(ich),
     nummer: eigene?.trikotnummer ?? "",
     ausgeschlossen: eigene?.ausgeschlossen ?? false,
@@ -564,6 +576,7 @@ export async function ladeTrainerAbfrage(
           : `Kontakt ${p.kontaktId}`,
       })),
   };
+  return { stand: "da", daten };
 }
 
 export type TrainerEingabe = {
@@ -731,6 +744,173 @@ export async function trageNach(
   if (ergebnis.stand === "da") await spiegelePersonen(ergebnis.vorgang);
 
   return { ok: true, name: person.name };
+}
+
+/* ------------------------------------------------------------------ *
+ * Die Groessen-Mail an die Mannschaft (M2a)
+ * ------------------------------------------------------------------ */
+
+/** Die Art in `mail_versand`. Die Erinnerung (M2) bekommt spaeter eine eigene. */
+export const MAIL_GROESSEN = "groessen";
+
+export type MailEmpfaenger = {
+  person: string;
+  name: string;
+  /**
+   * Ob am Kontakt eine Adresse steht. Die Adresse selbst geht nie an den
+   * Browser: der Trainer soll auswaehlen koennen, nicht die Adressen seiner
+   * Mannschaft ablesen (CLAUDE.md, „Kontaktdaten nie offen anzeigen“).
+   */
+  hatAdresse: boolean;
+  /** Zeitpunkt der letzten Groessen-Mail, leer wenn noch keine rausging. */
+  zuletzt: string;
+  /** Wer schon eingetragen hat, braucht keine Mail mehr. */
+  hatGroesse: boolean;
+};
+
+export type Verteiler = {
+  vorgang: string;
+  mannschaft: string;
+  frist: string;
+  empfaenger: MailEmpfaenger[];
+};
+
+/**
+ * Wer eine Groessen-Mail bekommen kann, und wer schon eine hat.
+ *
+ * Hier stehen Namen, auch bei einer Jugendmannschaft — wie in F3 und aus
+ * demselben Grund: der Trainer muss wissen, wen er anschreibt, und die Seite
+ * haengt an seinem eigenen signierten Link.
+ */
+export async function verteiler(nummer: string): Promise<Abruf<Verteiler>> {
+  const ergebnis = await vorgangPerNummer(nummer);
+  if (ergebnis.stand !== "da") return ergebnis;
+  const satz = ergebnis.vorgang;
+
+  const kontakte = await kontakteVon(satz);
+  if (kontakte === null) return { stand: "gestoert" };
+
+  // Wer schon eine Mail hat, entscheidet die Vorauswahl. Waere das hier
+  // „konnte nicht fragen“ und die Karte zeigte trotzdem alle als offen an,
+  // bekaeme die halbe Mannschaft die Mail ein zweites Mal.
+  const gesendet = await mailsJePerson(satz.id, MAIL_GROESSEN);
+  if (gesendet === null) return { stand: "gestoert" };
+
+  return {
+    stand: "da",
+    daten: {
+      vorgang: satz.nummer,
+      mannschaft: satz.mannschaften.join(", ") || (satz.mannschaftscode ?? ""),
+      frist: kurz(satz.groessenFrist) ?? "",
+      // Nach Namen, nicht in der Reihenfolge von HubSpot: die ist beliebig und
+      // wechselt zwischen zwei Besuchen. Wer 26 Haken setzt, will die Liste
+      // zweimal gleich vorfinden.
+      empfaenger: kontakte
+        .map((k) => ({
+          person: k.id,
+          name: personName(k),
+          hatAdresse: Boolean(text(k, "email")),
+          zuletzt: gesendet.get(k.id) ?? "",
+          hatGroesse: hatGroesse(k),
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name, "de")),
+    },
+  };
+}
+
+/** „Oberteil“, „Oberteil und Trainingshose“, „Trikot, Oberteil und Schuhe“. */
+function aufzaehlung(teile: string[]): string {
+  if (teile.length <= 1) return teile[0] ?? "";
+  return `${teile.slice(0, -1).join(", ")} und ${teile[teile.length - 1]}`;
+}
+
+export type VersandErgebnis =
+  | { ok: true; verschickt: number; fehlgeschlagen: number; umgeleitetAn?: string }
+  | { ok: false; grund: "gestoert" | "unbekannt" | "zu" | "niemand" | "kein-versand" };
+
+/**
+ * Verschickt die Groessen-Mail an die ausgewaehlten Personen.
+ *
+ * Wer ausgewaehlt werden darf, entscheidet der Vorgang und nicht das Formular:
+ * die Liste wird frisch geladen und jede ID daran geprueft. Sonst liesse sich
+ * ueber ein nachgebautes Formular jede beliebige Kontakt-ID anschreiben.
+ *
+ * Verschickt wird einzeln, damit jeder nur seinen eigenen Link bekommt — und
+ * damit eine Adresse, die Resend ablehnt, die uebrigen nicht mitreisst.
+ */
+export async function sendeGroessenMails(
+  nummer: string,
+  ids: string[],
+): Promise<VersandErgebnis> {
+  if (!mailAktiv()) return { ok: false, grund: "kein-versand" };
+
+  const ergebnis = await vorgangPerNummer(nummer);
+  if (ergebnis.stand === "gestoert") return { ok: false, grund: "gestoert" };
+  if (ergebnis.stand !== "da") return { ok: false, grund: "unbekannt" };
+  const satz = ergebnis.vorgang;
+
+  // Nur solange Groessen gesammelt werden. Danach waere die Mail eine
+  // Aufforderung, etwas einzutragen, das niemand mehr aendern kann.
+  if (satz.stufe !== 1) return { ok: false, grund: "zu" };
+
+  const raus = ausgeschlossene(satz);
+  const erlaubt = new Set(
+    satz.personen.map((p) => p.kontaktId).filter((id) => !raus.has(id)),
+  );
+  const gewaehlt = [...new Set(ids)].filter((id) => erlaubt.has(id));
+  if (gewaehlt.length === 0) return { ok: false, grund: "niemand" };
+
+  const kontakte = await batchLesen("contacts", gewaehlt, KONTAKT_FELDER);
+  if (kontakte.length === 0) return { ok: false, grund: "gestoert" };
+
+  const arten = aufzaehlung(gefragteArten(satz).map((art) => GROESSEN_LABEL[art]));
+  const frist = kurz(satz.groessenFrist) ?? "zur Frist";
+  const nur = nurGroessen(satz);
+  const mannschaft = satz.mannschaften.join(", ") || (satz.mannschaftscode ?? "");
+
+  let verschickt = 0;
+  let fehlgeschlagen = 0;
+  let umgeleitetAn: string | undefined;
+
+  for (const k of kontakte) {
+    const email = text(k, "email");
+    const pfad = groessenLink(satz.nummer, k.id);
+    const link = pfad ? absolut(pfad) : null;
+    if (!email || !link) {
+      fehlgeschlagen += 1;
+      continue;
+    }
+
+    const ging = await sendeM2a(email, {
+      vorgang: satz.nummer,
+      vorname: text(k, "firstname") ?? "",
+      mannschaft,
+      arten,
+      frist,
+      nurGroessen: nur,
+      groessenLink: link,
+    });
+    if (!ging) {
+      fehlgeschlagen += 1;
+      continue;
+    }
+
+    verschickt += 1;
+    const umgeleitet = ging !== email;
+    if (umgeleitet) umgeleitetAn = ging;
+    await vermerkeMail(satz.id, MAIL_GROESSEN, k.id, umgeleitet);
+  }
+
+  if (verschickt > 0) {
+    // Ohne Namen: der Verlauf steht auch auf der Spieler-Ansicht.
+    await vermerke(satz.id, {
+      art: "mail",
+      text: `Größen-Mail an ${verschickt} ${verschickt === 1 ? "Person" : "Personen"} verschickt`,
+      abStufe: 1,
+    });
+  }
+
+  return { ok: true, verschickt, fehlgeschlagen, umgeleitetAn };
 }
 
 export type { StufeNr };

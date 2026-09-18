@@ -2,7 +2,7 @@ import { KeinZugang } from "@/components/kein-zugang";
 import { Stoerung } from "@/components/stoerung";
 import { Statusseite } from "@/components/statusseite";
 import { ergaenzenLink, pruefe } from "@/lib/links";
-import { ladeVorgang, nachtragbarePersonen } from "@/lib/vorgaenge";
+import { ladeVorgang, nachtragbarePersonen, verteiler } from "@/lib/vorgaenge";
 
 /**
  * Statusseite für den Trainer, erreichbar nur über den signierten Link aus
@@ -38,6 +38,11 @@ export default async function TrainerStatus(props: PageProps<"/v/[vorgang]">) {
   // prueft die Stufe selbst und gibt sonst null zurueck – die Karte entfaellt dann.
   const nachtrag = vorgang.stufe === 1 ? await nachtragbarePersonen(nummer) : null;
 
+  // Dasselbe fuer die Groessen-Mail: verschickt wird nur, solange die Groessen
+  // laufen. Ist der Verteiler gestoert, entfaellt die Karte — eine Liste, in
+  // der niemand als „schon angeschrieben“ steht, verfuehrt zum zweiten Versand.
+  const liste = vorgang.stufe === 1 ? await verteiler(nummer) : null;
+
   return (
     <Statusseite
       vorgang={vorgang}
@@ -45,6 +50,11 @@ export default async function TrainerStatus(props: PageProps<"/v/[vorgang]">) {
       ansicht="trainer"
       voranfrage={voranfrage}
       nachtrag={nachtrag ? { token: t, personen: nachtrag.personen } : undefined}
+      verteiler={
+        liste?.stand === "da"
+          ? { token: t, frist: liste.daten.frist, empfaenger: liste.daten.empfaenger }
+          : undefined
+      }
     />
   );
 }

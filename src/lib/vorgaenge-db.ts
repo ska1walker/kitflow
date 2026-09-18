@@ -349,6 +349,17 @@ export type SatzErgebnis =
   | { stand: "unbekannt" }
   | { stand: "gestoert" };
 
+/**
+ * Dieselben drei Stände für alles, was eine Seite lädt.
+ *
+ * `null` hieß dort früher beides: „gibt es nicht“ und „konnte nicht fragen“.
+ * Die Statusseite trennte das schon, F2, F3 und F1b nicht — dort bekam der
+ * Spieler bei einer Störung „Dieser Link funktioniert nicht“ zu lesen und
+ * suchte den Fehler bei sich. Ein toter Link und ein Ausfall sehen für den,
+ * der davorsitzt, völlig verschieden aus.
+ */
+export type Abruf<T> = { stand: "da"; daten: T } | { stand: "unbekannt" } | { stand: "gestoert" };
+
 export async function vorgangPerNummer(nummer: string): Promise<SatzErgebnis> {
   const zeilen = await lese<VorgangRoh>("vorgang", {
     select: MIT_KINDERN,
@@ -709,6 +720,39 @@ export async function verlauf(vorgangId: string): Promise<EreignisSatz[] | null>
     intern: z.intern,
     abStufe: alsStufe(z.ab_stufe) ?? 0,
   }));
+}
+
+/**
+ * Dasselbe für den ganzen Kader auf einmal: je Person der Zeitpunkt der
+ * letzten Mail dieser Art. Wer nicht in der Karte steht, hat noch keine.
+ *
+ * Ein Aufruf statt 26 – die Liste in der Mail-Karte zeigt neben jedem Namen,
+ * ob er schon angeschrieben wurde.
+ */
+export async function mailsJePerson(
+  vorgangId: string,
+  art: string,
+): Promise<Map<string, string> | null> {
+  const zeilen = await lese<{ hs_kontakt_id: string | null; gesendet_am: string }>(
+    "mail_versand",
+    {
+      select: "hs_kontakt_id,gesendet_am",
+      vorgang_id: `eq.${vorgangId}`,
+      art: `eq.${art}`,
+      umgeleitet: "is.false",
+      order: "gesendet_am.desc",
+    },
+  );
+  if (zeilen === null) return null;
+
+  const letzte = new Map<string, string>();
+  // Absteigend sortiert: der erste Treffer je Person ist der jüngste.
+  for (const z of zeilen) {
+    if (z.hs_kontakt_id && !letzte.has(z.hs_kontakt_id)) {
+      letzte.set(z.hs_kontakt_id, z.gesendet_am);
+    }
+  }
+  return letzte;
 }
 
 /**

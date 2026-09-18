@@ -1,3 +1,4 @@
+import { da } from "../../test/abruf";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { ladeListe } from "./vorgaenge";
 import { artikel, kontakt, person, satz } from "../../test/satz";
@@ -34,15 +35,15 @@ describe("Woraus die Zeilen entstehen", () => {
       kontakte: [kontakt("111", { trikot: "L", firstname: "Kai", lastname: "Böhm" })],
     });
 
-    const liste = await ladeListe("AUS-2026-001");
+    const liste = da(await ladeListe("AUS-2026-001"));
 
-    expect(liste?.zeilen).toHaveLength(1);
-    expect(liste?.zeilen[0]).toMatchObject({
+    expect(liste.zeilen).toHaveLength(1);
+    expect(liste.zeilen[0]).toMatchObject({
       name: "Kai Böhm",
       nummer: "7",
       torwart: true,
     });
-    expect(liste?.zeilen[0].groessen).toEqual([{ art: "trikot", label: "Trikot", wert: "L" }]);
+    expect(liste.zeilen[0].groessen).toEqual([{ art: "trikot", label: "Trikot", wert: "L" }]);
   });
 
   test("wer ausgeschlossen ist, steht gar nicht in der Liste", async () => {
@@ -54,8 +55,8 @@ describe("Woraus die Zeilen entstehen", () => {
       kontakte: [kontakt("111"), kontakt("222", { firstname: "Uwe", lastname: "Christiani" })],
     });
 
-    const liste = await ladeListe("AUS-2026-001");
-    expect(liste?.zeilen.map((z) => z.person)).toEqual(["111"]);
+    const liste = da(await ladeListe("AUS-2026-001"));
+    expect(liste.zeilen.map((z) => z.person)).toEqual(["111"]);
   });
 
   test("die Initialen-Spalte gibt es nur mit dem Häkchen aus F1", async () => {
@@ -64,11 +65,11 @@ describe("Woraus die Zeilen entstehen", () => {
       kontakte: [kontakt("111", { initialen: "KB" })],
     };
     stelleWelt(welt);
-    expect((await ladeListe("AUS-2026-001"))?.zeilen[0].initialen).toBe("");
+    expect(da(await ladeListe("AUS-2026-001")).zeilen[0].initialen).toBe("");
 
     vi.unstubAllGlobals();
     stelleWelt({ ...welt, vorgang: satz({ ...welt.vorgang, initialenNoetig: true }) });
-    expect((await ladeListe("AUS-2026-001"))?.zeilen[0].initialen).toBe("KB");
+    expect(da(await ladeListe("AUS-2026-001")).zeilen[0].initialen).toBe("KB");
   });
 
   test("jede Zeile trägt ihren eigenen signierten Link", async () => {
@@ -77,8 +78,8 @@ describe("Woraus die Zeilen entstehen", () => {
       kontakte: [kontakt("111")],
     });
 
-    const liste = await ladeListe("AUS-2026-001");
-    expect(liste?.zeilen[0].aendern).toContain("/b/AUS-2026-001/111");
+    const liste = da(await ladeListe("AUS-2026-001"));
+    expect(liste.zeilen[0].aendern).toContain("/b/AUS-2026-001/111");
   });
 });
 
@@ -91,8 +92,8 @@ describe("Was die Prüfungen daraus machen", () => {
       kontakte: [kontakt("111", { firstname: "Ben", lastname: "Morche" })],
     });
 
-    const liste = await ladeListe("AUS-2026-001");
-    const zwei = liste?.pruefungen.find((p) => p.nr === 2);
+    const liste = da(await ladeListe("AUS-2026-001"));
+    const zwei = liste.pruefungen.find((p) => p.nr === 2);
     expect(zwei?.stand).toBe("gefallen");
     expect(zwei?.details).toEqual(["Ben Morche: Oberteil fehlt"]);
   });
@@ -110,8 +111,8 @@ describe("Was die Prüfungen daraus machen", () => {
       ],
     });
 
-    const liste = await ladeListe("AUS-2026-001");
-    const drei = liste?.pruefungen.find((p) => p.nr === 3);
+    const liste = da(await ladeListe("AUS-2026-001"));
+    const drei = liste.pruefungen.find((p) => p.nr === 3);
     expect(drei?.details).toEqual(["Rückennummer 7 doppelt: Kai Böhm und Uwe Christiani"]);
   });
 
@@ -121,20 +122,20 @@ describe("Was die Prüfungen daraus machen", () => {
       kontakte: [kontakt("111", { trainingsanzug_oberteil: "L", groesse_zuletzt_bestaetigt_am: "2026-09-18" })],
     });
 
-    const liste = await ladeListe("AUS-2026-001");
-    expect(liste?.pruefungen.filter((p) => p.stand === "gefallen")).toEqual([]);
+    const liste = da(await ladeListe("AUS-2026-001"));
+    expect(liste.pruefungen.filter((p) => p.stand === "gefallen")).toEqual([]);
   });
 });
 
 describe("Wann es gar keine Liste gibt", () => {
   test("zu einer unbekannten Nummer", async () => {
     stelleWelt({});
-    expect(await ladeListe("AUS-2026-999")).toBeNull();
+    expect((await ladeListe("AUS-2026-999")).stand).toBe("unbekannt");
   });
 
   test("und wenn die Datenbank schweigt", async () => {
     stelleWelt({ vorgang: satz(), dbGestoert: true });
-    expect(await ladeListe("AUS-2026-001")).toBeNull();
+    expect((await ladeListe("AUS-2026-001")).stand).toBe("gestoert");
   });
 
   test("auch wenn HubSpot die Namen nicht hergibt", async () => {
@@ -145,6 +146,6 @@ describe("Wann es gar keine Liste gibt", () => {
       kontakte: [kontakt("111")],
       hubspotGestoert: true,
     });
-    expect(await ladeListe("AUS-2026-001")).toBeNull();
+    expect((await ladeListe("AUS-2026-001")).stand).toBe("gestoert");
   });
 });

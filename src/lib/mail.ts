@@ -233,3 +233,66 @@ export async function sendeM1(an: string, daten: M1Daten): Promise<string | null
   const { betreff, rahmen } = voranfrage ? m1Voranfrage(daten) : m1Vollstaendig(daten);
   return sendeMail({ an, betreff, text: alsText(rahmen), html: alsHtml(rahmen) });
 }
+
+export type M2aDaten = {
+  vorgang: string;
+  /** Leer, wenn am Kontakt kein Vorname steht. */
+  vorname: string;
+  mannschaft: string;
+  /** Was gefragt wird, in Worten: „Oberteil und Trainingshose“. */
+  arten: string;
+  frist: string;
+  /** Der Vorgang bestellt nichts, er sammelt nur Größen ein. */
+  nurGroessen: boolean;
+  groessenLink: string;
+};
+
+/**
+ * M2a · der persönliche Größen-Link an eine Person (docs/mails.md).
+ *
+ * Bis hierher verteilte der Trainer 24 Links von Hand aus der Mail M1. Diese
+ * Mail geht an genau eine Person und trägt genau deren Link – er gilt nur für
+ * sie und diesen Vorgang.
+ *
+ * Kein Nachname und keine fremden Namen: die Mail erreicht Eltern, und wer
+ * sonst noch in der Mannschaft ist, geht sie nichts an (CLAUDE.md).
+ */
+export async function sendeM2a(an: string, d: M2aDaten): Promise<string | null> {
+  const rahmen: Rahmen = {
+    eyebrow: `Vorgang ${d.vorgang}`,
+    titel: "Deine Größe fehlt noch",
+    vorschau: `${d.mannschaft}: ${d.arten} bitte bis ${d.frist} eintragen.`,
+    bloecke: [
+      {
+        art: "absatz",
+        text: `${anrede(d.vorname)} für ${d.mannschaft} ${
+          d.nurGroessen
+            ? "sammeln wir gerade die aktuellen Größen ein"
+            : "wird neue Ausstattung angefragt"
+        }. Dafür fehlt noch deine Größe: ${d.arten}.`,
+      },
+      {
+        art: "absatz",
+        text: `Bitte trag sie bis ${d.frist} ein. Das dauert eine Minute.`,
+      },
+      { art: "knopf", text: "Größe eintragen", href: d.groessenLink },
+      {
+        art: "absatz",
+        text: d.nurGroessen
+          ? "Mit dieser Angabe wird nichts bestellt – sie sorgt nur dafür, dass die Größe beim nächsten Mal stimmt."
+          : "Beflockte Sachen können nicht umgetauscht werden. Im Zweifel lieber eine Nummer größer.",
+      },
+      {
+        art: "absatz",
+        text: "Der Link gilt nur für dich. Bitte gib ihn nicht weiter – wer ihn hat, kann deine Größe ändern.",
+      },
+    ],
+  };
+
+  return sendeMail({
+    an,
+    betreff: `${d.mannschaft}: Größe bitte bis ${d.frist} eintragen`,
+    text: alsText(rahmen),
+    html: alsHtml(rahmen),
+  });
+}

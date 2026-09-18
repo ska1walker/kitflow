@@ -57,6 +57,35 @@ Spartenleiter Fußball · Eintracht Munster
 
 ---
 
+## M2a · Dein Größen-Link (AUS-1 → eine Person)
+
+Gebaut, verschickt aus kitflow: `sendeM2a` in `src/lib/mail.ts`. Sie geht an **eine** Person und
+trägt **deren** Link. Ausgelöst wird sie vom Trainer — auf der Danke-Seite nach F1/F1b und auf
+seiner Statusseite, jeweils über Häkchen je Person. Vorausgewählt ist, wer eine Adresse hat und
+noch keine Mail bekam; `mail_versand` hält das fest.
+
+**Betreff:** {{mannschaft}}: Größe bitte bis {{groessen_frist}} eintragen
+
+Hallo {{vorname}},
+
+für {{mannschaft}} wird neue Ausstattung angefragt. Dafür fehlt noch deine Größe: {{arten}}.
+
+Bitte trag sie bis {{groessen_frist}} ein. Das dauert eine Minute.
+
+[Größe eintragen] {{link_f2}}
+
+Beflockte Sachen können nicht umgetauscht werden. Im Zweifel lieber eine Nummer größer.
+
+Der Link gilt nur für dich. Bitte gib ihn nicht weiter – wer ihn hat, kann deine Größe ändern.
+
+Bei einem reinen Größencheck steht statt der Beflockungszeile, dass nichts bestellt wird.
+
+**Keine fremden Namen.** Die Mail erreicht Eltern; wer sonst in der Mannschaft ist, geht sie nichts
+an (CLAUDE.md). Wer keine Adresse hat, bekommt keine Mail — der Trainer sieht das in der Karte und
+trägt die Größe über die Liste selbst ein.
+
+---
+
 ## M2 · Erinnerung Größen (AUS-W → Eltern bzw. Spieler) · Phase 3
 
 **Betreff:** Erinnerung: Größe für {{mannschaft}} bis {{groessen_frist}}

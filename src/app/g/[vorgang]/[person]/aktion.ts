@@ -27,10 +27,17 @@ export async function groessenSpeichern(
     return { stand: "fehler", text: "Dieser Link funktioniert nicht mehr." };
   }
 
-  const abfrage = await ladeGroessenAbfrage(vorgang, person);
-  if (!abfrage) {
+  const abruf = await ladeGroessenAbfrage(vorgang, person);
+  // Eine Stoerung ist kein toter Link. Wer das hier liest, hat gerade seine
+  // Groesse eingetippt — er soll es gleich noch einmal versuchen und nicht
+  // glauben, sein Link sei abgelaufen.
+  if (abruf.stand === "gestoert") {
+    return { stand: "fehler", text: "kitflow kommt gerade nicht an die Daten. Bitte versuch es in einer Minute noch einmal." };
+  }
+  if (abruf.stand !== "da") {
     return { stand: "fehler", text: "Dieser Link funktioniert nicht mehr." };
   }
+  const abfrage = abruf.daten;
   if (!abfrage.offen) {
     return {
       stand: "fehler",

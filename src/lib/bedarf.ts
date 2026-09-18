@@ -32,7 +32,7 @@ import "server-only";
 import { hubspot, type HsListe, type HsObjekt } from "./hubspot";
 import { legeVorgangAn, vermerke, type NeuerArtikel } from "./vorgaenge-db";
 import { spiegele, spiegelePersonen } from "./spiegel";
-import { groessenLink, statusLink, bestaetigenLink, ergaenzenLink } from "./links";
+import { groessenLink, statusLink, bestaetigenLink, ergaenzenLink, signiere } from "./links";
 import { NUR_GROESSEN, TEAMS } from "./mannschaften";
 import type { ArtikelFuer, Groessenart } from "./typen";
 
@@ -87,7 +87,15 @@ export type BedarfEingabe = {
   hinweise: string;
 };
 
-export type PersonLink = { name: string; groessen: string; status: string };
+export type PersonLink = {
+  /** Die HubSpot-Kontakt-ID – die Mail-Karte auf der Danke-Seite hakt darüber an. */
+  id: string;
+  name: string;
+  /** Ob am Kontakt eine Adresse steht. Die Adresse selbst geht nie an den Browser. */
+  hatAdresse: boolean;
+  groessen: string;
+  status: string;
+};
 
 export type BedarfErgebnis = {
   vorgang: string;
@@ -97,6 +105,8 @@ export type BedarfErgebnis = {
   /** Leer, wenn zur Mannschaft niemand gefunden wurde oder noch keiner gesucht. */
   personen: PersonLink[];
   trainerStatus: string;
+  /** Das Token des Trainer-Links, damit die Danke-Seite die Mails verschicken kann. */
+  statusToken: string;
   bestaetigen: string;
   /** Nur im Modus `voranfrage` gefüllt: der Weg zu den fehlenden Angaben. */
   ergaenzen: string;
@@ -124,11 +134,22 @@ export function beflockungText(artikel: {
 }
 
 /** Eine Person eines Vorgangs, auf das Noetigste gekuerzt. */
-export type Empfaenger = { id: string; name: string; team: string };
+export type Empfaenger = {
+  id: string;
+  name: string;
+  team: string;
+  /** Ob am Kontakt eine Adresse steht. Die Adresse selbst bleibt serverseitig. */
+  hatAdresse: boolean;
+};
 
 function alsEmpfaenger(k: HsObjekt): Empfaenger {
   const name = `${k.properties.firstname ?? ""} ${k.properties.lastname ?? ""}`.trim();
-  return { id: k.id, name: name || `Kontakt ${k.id}`, team: k.properties.team ?? "" };
+  return {
+    id: k.id,
+    name: name || `Kontakt ${k.id}`,
+    team: k.properties.team ?? "",
+    hatAdresse: Boolean(k.properties.email),
+  };
 }
 
 /**
@@ -147,7 +168,7 @@ export async function kontaktPerEmail(email: string): Promise<Empfaenger | null>
     pfad: "/crm/v3/objects/contacts/search",
     koerper: {
       filterGroups: [{ filters: [{ propertyName: "email", operator: "EQ", value: adresse }] }],
-      properties: ["firstname", "lastname", "team"],
+      properties: ["firstname", "lastname", "team", "email"],
       limit: 1,
     },
   });
@@ -170,7 +191,7 @@ export async function kontakteDerMannschaft(teams: string[]): Promise<HsObjekt[]
       filterGroups: teams.map((team) => ({
         filters: [{ propertyName: "team", operator: "EQ", value: team }],
       })),
-      properties: ["firstname", "lastname", "team"],
+      properties: ["firstname", "lastname", "team", "email"],
       limit: 200,
     },
   });
@@ -279,10 +300,13 @@ export async function meldeBedarf(eingabe: BedarfEingabe): Promise<BedarfErgebni
         .join(" · "),
     })),
     trainerStatus: statusLink(satz.nummer) ?? "",
+    statusToken: signiere("status", satz.nummer) ?? "",
     bestaetigen: voranfrage ? "" : (bestaetigenLink(satz.nummer) ?? ""),
     ergaenzen: voranfrage ? (ergaenzenLink(satz.nummer) ?? "") : "",
     personen: kontakte.map((k) => ({
+      id: k.id,
       name: k.name,
+      hatAdresse: k.hatAdresse,
       groessen: groessenLink(satz.nummer, k.id) ?? "",
       status: statusLink(satz.nummer, k.id) ?? "",
     })),

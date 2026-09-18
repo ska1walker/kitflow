@@ -1,3 +1,4 @@
+import { da } from "../../test/abruf";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { ladeGroessenAbfrage, ladeListe } from "./vorgaenge";
 import { artikel, kontakt, person, satz } from "../../test/satz";
@@ -35,11 +36,11 @@ describe("Ein Vorgang mit Artikeln", () => {
       kontakte: [kontakt("111")],
     });
 
-    const f2 = await ladeGroessenAbfrage("AUS-2026-001", "111");
-    const f3 = await ladeListe("AUS-2026-001");
+    const f2 = da(await ladeGroessenAbfrage("AUS-2026-001", "111"));
+    const f3 = da(await ladeListe("AUS-2026-001"));
 
-    expect(f2?.fragen.map((f) => f.art)).toEqual(["oberteil", "trainingshose"]);
-    expect(f3?.arten.map((a) => a.art)).toEqual(["oberteil", "trainingshose"]);
+    expect(f2.fragen.map((f) => f.art)).toEqual(["oberteil", "trainingshose"]);
+    expect(f3.arten.map((a) => a.art)).toEqual(["oberteil", "trainingshose"]);
   });
 
   test("ein Artikel ohne Größe wird nicht gefragt", async () => {
@@ -51,8 +52,8 @@ describe("Ein Vorgang mit Artikeln", () => {
       kontakte: [kontakt("111")],
     });
 
-    const f2 = await ladeGroessenAbfrage("AUS-2026-001", "111");
-    expect(f2?.fragen.map((f) => f.art)).toEqual(["oberteil"]);
+    const f2 = da(await ladeGroessenAbfrage("AUS-2026-001", "111"));
+    expect(f2.fragen.map((f) => f.art)).toEqual(["oberteil"]);
   });
 });
 
@@ -67,13 +68,13 @@ describe("Ein Größencheck ohne Artikel", () => {
       kontakte: [kontakt("111")],
     });
 
-    const f2 = await ladeGroessenAbfrage("AUS-2026-001", "111");
-    const f3 = await ladeListe("AUS-2026-001");
+    const f2 = da(await ladeGroessenAbfrage("AUS-2026-001", "111"));
+    const f3 = da(await ladeListe("AUS-2026-001"));
 
-    expect(f2?.fragen.map((f) => f.art)).toEqual(["trikot", "schuhe"]);
-    expect(f3?.arten.map((a) => a.art)).toEqual(["trikot", "schuhe"]);
-    expect(f2?.nurGroessen).toBe(true);
-    expect(f3?.nurGroessen).toBe(true);
+    expect(f2.fragen.map((f) => f.art)).toEqual(["trikot", "schuhe"]);
+    expect(f3.arten.map((a) => a.art)).toEqual(["trikot", "schuhe"]);
+    expect(f2.nurGroessen).toBe(true);
+    expect(f3.nurGroessen).toBe(true);
   });
 
   test("und die Liste zeigt dann nur die eine Prüfung", async () => {
@@ -87,7 +88,7 @@ describe("Ein Größencheck ohne Artikel", () => {
       kontakte: [kontakt("111", { trikot: "L" })],
     });
 
-    const f3 = await ladeListe("AUS-2026-001");
-    expect(f3?.pruefungen.map((p) => p.nr)).toEqual([2]);
+    const f3 = da(await ladeListe("AUS-2026-001"));
+    expect(f3.pruefungen.map((p) => p.nr)).toEqual([2]);
   });
 });

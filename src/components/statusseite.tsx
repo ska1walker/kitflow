@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { IconTrikot } from "./icons";
 import { VEREIN } from "@/lib/beispieldaten";
 import type { Ansicht, Vorgang, VorgangsZeile } from "@/lib/typen";
+import type { MailEmpfaenger } from "@/lib/vorgaenge";
 import { VorgangAnsicht } from "./vorgang-ansicht";
 import { SpartenAnsicht } from "./sparten-ansicht";
 
@@ -50,6 +51,7 @@ export function Statusseite({
   ansicht,
   voranfrage,
   nachtrag,
+  verteiler,
   leiste,
   onOeffnen,
 }: {
@@ -61,6 +63,7 @@ export function Statusseite({
   voranfrage?: { ergaenzen: string; token: string };
   /** Nur am Trainer-Link und nur auf Stufe 1 (docs/formulare.md). */
   nachtrag?: { token: string; personen: { id: string; name: string }[] };
+  verteiler?: { token: string; frist: string; empfaenger: MailEmpfaenger[] };
   /** Steuerleiste des Schaufensters. Bei echten Vorgaengen leer. */
   leiste?: ReactNode;
   /**
@@ -105,6 +108,7 @@ export function Statusseite({
               onDemo={zeigeHinweis}
               voranfrage={voranfrage}
               nachtrag={nachtrag}
+              verteiler={verteiler}
             />
           )}
         </div>

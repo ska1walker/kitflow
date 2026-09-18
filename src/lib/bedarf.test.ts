@@ -156,7 +156,7 @@ describe("Ein Vorgang für genau eine Person", () => {
     const { aufrufe } = stelleWelt({ kontakte: [kontakt("111"), kontakt("222")] });
 
     const ergebnis = await meldeBedarf(
-      eingabe({ person: { id: "222", name: "Uwe Christiani", team: "Ü40 Team 3" } }),
+      eingabe({ person: { hatAdresse: true, id: "222", name: "Uwe Christiani", team: "Ü40 Team 3" } }),
     );
 
     expect(ergebnis?.personen).toHaveLength(1);
@@ -197,7 +197,7 @@ describe("Der Spiegel im CRM", () => {
     const { aufrufe } = stelleWelt({ kontakte: [], naechsteNummer: "AUS-2026-009" });
 
     const ergebnis = await meldeBedarf(
-      eingabe({ person: { id: "222", name: "Uwe Christiani", team: "Ü40 Team 3" } }),
+      eingabe({ person: { hatAdresse: true, id: "222", name: "Uwe Christiani", team: "Ü40 Team 3" } }),
     );
 
     expect(ergebnis?.vorgang).toBe("AUS-2026-009");

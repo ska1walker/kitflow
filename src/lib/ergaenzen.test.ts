@@ -1,3 +1,4 @@
+import { da } from "../../test/abruf";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { ergaenzeVorgang, ladeVoranfrage, type ErgaenzungEingabe } from "./ergaenzen";
 import { artikel, kontakt, satz } from "../../test/satz";
@@ -74,22 +75,22 @@ describe("Was F1b vorfindet", () => {
   test("die Artikel in der Reihenfolge der Meldung, mit fehlender Nummer als Platzhalter", async () => {
     stelleWelt({ vorgang: voranfrage() });
 
-    const v = await ladeVoranfrage("AUS-2026-001");
+    const v = da(await ladeVoranfrage("AUS-2026-001"));
 
-    expect(v?.artikel.map((a) => a.bezeichnung)).toEqual(["Trainingsjacke", "Trainingshose"]);
-    expect(v?.artikel[0].platzhalter).toBe(true);
-    expect(v?.personenGeschaetzt).toBe(26);
+    expect(v.artikel.map((a) => a.bezeichnung)).toEqual(["Trainingsjacke", "Trainingshose"]);
+    expect(v.artikel[0].platzhalter).toBe(true);
+    expect(v.personenGeschaetzt).toBe(26);
   });
 
   test("einen Vorgang, der keine Voranfrage mehr ist, gibt es hier nicht", async () => {
     // Sonst wechselte die Stufe ein zweites Mal und die Kontakte kämen doppelt.
     stelleWelt({ vorgang: satz({ stufe: 1 }) });
-    expect(await ladeVoranfrage("AUS-2026-001")).toBeNull();
+    expect((await ladeVoranfrage("AUS-2026-001")).stand).toBe("unbekannt");
   });
 
   test("und eine Störung ist kein fehlender Vorgang, sondern gar keine Antwort", async () => {
     stelleWelt({ vorgang: voranfrage(), dbGestoert: true });
-    expect(await ladeVoranfrage("AUS-2026-001")).toBeNull();
+    expect((await ladeVoranfrage("AUS-2026-001")).stand).toBe("gestoert");
   });
 });
 

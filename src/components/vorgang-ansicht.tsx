@@ -5,9 +5,11 @@ import { IconArrowRight, IconBell, IconCheck, IconStop } from "./icons";
 import { LETZTE_STUFE, stufe as stufeVon } from "@/lib/stufen";
 import { naechsterSchritt, statusText } from "@/lib/texte";
 import type { Ansicht, StufeNr, Vorgang } from "@/lib/typen";
+import type { MailEmpfaenger } from "@/lib/vorgaenge";
 import { Schrittleiste } from "./schrittleiste";
 import { VoranfrageKarte } from "./voranfrage-karte";
 import { NachtragKarte } from "./nachtrag-karte";
+import { MailKarte } from "./mail-karte";
 import {
   ArtikelKarte,
   GeldKarte,
@@ -121,6 +123,7 @@ export function VorgangAnsicht({
   onDemo,
   voranfrage,
   nachtrag,
+  verteiler,
 }: {
   vorgang: Vorgang;
   ansicht: Ansicht;
@@ -129,6 +132,8 @@ export function VorgangAnsicht({
   voranfrage?: { ergaenzen: string; token: string };
   /** Nur am Trainer-Link und nur auf Stufe 1: wer noch nachruecken kann. */
   nachtrag?: { token: string; personen: { id: string; name: string }[] };
+  /** Nur am Trainer-Link und nur auf Stufe 1: wer die Größen-Mail bekommen kann. */
+  verteiler?: { token: string; frist: string; empfaenger: MailEmpfaenger[] };
 }) {
   // Bei einem Abbruch stehen die Karten auf dem Stand, den der Vorgang erreicht
   // hatte. Kopf und naechster Schritt sprechen weiter vom Abbruch selbst.
@@ -176,6 +181,15 @@ export function VorgangAnsicht({
           vorgang={vorgang.nummer}
           ergaenzen={voranfrage.ergaenzen}
           token={voranfrage.token}
+        />
+      )}
+
+      {verteiler && verteiler.empfaenger.length > 0 && (
+        <MailKarte
+          vorgang={vorgang.nummer}
+          token={verteiler.token}
+          frist={verteiler.frist}
+          empfaenger={verteiler.empfaenger}
         />
       )}
 

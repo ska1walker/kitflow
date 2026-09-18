@@ -29,10 +29,20 @@ export type Welt = {
   hubspotGestoert?: boolean;
   /** Die nächste Vorgangsnummer, die die Datenbank vergibt. */
   naechsteNummer?: string;
+  /** Zeilen in `mail_versand` – was schon rausging. */
+  mails?: { art: string; hs_kontakt_id: string | null; gesendet_am: string; umgeleitet?: boolean }[];
+  /** Resend antwortet nicht. */
+  resendGestoert?: boolean;
+  /**
+   * Nur `mail_versand` antwortet nicht. Eigener Schalter, weil `dbGestoert`
+   * schon den Vorgang selbst scheitern lässt — ein Test damit sagt nichts über
+   * das, was danach kommt.
+   */
+  mailsGestoert?: boolean;
 };
 
 export type Aufruf = {
-  host: "db" | "hubspot";
+  host: "db" | "hubspot" | "resend";
   methode: string;
   pfad: string;
   suche: Record<string, string>;
@@ -82,17 +92,23 @@ export function stelleWelt(welt: Welt) {
   const netz = vi.fn(async (url: string, o?: RequestInit) => {
     const adresse = new URL(String(url));
     const beiHubspot = adresse.host === "api.hubapi.com";
+    const beiResend = adresse.host === "api.resend.com";
     const pfad = beiHubspot ? adresse.pathname : adresse.pathname.replace(/^\/rest\/v1\//, "");
     const methode = o?.method ?? (o?.body ? "POST" : "GET");
     const koerper = o?.body ? JSON.parse(String(o.body)) : undefined;
 
     aufrufe.push({
-      host: beiHubspot ? "hubspot" : "db",
+      host: beiResend ? "resend" : beiHubspot ? "hubspot" : "db",
       methode,
       pfad,
       suche: Object.fromEntries(adresse.searchParams),
       koerper,
     });
+
+    if (beiResend) {
+      if (welt.resendGestoert) return json({ message: "kaputt" }, 422);
+      return json({ id: "mail-1" });
+    }
 
     if (beiHubspot) {
       if (welt.hubspotGestoert) return json({ message: "kaputt" }, 500);
@@ -326,7 +342,19 @@ function dbAntwort(
   }
 
   if (pfad === "mail_versand") {
-    if (methode === "GET") return json([]);
+    if (welt.mailsGestoert) return json({ code: "PGRST000" }, 500);
+    if (methode === "GET") {
+      const art = (suche.get("art") ?? "").replace("eq.", "");
+      // `umgeleitet=is.false` ist der Kern: eine umgeleitete Mail lag in Kais
+      // Postfach, nicht im Postfach des Spielers, und zaehlt deshalb nicht.
+      const nurEchte = suche.get("umgeleitet") === "is.false";
+      return json(
+        (welt.mails ?? [])
+          .filter((m) => (art ? m.art === art : true))
+          .filter((m) => (nurEchte ? m.umgeleitet !== true : true))
+          .sort((a, b) => b.gesendet_am.localeCompare(a.gesendet_am)),
+      );
+    }
     if (methode === "POST") return json([{}]);
   }
 

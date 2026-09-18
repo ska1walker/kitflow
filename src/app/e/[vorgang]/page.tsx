@@ -1,5 +1,6 @@
 import { ErgaenzenFormular } from "@/components/ergaenzen-formular";
 import { KeinZugang } from "@/components/kein-zugang";
+import { Stoerung } from "@/components/stoerung";
 import { pruefe } from "@/lib/links";
 import { ladeVoranfrage } from "@/lib/ergaenzen";
 
@@ -16,8 +17,10 @@ export default async function ErgaenzenSeite(props: PageProps<"/e/[vorgang]">) {
 
   if (typeof t !== "string" || !pruefe(t, "ergaenzen", nummer)) return <KeinZugang />;
 
-  const voranfrage = await ladeVoranfrage(nummer);
-  if (!voranfrage) return <KeinZugang />;
+  const abruf = await ladeVoranfrage(nummer);
+  if (abruf.stand === "gestoert") return <Stoerung />;
+  if (abruf.stand !== "da") return <KeinZugang />;
+  const voranfrage = abruf.daten;
 
   return (
     <main className="mx-auto w-full max-w-3xl px-4 py-10">

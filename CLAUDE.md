@@ -61,7 +61,7 @@ echtes PostgREST auf einem echten Postgres, aufgesetzt von `scripts/db-testumgeb
 (docs/datenbank.md). Ein Papp-Netz spiegelt die eigene Annahme zurück — dort kam ein Fehler
 heraus, den die 54 Tests gegen die Attrappe nie gefunden hätten.
 
-`npm run test:browser` fährt 23 Prüfungen in einem echten Chromium gegen einen frisch gebauten
+`npm run test:browser` fährt 27 Prüfungen in einem echten Chromium gegen einen frisch gebauten
 Server (`playwright.config.ts`) und läuft in der Prüfung mit. Der Lauf bekommt die Zugänge zu
 HubSpot, Supabase und Resend **leer** übergeben — leer gesetzt heißt in Next, dass `.env.local`
 sie nicht mehr überschreibt. Er kann deshalb keinen echten Kontakt lesen, keinen Vorgang

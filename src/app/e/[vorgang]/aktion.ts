@@ -72,13 +72,17 @@ export async function angabenErgaenzen(
 
   // Frisch laden statt dem Formular glauben: welche Positionen es gibt,
   // entscheidet HubSpot, nicht die abgeschickten Feldnamen.
-  const voranfrage = await ladeVoranfrage(vorgang);
-  if (!voranfrage) {
+  const abruf = await ladeVoranfrage(vorgang);
+  if (abruf.stand === "gestoert") {
+    return { stand: "fehler", text: "kitflow kommt gerade nicht an die Daten. Bitte versuch es in einer Minute noch einmal." };
+  }
+  if (abruf.stand !== "da") {
     return {
       stand: "fehler",
       text: "Dieser Vorgang ist keine offene Voranfrage mehr.",
     };
   }
+  const voranfrage = abruf.daten;
   if (voranfrage.artikel.length === 0) {
     return { stand: "fehler", text: "Zu diesem Vorgang steht kein Artikel in HubSpot." };
   }

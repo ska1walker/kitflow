@@ -82,22 +82,21 @@ test("Eine ausgetauschte Vorgangsnummer öffnet die Seite nicht", async ({ page 
   await expect(page.getByRole("heading", { name: ABGEWIESEN })).toBeVisible();
 });
 
-test("Gegenprobe: das richtige Token kommt durch", async ({ page }) => {
-  // Ohne diese Prüfung wäre alles oben auch dann grün, wenn jede Seite
-  // grundsätzlich abwiese. Die Datenbank fehlt in diesem Lauf, also endet der
-  // Weg bei der Störung — aber er endet hinter der Grenze, nicht davor.
-  await page.goto(`/v/${VORGANG}?t=${token("status", VORGANG)}`);
-  await expect(page.getByRole("heading", { name: DURCHGELASSEN })).toBeVisible();
-  await expect(page.getByRole("heading", { name: ABGEWIESEN })).toHaveCount(0);
-});
-
-test("Gegenprobe: auch ein Link mit Personen-ID kommt durch", async ({ page }) => {
-  // Die zweite Gegenprobe kam durch eine Mutation, die ins Leere lief: nimmt
-  // man die Personen-ID aus der Signatur heraus, wird zwar der vertauschte
-  // Link weiter abgewiesen — aber der richtige eben auch, und oben wäre alles
-  // grün geblieben. Ein abgewiesener Link beweist nur etwas, solange der
-  // richtige daneben durchkommt.
-  await page.goto(`/v/${VORGANG}/${ICH}?t=${token("status", VORGANG, ICH)}`);
-  await expect(page.getByRole("heading", { name: DURCHGELASSEN })).toBeVisible();
-  await expect(page.getByRole("heading", { name: ABGEWIESEN })).toHaveCount(0);
-});
+for (const seite of SEITEN) {
+  test(`${seite.name}: das richtige Token kommt durch`, async ({ page }) => {
+    // Zwei Dinge auf einmal, und beide sind nötig.
+    //
+    // Erstens die Gegenprobe zu allem oben: wäre eine Seite grundsätzlich
+    // zu, bliebe sie trotzdem grün. Eine der Mutationen lief genau hier ins
+    // Leere — nimmt man die Personen-ID aus der Signatur, wird der
+    // vertauschte Link weiter abgewiesen, der richtige aber auch.
+    //
+    // Zweitens die Störungsmeldung. Der Lauf hat keine Datenbank, also endet
+    // jeder richtige Link bei „Gerade nicht erreichbar“. Genau das war der
+    // Fehler: F2, F3 und F1b sagten bei einem Ausfall „Dieser Link
+    // funktioniert nicht“ — und der Spieler suchte den Fehler bei sich.
+    await page.goto(`${seite.pfad}?t=${token(seite.zweck, ...seite.teile)}`);
+    await expect(page.getByRole("heading", { name: DURCHGELASSEN })).toBeVisible();
+    await expect(page.getByRole("heading", { name: ABGEWIESEN })).toHaveCount(0);
+  });
+}

@@ -16,7 +16,7 @@
 import { groessenLink, pruefe } from "@/lib/links";
 import { ladeVoranfrage } from "@/lib/ergaenzen";
 import { spiegele } from "@/lib/spiegel";
-import { trageNach } from "@/lib/vorgaenge";
+import { sendeGroessenMails, trageNach } from "@/lib/vorgaenge";
 import { dbAktiv } from "@/lib/db";
 import { setzeStufe, vermerke, vorgangPerNummer } from "@/lib/vorgaenge-db";
 
@@ -44,10 +44,14 @@ export async function voranfrageAbbrechen(
 
   // Nur eine offene Voranfrage laesst sich hier abbrechen. Alles Weitere
   // entscheidet die Spartenleitung in HubSpot.
-  const voranfrage = await ladeVoranfrage(vorgang);
-  if (!voranfrage) {
+  const abruf = await ladeVoranfrage(vorgang);
+  if (abruf.stand === "gestoert") {
+    return { stand: "fehler", text: "kitflow kommt gerade nicht an die Daten. Bitte versuch es in einer Minute noch einmal." };
+  }
+  if (abruf.stand !== "da") {
     return { stand: "fehler", text: "Dieser Vorgang ist keine offene Voranfrage mehr." };
   }
+  const voranfrage = abruf.daten;
 
   // Stufe 9 ist der Abbruch; `abbruchBei` haelt fest, wo der Vorgang stand.
   // Ohne das liesse er sich spaeter nicht wieder aufnehmen.
@@ -107,4 +111,55 @@ export async function personNachtragen(
   if (!ergebnis.ok) return { stand: "fehler", text: ergebnis.fehler };
 
   return { stand: "fertig", name: ergebnis.name, pfad: groessenLink(vorgang, person) ?? "" };
+}
+
+export type VersandStand =
+  | { stand: "leer" }
+  | { stand: "fertig"; verschickt: number; fehlgeschlagen: number; umgeleitetAn?: string }
+  | { stand: "fehler"; text: string };
+
+/**
+ * Verschickt die Größen-Mail an die angehakten Personen (M2a).
+ *
+ * Bis hierher verteilte der Trainer 24 Links von Hand aus M1. Welche IDs das
+ * Formular mitschickt, entscheidet nichts: `sendeGroessenMails` lädt den
+ * Vorgang frisch und lässt nur durch, wer wirklich daran hängt.
+ */
+export async function groessenMailsSenden(
+  vorgang: string,
+  token: string,
+  _bisher: VersandStand,
+  formular: FormData,
+): Promise<VersandStand> {
+  if (!pruefe(token, "status", vorgang)) {
+    return { stand: "fehler", text: "Dieser Link funktioniert nicht mehr." };
+  }
+
+  const ids = formular.getAll("person").filter((w): w is string => typeof w === "string");
+  if (ids.length === 0) {
+    return { stand: "fehler", text: "Bitte hak an, wer eine Mail bekommen soll." };
+  }
+
+  const ergebnis = await sendeGroessenMails(vorgang, ids);
+  if (ergebnis.ok) {
+    return {
+      stand: "fertig",
+      verschickt: ergebnis.verschickt,
+      fehlgeschlagen: ergebnis.fehlgeschlagen,
+      umgeleitetAn: ergebnis.umgeleitetAn,
+    };
+  }
+
+  const texte: Record<typeof ergebnis.grund, string> = {
+    gestoert:
+      "kitflow kommt gerade nicht an die Daten. Bitte versuch es in einer Minute noch einmal.",
+    unbekannt: "Dieser Link funktioniert nicht mehr.",
+    zu: "Für diesen Vorgang werden keine Größen mehr gesammelt.",
+    niemand: "Von den Angehakten gehört niemand mehr zu diesem Vorgang.",
+    // Nicht „die Links stehen unten“: auf der Statusseite stehen sie das
+    // nicht, nur auf der Danke-Seite. Der Trainer hat sie in M1.
+    "kein-versand":
+      "kitflow kann gerade keine Mails verschicken. Die persönlichen Links stehen in der Mail, mit der dieser Vorgang angelegt wurde – von dort lassen sie sich von Hand verteilen.",
+  };
+  return { stand: "fehler", text: texte[ergebnis.grund] };
 }

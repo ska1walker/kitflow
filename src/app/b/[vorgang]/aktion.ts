@@ -27,8 +27,14 @@ export async function listeBestaetigen(
     return { stand: "fehler", text: "Dieser Link funktioniert nicht mehr." };
   }
 
-  const liste = await ladeListe(vorgang);
-  if (!liste) return { stand: "fehler", text: "Dieser Link funktioniert nicht mehr." };
+  const abruf = await ladeListe(vorgang);
+  if (abruf.stand === "gestoert") {
+    return { stand: "fehler", text: "kitflow kommt gerade nicht an die Daten. Bitte versuch es in einer Minute noch einmal." };
+  }
+  if (abruf.stand !== "da") {
+    return { stand: "fehler", text: "Dieser Link funktioniert nicht mehr." };
+  }
+  const liste = abruf.daten;
   if (!liste.offen) {
     return { stand: "fehler", text: "Dieser Vorgang ist über die Größenphase hinaus." };
   }

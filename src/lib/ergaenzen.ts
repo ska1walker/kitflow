@@ -19,7 +19,7 @@ import "server-only";
 
 import { kontakteDerMannschaft } from "./bedarf";
 import { GROESSEN_LABEL } from "./groessen";
-import { groessenLink, statusLink, bestaetigenLink } from "./links";
+import { groessenLink, signiere, statusLink, bestaetigenLink } from "./links";
 import { spiegele, spiegelePersonen } from "./spiegel";
 import {
   aendereArtikel,
@@ -28,6 +28,7 @@ import {
   setzeStufe,
   vermerke,
   vorgangPerNummer,
+  type Abruf,
 } from "./vorgaenge-db";
 import type { BedarfErgebnis } from "./bedarf";
 import type { ArtikelFuer, Groessenart } from "./typen";
@@ -81,20 +82,20 @@ export type ErgaenzungEingabe = {
 };
 
 /**
- * Die Voranfrage zu einer Nummer. `null` heisst: gibt es nicht, ist keine
- * Voranfrage mehr, oder die Datenbank antwortet nicht.
+ * Die Voranfrage zu einer Nummer. `unbekannt` heisst: gibt es nicht oder ist
+ * keine Voranfrage mehr; `gestoert` heisst, die Datenbank antwortet nicht.
  *
  * Nur Stufe 0: ein Vorgang, bei dem die Groessen schon laufen, wird nicht noch
  * einmal ergaenzt – sonst wechselte die Stufe ein zweites Mal und die Kontakte
  * kaemen doppelt dazu.
  */
-export async function ladeVoranfrage(nummer: string): Promise<Voranfrage | null> {
+export async function ladeVoranfrage(nummer: string): Promise<Abruf<Voranfrage>> {
   const ergebnis = await vorgangPerNummer(nummer);
-  if (ergebnis.stand !== "da") return null;
+  if (ergebnis.stand !== "da") return ergebnis;
   const satz = ergebnis.vorgang;
-  if (satz.stufe !== 0) return null;
+  if (satz.stufe !== 0) return { stand: "unbekannt" };
 
-  return {
+  const daten: Voranfrage = {
     vorgang: satz.nummer,
     vorgangId: satz.id,
     trainerEmail: satz.trainerEmail ?? "",
@@ -118,6 +119,7 @@ export async function ladeVoranfrage(nummer: string): Promise<Voranfrage | null>
       groesseBis: a.groesseBis ?? "",
     })),
   };
+  return { stand: "da", daten };
 }
 
 /** Der Text, der als Beflockung am Artikel steht. */
@@ -138,8 +140,9 @@ export async function ergaenzeVorgang(
   nummer: string,
   eingabe: ErgaenzungEingabe,
 ): Promise<BedarfErgebnis | null> {
-  const voranfrage = await ladeVoranfrage(nummer);
-  if (!voranfrage) return null;
+  const abruf = await ladeVoranfrage(nummer);
+  if (abruf.stand !== "da") return null;
+  const voranfrage = abruf.daten;
 
   for (const artikel of voranfrage.artikel) {
     const dazu = eingabe.artikel.find((a) => a.artikelId === artikel.artikelId);
@@ -207,10 +210,13 @@ export async function ergaenzeVorgang(
       detail: `${a.groessenartLabel} · ${a.stueck} Stück je Person`,
     })),
     trainerStatus: statusLink(nummer) ?? "",
+    statusToken: signiere("status", nummer) ?? "",
     bestaetigen: bestaetigenLink(nummer) ?? "",
     ergaenzen: "",
     personen: kontakte.map((k) => ({
+      id: k.id,
       name: `${k.properties.firstname ?? ""} ${k.properties.lastname ?? ""}`.trim() || k.id,
+      hatAdresse: Boolean(k.properties.email),
       groessen: groessenLink(nummer, k.id) ?? "",
       status: statusLink(nummer, k.id) ?? "",
     })),

@@ -1,4 +1,5 @@
 import { KeinZugang } from "@/components/kein-zugang";
+import { Stoerung } from "@/components/stoerung";
 import { TrainerFormular } from "@/components/trainer-formular";
 import { Card } from "@/components/ui";
 import { bestaetigenLink, pruefe } from "@/lib/links";
@@ -16,8 +17,10 @@ export default async function TrainerGroessenSeite(props: PageProps<"/b/[vorgang
 
   if (typeof t !== "string" || !pruefe(t, "trainer", nummer, person)) return <KeinZugang />;
 
-  const abfrage = await ladeTrainerAbfrage(nummer, person);
-  if (!abfrage) return <KeinZugang />;
+  const abruf = await ladeTrainerAbfrage(nummer, person);
+  if (abruf.stand === "gestoert") return <Stoerung />;
+  if (abruf.stand !== "da") return <KeinZugang />;
+  const abfrage = abruf.daten;
 
   return (
     <main className="mx-auto w-full max-w-2xl px-4 py-10">
