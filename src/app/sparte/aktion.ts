@@ -18,7 +18,7 @@
 import { redirect } from "next/navigation";
 import { authClient, spartenLeitung } from "@/lib/anmeldung";
 import { dbAktiv } from "@/lib/db";
-import { setzeStufe, vermerke, vorgangPerNummer } from "@/lib/vorgaenge-db";
+import { aendereVorgang, setzeStufe, vermerke, vorgangPerNummer } from "@/lib/vorgaenge-db";
 import { spiegele } from "@/lib/spiegel";
 import { stufe as stufeVon } from "@/lib/stufen";
 import type { StufeNr } from "@/lib/typen";
@@ -96,4 +96,92 @@ export async function abmelden(): Promise<void> {
   const client = await authClient();
   if (client) await client.auth.signOut();
   redirect("/anmelden");
+}
+
+export type FristStand =
+  | { stand: "leer" }
+  | { stand: "fertig"; nummer: string; frist: string; vergangen: boolean }
+  | { stand: "fehler"; text: string };
+
+/** „2026-09-30“ wird „30.09.2026“ — die Rückmeldung liest ein Mensch. */
+function deutsch(iso: string): string {
+  const t = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  return t ? `${t[3]}.${t[2]}.${t[1]}` : iso;
+}
+
+/**
+ * Die Größenfrist eines laufenden Vorgangs ändern.
+ *
+ * Bis hierher gab es dafür keine Stelle: F1 setzt sie beim Anlegen, F1b beim
+ * Vervollständigen einer Voranfrage — danach stand sie fest. Aufgefallen ist
+ * das an einem echten Vorgang, dessen Frist so knapp lag, dass der
+ * Erinnerungslauf nie zum Zug gekommen wäre: er verlangt drei Tage Abstand zur
+ * letzten Mail, und die Frist lag zwei Tage voraus.
+ *
+ * Genau deshalb ist das Verlängern mehr als Kosmetik — es entscheidet, ob
+ * überhaupt noch jemand erinnert wird.
+ */
+export async function fristSetzen(_bisher: FristStand, formular: FormData): Promise<FristStand> {
+  const wer = await spartenLeitung();
+  if (!wer) return { stand: "fehler", text: "Dafür musst du angemeldet sein." };
+
+  const nummer = String(formular.get("vorgang") ?? "").trim();
+  const frist = String(formular.get("frist") ?? "").trim();
+  if (!nummer) return { stand: "fehler", text: "Bitte einen Vorgang wählen." };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(frist)) {
+    return { stand: "fehler", text: "Bitte ein Datum wählen." };
+  }
+
+  // Tippfehler-Riegel: „2206“ statt „2026“ schöbe die Frist um 180 Jahre und
+  // liefe nie ab. Ein Datum, das gar keines ist, fängt der Test davor nicht.
+  const tag = new Date(`${frist}T12:00:00Z`);
+  if (Number.isNaN(tag.getTime())) return { stand: "fehler", text: "Bitte ein Datum wählen." };
+  const jahre = (tag.getTime() - Date.now()) / (365 * 86_400_000);
+  if (jahre > 2 || jahre < -5) {
+    return { stand: "fehler", text: "Dieses Datum liegt zu weit weg. Bitte noch einmal prüfen." };
+  }
+
+  if (!dbAktiv()) {
+    return { stand: "fehler", text: "Das hat gerade nicht geklappt. Bitte versuch es später." };
+  }
+
+  const abruf = await vorgangPerNummer(nummer);
+  if (abruf.stand === "gestoert") {
+    return {
+      stand: "fehler",
+      text: "kitflow kommt gerade nicht an die Daten. Bitte versuch es in einer Minute noch einmal.",
+    };
+  }
+  if (abruf.stand !== "da") return { stand: "fehler", text: `Vorgang ${nummer} gibt es nicht.` };
+  const vorgang = abruf.vorgang;
+
+  // Nur solange Größen gesammelt werden. Danach ist die Frist Geschichte, und
+  // sie zu ändern sähe aus, als ließe sich noch etwas eintragen.
+  if (vorgang.stufe !== 1) {
+    return { stand: "fehler", text: `Für ${nummer} werden keine Größen mehr gesammelt.` };
+  }
+  if (vorgang.groessenFrist === frist) {
+    return { stand: "fehler", text: `${nummer} steht schon auf dem ${deutsch(frist)}.` };
+  }
+
+  const gesetzt = await aendereVorgang(vorgang.id, { groessenFrist: frist });
+  if (!gesetzt) {
+    return { stand: "fehler", text: "Das hat gerade nicht geklappt. Bitte versuch es später." };
+  }
+
+  await vermerke(vorgang.id, {
+    art: "frist-gesetzt",
+    text: `Größenfrist von Hand auf den ${deutsch(frist)} gesetzt`,
+    sub: wer,
+    intern: true,
+    abStufe: 1,
+  });
+
+  const frisch = await vorgangPerNummer(nummer);
+  if (frisch.stand === "da") await spiegele(frisch.vorgang);
+
+  // Eine Frist in der Vergangenheit ist erlaubt – man korrigiert damit einen
+  // Tippfehler. Verschwiegen wird sie nicht: der Erinnerungslauf rührt sich
+  // danach nie wieder.
+  return { stand: "fertig", nummer, frist: deutsch(frist), vergangen: tag.getTime() < Date.now() };
 }

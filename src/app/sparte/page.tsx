@@ -3,6 +3,7 @@ import { Card } from "@/components/ui";
 import { Kopfzeile } from "@/components/kopfzeile";
 import { SpartenAnsicht } from "@/components/sparten-ansicht";
 import { StufenKarte } from "@/components/stufen-karte";
+import { FristKarte } from "@/components/frist-karte";
 import { Abmelden } from "@/components/abmelden";
 import { Stoerung } from "@/components/stoerung";
 import { spartenLeitung } from "@/lib/anmeldung";
@@ -62,6 +63,7 @@ export default async function Sparte() {
           ) : (
             <>
               <SpartenAnsicht zeilen={zeilen} />
+              <FristKarte zeilen={zeilen} />
               <StufenKarte zeilen={zeilen} />
             </>
           )}

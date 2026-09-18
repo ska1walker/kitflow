@@ -71,16 +71,15 @@ Zwei Wege:
   ein zweites Mal am 24.09.
 - **So lassen** und in zwei Tagen selbst nachhaken.
 
-**Eine Oberfläche zum Ändern der Größenfrist gibt es noch nicht.** F1b (`/e/…`)
-gilt nur für Voranfragen, und die Karte auf `/sparte` setzt nur die Stufe. Bis
-dahin geht es im Supabase-SQL-Editor:
+**Verlängern geht auf `/sparte`**, Karte „Größenfrist ändern" (seit 18.09.).
+Vorgang wählen, Datum wählen, „Setzen". Angeboten werden nur Vorgänge, bei
+denen gerade Größen gesammelt werden.
+
+Ohne Anmeldung ginge es auch im Supabase-SQL-Editor:
 
 ```sql
 update vorgang set groessen_frist = '2026-09-30' where nummer = 'AUS-2026-002';
 ```
-
-Sag Bescheid, wenn ich die Frist auf `/sparte` änderbar machen soll — das ist
-eine kleine Karte neben dem Stufenwechsel.
 
 ### 1.5 AUS-2026-001 aufräumen
 
@@ -192,7 +191,6 @@ Nichts davon ist dringend, und nichts davon fange ich ohne dein Wort an.
 
 | | |
 | --- | --- |
-| **Größenfrist änderbar machen** | siehe 1.4 — eine kleine Karte auf `/sparte` |
 | **M3 · Größenliste zum Prüfen** | die Mail an den Trainer, wenn alle eingetragen haben |
 | **M4 · Anfrage an die Händler** | **bleibt ungebaut bis zu deiner ausdrücklichen Freigabe** |
 | **Foto-Upload** | meine Empfehlung: harte Größengrenze *und* serverseitig verkleinern, nur Trainer, erst nach dem echten Durchlauf |

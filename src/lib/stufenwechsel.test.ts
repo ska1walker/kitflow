@@ -26,7 +26,7 @@ vi.mock("@/lib/anmeldung", () => ({
   authClient: async () => null,
 }));
 
-import { stufeSetzen } from "@/app/sparte/aktion";
+import { fristSetzen, stufeSetzen } from "@/app/sparte/aktion";
 
 function formular(werte: Record<string, string>) {
   const f = new FormData();
@@ -186,5 +186,139 @@ describe("Wenn die Datenbank schweigt", () => {
     expect(stand.stand === "fehler" && stand.text).toContain("nicht an die Daten");
     expect(stand.stand === "fehler" && stand.text).not.toContain("gibt es nicht");
     expect(gesetzt(aufrufe)).toBeUndefined();
+  });
+});
+
+describe("Die Größenfrist ändern", () => {
+  /** Wurde die Frist wirklich geschrieben? */
+  function fristGesetzt(aufrufe: { host: string; methode: string; pfad: string; koerper: unknown }[]) {
+    return aufrufe.find(
+      (a) =>
+        a.host === "db" &&
+        a.pfad === "vorgang" &&
+        a.methode === "PATCH" &&
+        typeof a.koerper === "object" &&
+        a.koerper !== null &&
+        "groessen_frist" in a.koerper,
+    );
+  }
+
+  test("ohne Anmeldung wird nichts geändert", async () => {
+    wer.email = null;
+    const { aufrufe } = welt();
+
+    const stand = await fristSetzen(
+      { stand: "leer" },
+      formular({ vorgang: "AUS-2026-001", frist: "2026-12-01" }),
+    );
+
+    expect(stand.stand === "fehler" && stand.text).toContain("angemeldet");
+    expect(fristGesetzt(aufrufe)).toBeUndefined();
+  });
+
+  test("angemeldet wird sie gesetzt", async () => {
+    const { aufrufe } = welt();
+
+    const stand = await fristSetzen(
+      { stand: "leer" },
+      formular({ vorgang: "AUS-2026-001", frist: "2026-12-01" }),
+    );
+
+    expect(stand.stand).toBe("fertig");
+    expect(stand.stand === "fertig" && stand.frist).toBe("01.12.2026");
+    expect(fristGesetzt(aufrufe)?.koerper).toMatchObject({ groessen_frist: "2026-12-01" });
+  });
+
+  test("wer es war, steht im Verlauf", async () => {
+    const { aufrufe } = welt();
+
+    await fristSetzen({ stand: "leer" }, formular({ vorgang: "AUS-2026-001", frist: "2026-12-01" }));
+
+    const eintrag = aufrufe.find((a) => a.pfad === "ereignis" && a.methode === "POST");
+    expect(eintrag?.koerper).toMatchObject({
+      art: "frist-gesetzt",
+      sub: "kai@example.invalid",
+      intern: true,
+    });
+  });
+
+  test("nur solange Größen laufen", async () => {
+    // Auf Stufe 2 ist die Liste raus. Eine neue Frist sähe aus, als liesse
+    // sich noch etwas eintragen.
+    const { aufrufe } = stelleWelt({ vorgang: satz({ nummer: "AUS-2026-001", stufe: 2 }) });
+
+    const stand = await fristSetzen(
+      { stand: "leer" },
+      formular({ vorgang: "AUS-2026-001", frist: "2026-12-01" }),
+    );
+
+    expect(stand.stand === "fehler" && stand.text).toContain("keine Größen mehr");
+    expect(fristGesetzt(aufrufe)).toBeUndefined();
+  });
+
+  test.for(["", "30.09.2026", "2026-9-30", "morgen", "2026-13-01"] as const)(
+    "„%s“ ist kein Datum",
+    async (wert) => {
+      const { aufrufe } = welt();
+      const stand = await fristSetzen({ stand: "leer" }, formular({ vorgang: "AUS-2026-001", frist: wert }));
+      expect(stand.stand).toBe("fehler");
+      expect(fristGesetzt(aufrufe)).toBeUndefined();
+    },
+  );
+
+  test("ein Vertipper im Jahr wird abgefangen", async () => {
+    // „2206“ statt „2026“ schöbe die Frist um 180 Jahre – sie liefe nie ab,
+    // und der Erinnerungslauf erinnerte bis in alle Ewigkeit.
+    const { aufrufe } = welt();
+
+    const stand = await fristSetzen(
+      { stand: "leer" },
+      formular({ vorgang: "AUS-2026-001", frist: "2206-09-30" }),
+    );
+
+    expect(stand.stand === "fehler" && stand.text).toContain("zu weit weg");
+    expect(fristGesetzt(aufrufe)).toBeUndefined();
+  });
+
+  test("eine Frist in der Vergangenheit geht – wird aber benannt", async () => {
+    // Damit korrigiert man einen Tippfehler. Verschwiegen wird die Folge nicht.
+    const { aufrufe } = welt();
+
+    const stand = await fristSetzen(
+      { stand: "leer" },
+      formular({ vorgang: "AUS-2026-001", frist: "2026-09-01" }),
+    );
+
+    expect(stand.stand).toBe("fertig");
+    expect(stand.stand === "fertig" && stand.vergangen).toBe(true);
+    expect(fristGesetzt(aufrufe)).toBeDefined();
+  });
+
+  test("dieselbe Frist noch einmal ändert nichts", async () => {
+    const { aufrufe } = welt();
+
+    const stand = await fristSetzen(
+      { stand: "leer" },
+      formular({ vorgang: "AUS-2026-001", frist: "2026-09-30" }),
+    );
+
+    expect(stand.stand === "fehler" && stand.text).toContain("steht schon");
+    expect(fristGesetzt(aufrufe)).toBeUndefined();
+  });
+
+  test("schweigt die Datenbank, ist das kein unbekannter Vorgang", async () => {
+    const { aufrufe } = stelleWelt({
+      vorgang: satz({ nummer: "AUS-2026-001", stufe: 1 }),
+      dbGestoert: true,
+    });
+
+    const stand = await fristSetzen(
+      { stand: "leer" },
+      formular({ vorgang: "AUS-2026-001", frist: "2026-12-01" }),
+    );
+
+    expect(stand.stand === "fehler" && stand.text).toContain("nicht an die Daten");
+    expect(stand.stand === "fehler" && stand.text).not.toContain("gibt es nicht");
+    expect(fristGesetzt(aufrufe)).toBeUndefined();
   });
 });

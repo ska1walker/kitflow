@@ -74,6 +74,23 @@ liegt bewusst nicht in jeder Zeile: das ist ein Werkzeug für den Ausnahmefall.
 Der Verlauf hält fest, **wer** es war (`sub` am Ereignis, `intern`) — der Sinn
 des Logins ist ja, dass es nicht mehr anonym passiert.
 
+## Die Größenfrist ändern
+
+Zweite Karte auf `/sparte`, aus demselben Grund wie der Stufenwechsel: es gab
+keine Stelle dafür. F1 setzt die Frist beim Anlegen, F1b beim Vervollständigen
+einer Voranfrage — danach stand sie fest.
+
+Aufgefallen ist das an einem echten Vorgang: seine Frist lag zwei Tage voraus,
+und der Erinnerungslauf verlangt drei Tage Abstand zur letzten Mail. Es wäre
+also nie eine Erinnerung rausgegangen, ohne dass jemand es gemerkt hätte.
+Verlängern ist deshalb keine Kosmetik — es entscheidet, ob überhaupt erinnert
+wird.
+
+Angeboten wird sie nur für Vorgänge auf Stufe 1. Ein Datum mehr als zwei Jahre
+voraus gilt als Vertipper (`2206` statt `2026`) und wird abgewiesen; eine Frist
+in der Vergangenheit ist erlaubt — man korrigiert damit einen Tippfehler —, und
+die Rückmeldung sagt dazu, dass danach keine Erinnerung mehr rausgeht.
+
 ## Was in Supabase eingerichtet sein muss
 
 1. **Custom SMTP auf Resend.** Ohne das verschickt Supabase aus einer eigenen
