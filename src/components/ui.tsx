@@ -1,4 +1,9 @@
-import type { ButtonHTMLAttributes, ReactNode, SelectHTMLAttributes } from "react";
+import type {
+  AnchorHTMLAttributes,
+  ButtonHTMLAttributes,
+  ReactNode,
+  SelectHTMLAttributes,
+} from "react";
 import { IconChevronDown } from "./icons";
 
 /**
@@ -34,6 +39,25 @@ export function Button({
     >
       {children}
     </button>
+  );
+}
+
+/** Ein Link, der wie ein Knopf aussieht. Die Klassen stehen nur einmal, oben. */
+export function KnopfLink({
+  variante = "primary",
+  className = "",
+  children,
+  ...props
+}: AnchorHTMLAttributes<HTMLAnchorElement> & {
+  variante?: ButtonVariante;
+}) {
+  return (
+    <a
+      {...props}
+      className={`inline-flex items-center justify-center gap-2 transition-colors ${VARIANTEN[variante]} ${className}`}
+    >
+      {children}
+    </a>
   );
 }
 

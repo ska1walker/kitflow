@@ -1,5 +1,6 @@
 import { GroessenFormular } from "@/components/groessen-formular";
 import { KeinZugang } from "@/components/kein-zugang";
+import { Stoerung } from "@/components/stoerung";
 import { Card } from "@/components/ui";
 import { pruefe } from "@/lib/links";
 import { ladeGroessenAbfrage } from "@/lib/vorgaenge";
@@ -15,8 +16,10 @@ export default async function GroessenSeite(props: PageProps<"/g/[vorgang]/[pers
 
   if (typeof t !== "string" || !pruefe(t, "groessen", nummer, person)) return <KeinZugang />;
 
-  const abfrage = await ladeGroessenAbfrage(nummer, person);
-  if (!abfrage) return <KeinZugang />;
+  const abruf = await ladeGroessenAbfrage(nummer, person);
+  if (abruf.stand === "gestoert") return <Stoerung />;
+  if (abruf.stand !== "da") return <KeinZugang />;
+  const abfrage = abruf.daten;
 
   return (
     <main className="mx-auto w-full max-w-2xl px-4 py-10">

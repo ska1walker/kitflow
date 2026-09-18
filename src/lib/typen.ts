@@ -11,11 +11,16 @@ import type { ComponentType, SVGProps } from "react";
 /**
  * Stufe 1 bis 8 ist der normale Weg, 9 ist der Abbruch. Die Schrittleiste
  * zeigt nur 1 bis 8; ein abgebrochener Vorgang bekommt eine eigene Anzeige.
+ *
+ * Stufe 0 (Voranfrage) liegt davor: der Trainer hat grob gemeldet, um ein
+ * Richtangebot fuer den Sponsor zu bekommen. Sie ist bewusst die Null und
+ * nicht eine neue Eins, damit die Nummern 1 bis 9 in Code und Papieren
+ * bleiben, wo sie sind (docs/konzept.md).
  */
-export type StufeNr = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
+export type StufeNr = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
 
 /** Die Stufen, die der Regler im Entwurf durchspielt. */
-export const STUFEN_NRN: StufeNr[] = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+export const STUFEN_NRN: StufeNr[] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
 
 /** Wer die Seite gerade sieht. Rollen nach docs/konzept.md. */
 export type Ansicht = "trainer" | "spieler" | "sparte";
@@ -74,6 +79,9 @@ export type Artikel = {
   artikelnrIntersport?: string;
   groessenart: Groessenart;
   fuer: ArtikelFuer;
+  /** Nur in der Voranfrage: der grobe Bereich statt einzelner Größen. */
+  groesseVon?: string;
+  groesseBis?: string;
 };
 
 export type Haendler = {
@@ -109,9 +117,10 @@ export type PersonGroesse = {
 /**
  * Ein vollstaendiger Vorgang, so wie die Statusseite ihn braucht.
  *
- * Zusammengesetzt aus HubSpot: Deal, Positionen und Kontakte. `quelle` sagt,
- * ob echte Daten oder Beispieldaten angezeigt werden – die Oberflaeche muss
- * Beispieldaten kennzeichnen (CLAUDE.md).
+ * Zusammengesetzt aus dem Vorgang in der Datenbank und den Kontakten in
+ * HubSpot (docs/datenbank.md). `quelle` sagt, ob echte Daten oder
+ * Beispieldaten angezeigt werden – die Oberflaeche muss Beispieldaten
+ * kennzeichnen (CLAUDE.md).
  */
 export type Vorgang = {
   nummer: string;
@@ -126,6 +135,9 @@ export type Vorgang = {
   finanzierungZugesagt: boolean;
   geldEingangAm?: string;
 
+  /** Nur in der Voranfrage (Stufe 0): die Schätzung des Trainers. */
+  personenGeschaetzt?: number;
+
   groessenEingetragen: number;
   groessenGesamt: number;
   groessenBestaetigtAm?: string;
@@ -136,6 +148,12 @@ export type Vorgang = {
   feldspielerAnzahl: number;
   torwartAnzahl: number;
 
+  /**
+   * Der Vorgang bestellt nichts, er sammelt nur Groessen ein. Dann gibt es
+   * keine Artikel – und die Seite soll auch keine ankuendigen.
+   */
+  nurGroessen: boolean;
+
   haendler: Haendler[];
   artikel: Artikel[];
   verlauf: Ereignis[];
@@ -145,5 +163,38 @@ export type Vorgang = {
   meinHinweis: string;
   spielerGruss: string;
 
-  quelle: "hubspot" | "beispiel";
+  quelle: "echt" | "beispiel";
 };
+
+/* ------------------------------------------------------------------ *
+ * Initialen (docs/datenmodell.md)
+ * ------------------------------------------------------------------ */
+
+/**
+ * Beides kommt aus der HubSpot-Eigenschaft `initialen` selbst, nicht aus einer
+ * Annahme: sie laesst hoechstens drei Zeichen zu und weist Sonderzeichen ab
+ * („Enter 3 characters or fewer“ / „Enter only numbers and letters“). Wer hier
+ * grosszuegiger prueft, bekommt die Ablehnung erst von HubSpot – und der
+ * Spieler sieht dann „hat nicht geklappt“ statt zu erfahren, was falsch ist.
+ * Aendert sich die Regel in HubSpot, gehoeren diese beiden Zeilen nachgezogen.
+ */
+export const INITIALEN_MAX = 3;
+
+/** Buchstaben, Ziffern und Leerzeichen – „KB“, „KAB“, „K B“. Umlaute gehen. */
+const INITIALEN_MUSTER = /^[A-Za-zÄÖÜäöüß0-9 ]+$/;
+
+/**
+ * Prueft Initialen und gibt sie normiert zurueck, sonst eine Meldung im
+ * Klartext. Normiert heisst: Rand getrimmt, Doppelleerzeichen zusammengezogen.
+ */
+export function pruefeInitialen(roh: string): { wert: string } | { fehler: string } {
+  const wert = roh.trim().replace(/\s+/g, " ");
+  if (!wert) return { fehler: "Bitte die Initialen eintragen." };
+  if (wert.length > INITIALEN_MAX) {
+    return { fehler: `Höchstens ${INITIALEN_MAX} Zeichen – so viel passt auf den Aufdruck.` };
+  }
+  if (!INITIALEN_MUSTER.test(wert)) {
+    return { fehler: "Erlaubt sind nur Buchstaben und Ziffern, keine Sonderzeichen." };
+  }
+  return { wert };
+}

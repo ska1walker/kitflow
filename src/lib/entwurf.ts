@@ -21,7 +21,7 @@ const EVENT = "kitflow-entwurf-geaendert";
 const STANDARD: Entwurf = { ansicht: "trainer", stand: 2 };
 
 function istStufeNr(wert: unknown): wert is StufeNr {
-  return typeof wert === "number" && Number.isInteger(wert) && wert >= 1 && wert <= 9;
+  return typeof wert === "number" && Number.isInteger(wert) && wert >= 0 && wert <= 9;
 }
 
 function istAnsicht(wert: unknown): wert is Ansicht {

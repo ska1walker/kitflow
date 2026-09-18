@@ -14,6 +14,7 @@ Zugang über signierte Links: `/v/{vorgang}?t=…` (Status), `/g/{vorgang}/{hsid
 - Die Rolle steht nicht in der URL: `/v/{vorgang}` ist die Trainer-Ansicht, `/v/{vorgang}/{hsid}` die Spieler-Ansicht derselben Person. Der Umschalter fällt dort weg.
 - Vor dem Rendern wird der Vorgang für Spieler gekürzt (`fuerSpieler`): fremde Namen und interne Verlaufseinträge werden entfernt, nicht nur ausgeblendet. Ausgeblendet hieße, sie stünden trotzdem im Quelltext.
 - Ein abgelehnter Link bekommt immer dieselbe Antwort, auch wenn es den Vorgang gar nicht gibt. Wer raten will, soll daraus nichts lernen.
+- **Eine Störung ist kein abgelehnter Link.** Antwortet HubSpot nicht, sagt die Seite das auch („Gerade nicht erreichbar"), statt „Dieser Link funktioniert nicht" zu behaupten. Sie ist erst nach geprüfter Signatur erreichbar und verrät deshalb nichts darüber, ob es den Vorgang gibt. `ladeVorgang` unterscheidet dafür drei Fälle: `da`, `unbekannt` (gibt es nicht oder die Nummer passt nicht) und `gestoert`. Vorher kam in allen drei Fällen der Beispiel-Vorgang zurück, den beide Seiten sofort verwarfen — übrig blieb der tote Link, und der Trainer suchte den Fehler bei sich.
 - Links baut `npm run link -- <vorgangsnummer> [personen-id]`, bis die Mails sie selbst verschicken.
 - Gebaut sind `/v` (Status, zwei Rollen), `/g` (F2) und `/b` (F3). `/` ist ein Schaufenster mit Beispieldaten und fasst HubSpot nicht an.
 - Jede Server Action prüft das Token selbst. Eine Action ist eine eigene Adresse und lässt sich ohne die Seite aufrufen; sich darauf zu verlassen, dass die Seite schon geprüft hat, wäre keine Prüfung.
@@ -24,6 +25,10 @@ Zugang über signierte Links: `/v/{vorgang}?t=…` (Status), `/g/{vorgang}/{hsid
 
 Angelegt werden: der Deal auf Stufe 1 mit der nächsten freien Vorgangsnummer des Jahres, je Artikel ein Produkt (vorhandene werden über `hs_sku` wiederverwendet), je Artikel **eine Position ohne `spieler_hsid`** — das ist die Artikelliste des Vorgangs, aus der F2 die Größenarten liest und die F3 später zu Person mal Artikel aufklappt — und die Verknüpfung zu allen Kontakten, deren `team` eine der gewählten Mannschaften ist.
 
+**Für wen?** Neben einer Mannschaft kann ein Vorgang auch genau **einer Person** gelten — für den einzelnen Nachzügler, der einen Trainingsanzug braucht. Dann wird die Person **über ihre E-Mail-Adresse benannt, nicht gesucht**: `/neu` steht ohne Token offen, eine Namenssuche dort wäre ein Mitgliederverzeichnis für jeden, der die Seite kennt. Ein EQ-Treffer auf `email` verrät nur dem etwas, der die Adresse ohnehin hat. Gibt es keinen Kontakt, entsteht **nichts** — kitflow legt keine Personen an. `mannschaft` am Deal wird mit dem `team` des Kontakts gefüllt, sonst hielte `istJugend` den Vorgang vorsichtshalber für Jugend. Den Weg gibt es nur im vollständigen Modus: eine Voranfrage holt einen Richtpreis für eine Gruppe, und F1b würde später wieder die ganze Mannschaft laden.
+
+**Nur Größen erfassen** ist eine dritte Ausstattungsart neben Trikotsatz und Weiterer Ausstattung. Dann hängt **kein Artikel** am Vorgang; was gefragt wird, steht als `groessenarten` am Deal (Semikolonliste). Keine Lieferadresse, keine Zahlungsregel, keine Initialen, kein Händler — die Kette endet bei der bestätigten Liste. Auch das gibt es nur im vollständigen Modus. Die Ausstattungsart ist in HubSpot eine Auswahl mit festen Optionen: `scripts/hubspot-setup.mjs` trägt fehlende Optionen an vorhandenen Eigenschaften nach, sonst weist HubSpot den Deal mit `INVALID_OPTION` ab.
+
 Findet sich zu keiner gewählten Mannschaft ein Kontakt, steht der Vorgang sofort auf Stufe 9 und die Seite sagt, dass die Mannschaft in HubSpot gepflegt werden muss (docs/formulare.md, M7).
 
 Es fehlt Mail M1. Solange sie fehlt, zeigt die Danke-Seite alle Links im Klartext, damit sie nicht verloren gehen. Ebenfalls offen: die Auswahl aus dem Artikelstamm statt freier Felder, und der Wunschtermin für die Lieferung, für den es keine Eigenschaft gibt.
@@ -32,15 +37,29 @@ Die Vorgangsnummer kommt aus einer Suche über die bestehenden Nummern. Zwei Mel
 
 ### Stand von F2 und F3
 
-**F2 fertig.** Gefragt werden nur die Größenarten der Artikel dieses Vorgangs, jede einmal. Geändert werden darf nur auf Stufe 1. Geschrieben wird nur, was vorher als Frage rausging und in der HubSpot-Werteliste steht. Die Veraltungsregel (4 Monate Jugend, 12 Erwachsene) ist umgesetzt; ohne Bestätigungsdatum gilt eine Größe als veraltet. Es fehlt Mail M3.
+**F2 fertig.** Gefragt werden nur die Größenarten der Artikel dieses Vorgangs, jede einmal; bei einem Vorgang ohne Artikel („Nur Größen erfassen“) die Arten aus `groessenarten` am Deal. Beide Wege laufen durch **einen** Helfer `gefragteArten(deal, artikel)` in `src/lib/vorgaenge.ts` — F2 und F3 müssen hier zum selben Ergebnis kommen, sonst fragt das Formular etwas anderes, als die Liste anzeigt. Dazu, **nur wenn der Vorgang `initialen_noetig` trägt**, ein Pflichtfeld Initialen: höchstens drei Zeichen, nur Buchstaben und Ziffern. Beide Grenzen stehen so in der HubSpot-Eigenschaft `initialen`; kitflow prüft sie vorher, damit der Spieler erfährt, was falsch ist, statt „hat nicht geklappt“ zu lesen. Die Initialen hängen am Vorgang, nicht an einer Größenart – eine Person hat genau ein Paar, egal wie viele Artikel beflockt werden. Geändert werden darf nur auf Stufe 1. Geschrieben wird nur, was vorher als Frage rausging und in der HubSpot-Werteliste steht. Die Veraltungsregel (4 Monate Jugend, 12 Erwachsene) ist umgesetzt; ohne Bestätigungsdatum gilt eine Größe als veraltet. Es fehlt Mail M3.
 
 **F2 als Trainer** liegt unter `/b/{vorgang}/{person}` mit eigenem Zweck `trainer`; die Links auf die einzelnen Zeilen erzeugt F3 selbst. Größen sind hier optional, weil der Trainer meist nur eine Nummer nachträgt; das Bestätigungsdatum wird nur gesetzt, wenn er wirklich eine Größe angefasst hat. Die Rückennummer muss zwischen 1 und 99 liegen und in der Mannschaft eindeutig sein — geprüft wird beides serverseitig, nicht nur im Browser. „Bekommt diesmal nichts“ und „spielt Torwart“ hängen am Deal (`ausgeschlossene_spieler`, `torwarte`), nicht am Kontakt: beides gilt nur für diesen Vorgang. Wer ausgeschlossen ist, kommt über seinen eigenen Größen-Link nicht mehr hinein und fällt aus der Liste; der Trainer erreicht ihn weiter und kann den Ausschluss zurücknehmen.
 
 **F3 bis zur Bestätigung.** Tabelle mit Größen und Rückennummern, fehlend oder veraltet gelb, Nummer fehlend oder doppelt rot. Die sechs Prüfungen laufen und nennen im Klartext, was fehlt. Eine gefallene Prüfung verhindert das Bestätigen, auch mit gesetztem Häkchen. Prüfung 4 (Vereinslogo als Datei) und 5 (Summen gegen die Positionen) bleiben **offen** statt bestanden: das Logo kennt das Datenmodell nicht, und die Positionen entstehen erst danach. Offene Prüfungen blockieren nicht — sonst könnte niemand je bestätigen — stehen aber sichtbar da.
 
+Bei „Nur Größen erfassen“ bleibt **nur Prüfung 2** (jede Person hat eine aktuelle Größe). Die anderen gelten der Anfrage an die Händler; „Es hängt kein Artikel am Vorgang“ wäre dort ein erfundener Mangel. Lieferadresse und Händlerhinweis fallen aus dem Formular.
+
 Die Bestätigung schreibt `liste_bestaetigt_am`, `lieferadresse` und `hinweis_haendler`. **Die Stufe bleibt auf 1.** „Anfrage raus“ heißt, dass eine Anfrage rausgegangen ist; solange kitflow keine Mail verschickt, wäre dieser Stand eine Behauptung. Es fehlen also: Positionen am Deal anlegen, Händler-XLSX, M4 an beide Händler, M5 an den Trainer, M6 bei nicht bestandener Prüfung, Stufenwechsel. Alles davon hängt am Mailversand über Resend und an der Entscheidung XLSX in kitflow oder in Make (docs/offen.md).
 
 ## Statusseite `/v/{vorgang}`
+
+**Person nachtragen.** Verknüpft wird in F1 genau einmal, beim Absenden; wer danach zur Mannschaft
+kommt, fehlte am Vorgang und musste in HubSpot von Hand angehängt werden. Auf **Stufe 1** zeigt die
+Trainer-Statusseite deshalb eine Karte mit denen, die zur Mannschaft des Vorgangs gehören und noch
+nicht dranhängen (`kontakteDerMannschaft` minus `assoziierteIds`) — keine freie Namenssuche. Die
+Server Action prüft denselben `status`-Token wie der Abbruch, die Stufe **und** dass die gewählte ID
+wirklich in dieser Auswahl steckt; eine untergeschobene ID kommt nicht durch, auch nicht die eines
+Kontakts aus einer fremden Mannschaft. Zurück kommt der frische Größen-Link als Pfad, den die Karte
+aus der Adresse der Seite absolut macht — `KITFLOW_BASIS` ist für Mails da und darf fehlen.
+
+Zu wissen: der HubSpot-Suchindex hinkt Schreibvorgängen bis zu einer Minute nach. Wer gerade erst
+`team` bekommen hat, steht so lange nicht in der Auswahl. Die Karte sagt das.
 
 Entwurf: prototyp/statusseite.html. Drei Ansichten:
 
@@ -49,6 +68,48 @@ Entwurf: prototyp/statusseite.html. Drei Ansichten:
 - Spartenleitung (`/sparte`, mit Login): alle Vorgänge mit Stand, Mini-Leiste, „wartet auf …“, Hinweis bei Stillstand; „wartet auf dich“ bei Stufe 3 (Angebot wählen) und 5 (Bestellung freigeben).
 
 ## F1 · Bedarf melden (Trainer, öffentlicher Link)
+
+**Wer hier etwas anlegen darf** (18.09.2026). Die Seite hat als einzige kein Token. Bis hierher
+konnte jeder, der die Adresse kennt, „2014“ wählen, abschicken und bekam die Vor- und Nachnamen
+eines ganzen Jugendjahrgangs samt gültiger Größen-Links auf die Danke-Seite. Zwei Riegel:
+
+1. **Die E-Mail-Adresse muss als Kontakt bei Eintracht Munster stehen, und die Person muss
+   Trainerin, Trainer oder Spartenleitung der Fußballsparte sein.** Gesucht wird über die genaue
+   Adresse, nicht über den Namen — ein Treffer verrät nur dem etwas, der die Adresse schon hat.
+   Kein Treffer heißt: es entsteht nichts.
+
+   „Kontakt beim Verein“ allein reicht nicht: das wäre jedes Mitglied, auch jedes Kind. Maßgeblich
+   ist die HubSpot-Eigenschaft **„Funktion im Verein“** (intern `numemployees`, Mehrfachauswahl)
+   zusammen mit `sparte`. Stand 18.09.2026: 36 Trainer und 3 Spartenleiter Fußball. Die
+   Spartenleiter der anderen Sparten kommen nicht durch — Ausstattung der Fußballsparte geht sie
+   nichts an. Wer abgewiesen wird, erfährt den Grund, damit eine falsch gepflegte Zeile sich
+   klären lässt.
+2. **Die Danke-Seite trägt keine Namen und keine persönlichen Links mehr.** Sie zeigt die
+   Vorgangsnummer, die Personenzahl und die beiden Links des Trainers. Alles andere geht per Mail
+   an genau die Adresse, die unter 1. bestätigt wurde. Die Namen verlassen den Server gar nicht:
+   die Server Action leert `personen`, bevor sie antwortet.
+
+Eine Störung bei HubSpot heißt dabei nie „kenne ich nicht“ — sonst sperrte ein Rate-Limit jeden
+Trainer aus und sagte ihm auch noch, er sei kein Mitglied.
+
+F1b (`/e/{vorgang}`) hängt an einem signierten Link und zeigt die Namen und Links weiterhin: dort
+steht schon fest, wer den Link bekommen hat.
+
+**Zwei Modi.** Ganz oben wählt der Trainer, wie weit er ist. Die Vorauswahl ist der einfache Modus –
+er ist der häufigere Fall, weil vor dem Sponsor noch nichts feststeht. Der Modus steht als verstecktes
+Feld `modus` im Formular; die Server Action fällt bei fehlendem oder unbekanntem Wert auf den strengen
+Modus zurück, damit ein manipuliertes Formular keine Pflichtfelder abwählen kann.
+
+- **Erst ein Richtangebot** (`voranfrage`): Deine Daten, Mannschaft, Was braucht ihr, „Für wie viele
+  Personen?“ (Zahl 1–60), je Artikel nur Hersteller, Artikelbezeichnung, Größenart, Größen von/bis
+  (Auswahl aus den Werten der Größenart) und Stück je Person; dazu Sponsor und Hinweise. Keine
+  Artikelnummer, keine Farbe, kein Für wen, keine Beflockung, keine Frist, keine Lieferadresse, keine
+  Zahlungsregel. Ergebnis: Deal auf Stufe 0, Produkte mit Platzhalter-Nummer, keine Kontakte am Deal.
+  Danke-Seite zeigt den Status-Link und den Link auf F1b.
+- **Komplett melden** (`vollstaendig`): unverändert der Ablauf unten, Deal auf Stufe 1. Nur hier gibt
+  es zwei weitere Schalter: **Für wen?** (eine Mannschaft oder eine einzelne Person über ihre
+  E-Mail-Adresse) und die Ausstattungsart **Nur Größen erfassen** (kein Artikel, stattdessen die
+  Größenarten angehakt). Beide lassen sich kombinieren — eine Person, eine Frage, kein Händler.
 
 Einleitung: „Hier meldest du als Trainerin oder Trainer neuen Ausstattungsbedarf für deine Mannschaft an. Danach bekommen deine Spielerinnen und Spieler einen persönlichen Link für ihre Größen. Du prüfst die fertige Liste, erst dann geht eine Anfrage an beide Händler (Intersport Uelzen und 11teamsports). Die Angebote bekommst du in Kopie.“
 Hinweis: „Diese Meldung ist noch keine Bestellung. Bestellt wird erst, wenn die Finanzierung steht und das Geld da ist.“
@@ -68,6 +129,24 @@ Hinweis: „Diese Meldung ist noch keine Bestellung. Bestellt wird erst, wenn di
 7. Danke-Seite: „Du bekommst gleich eine E-Mail mit der Vorgangsnummer, den persönlichen Größenlinks für deine Mannschaft und einem fertigen Text für die Elterngruppe. Wenn alle eingetragen haben, bekommst du die Liste zum Prüfen.“ Dazu Link auf die Statusseite.
 
 Danach: Deal anlegen (Stufe 1), Kontakte der Mannschaft über `team` finden, Größenlinks erzeugen, Mail M1 mit Baustein M1a und Merkblatt Zahlwege. Keine Spieler gefunden: M7 und Stufe 9.
+
+## F1b · Angaben vervollständigen (Trainer, signierter Link `/e/{vorgang}`)
+
+Der zweite Halt des einfachen Wegs, Zweck `ergaenzen`. Erreichbar nur, solange der Vorgang auf Stufe 0
+steht; danach antwortet die Seite wie bei einem falschen Token.
+
+Kopf: Vorgangsnummer, Mannschaft, Ausstattungsart und die geschätzte Personenzahl.
+
+1. Artikel, in der Reihenfolge der Meldung. Bezeichnung, Größenbereich und Stück je Person stehen fest
+   und sind nicht änderbar – wer etwas anderes braucht, meldet neu. Gefragt wird je Artikel:
+   Artikelnummer des Herstellers (Pflicht), Farbe, Für wen, Beflockung samt Freitext bei „Abweichend“.
+2. Fristen und Lieferung: Größenfrist (Pflicht), Lieferadresse (Pflicht), Sponsor, Hinweise.
+3. Pflicht-Checkbox Zahlungsregel, wortgleich mit F1.
+
+Danach: Produkt bekommt die echte Artikelnummer und `aktiv = true`. Gibt es zu der Nummer schon ein
+Produkt, hängt die Position darauf um und der Platzhalter wird stillgelegt statt gelöscht. Deal
+bekommt Frist, Lieferadresse und Hinweis, die Kontakte der Mannschaft kommen über `team` dazu, Stufe
+wird 1. Kein Kontakt gefunden: Stufe 9, wie in F1.
 
 ## F2 · Größen (Spieler bzw. Eltern; Trainer)
 

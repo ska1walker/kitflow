@@ -1,20 +1,16 @@
 "use client";
 
 import { useActionState } from "react";
-import { Badge, Button, Card, SelectFeld } from "./ui";
+import { abschicken } from "./formular";
+import { GroessenFeld } from "./groessen-feld";
+import { Button, Card } from "./ui";
 import { IconCheck } from "./icons";
 import { groessenSpeichern, type Ergebnis } from "@/app/g/[vorgang]/[person]/aktion";
+import { INITIALEN_MAX } from "@/lib/typen";
 import type { GroessenAbfrage } from "@/lib/vorgaenge";
 
 const LEER: Ergebnis = { stand: "leer" };
 
-/**
- * F2 · Größen (docs/formulare.md).
- *
- * Die Texte sprechen Spieler und Eltern per du an. Der Hinweis auf die
- * Beflockung steht bewusst über den Feldern: beflockte Kleidung nimmt kein
- * Händler zurück, das soll man vor der Auswahl lesen, nicht danach.
- */
 export function GroessenFormular({
   abfrage,
   token,
@@ -43,8 +39,9 @@ export function GroessenFormular({
               öffnen und etwas ändern, es zählt die letzte Eingabe.
             </p>
             <p className="mt-3 text-sm text-ink-600">
-              Wenn alle eingetragen haben, prüft deine Trainerin oder dein Trainer die Liste. Danach
-              geht die Anfrage an die Händler.
+              {abfrage.nurGroessen
+                ? "Wenn alle eingetragen haben, prüft deine Trainerin oder dein Trainer die Liste. Damit ist es erledigt – bestellt wird nichts."
+                : "Wenn alle eingetragen haben, prüft deine Trainerin oder dein Trainer die Liste. Danach geht die Anfrage an die Händler."}
             </p>
           </div>
         </div>
@@ -59,37 +56,62 @@ export function GroessenFormular({
         {abfrage.anrede ? `Hallo ${abfrage.anrede},` : "Hallo,"}
       </h1>
       <p className="mt-1 text-sm text-ink-600">
-        für {abfrage.mannschaft ? <b>{abfrage.mannschaft}</b> : "deine Mannschaft"} wird neue
-        Ausstattung angefragt: {abfrage.gegenstand}.
+        {abfrage.nurGroessen ? (
+          <>
+            für {abfrage.mannschaft ? <b>{abfrage.mannschaft}</b> : "deine Mannschaft"} sammeln wir
+            gerade die aktuellen Größen ein. Bestellt wird damit nichts.
+          </>
+        ) : (
+          <>
+            für {abfrage.mannschaft ? <b>{abfrage.mannschaft}</b> : "deine Mannschaft"} wird neue
+            Ausstattung angefragt: {abfrage.gegenstand}.
+          </>
+        )}
       </p>
 
       <p className="mt-4 text-sm text-ink-700">
-        Bitte trag die Größen ein, die jetzt passen. Wenn schon eine Größe vorausgewählt ist, stammt
-        sie aus der letzten Abfrage. Prüf sie kurz, Kinder wachsen schnell.
+        Bitte trag die Größen ein, die jetzt passen. Steht unter einem Feld schon eine Größe, haben
+        wir sie von der letzten Abfrage — mit „übernehmen“ ist sie eingetragen, sonst wähl einfach
+        eine andere.
+        {abfrage.jugend ? " Prüf das kurz, Kinder wachsen schnell." : ""}
       </p>
 
-      <p className="mt-3 rounded-xl bg-amber-50 px-3.5 py-3 text-sm text-ink-700">
-        Beflockte Kleidung kann der Händler nicht umtauschen. Im Zweifel lieber eine Nummer größer
-        oder vorher bei einem Teamkollegen anprobieren.
-      </p>
+      {/* Der Warnhinweis gilt der Bestellung. Wo nichts bestellt wird, wäre er
+          eine Drohung ohne Anlass. */}
+      {!abfrage.nurGroessen && (
+        <p className="mt-3 rounded-xl bg-amber-50 px-3.5 py-3 text-sm text-ink-700">
+          Beflockte Kleidung kann der Händler nicht umtauschen. Im Zweifel lieber eine Nummer
+          größer oder vorher bei einem Teamkollegen anprobieren.
+        </p>
+      )}
 
-      <form action={absenden} className="mt-5 flex flex-col gap-4">
+      <form onSubmit={abschicken(absenden)} className="mt-5 flex flex-col gap-4">
         {abfrage.fragen.map((frage) => (
-          <label key={frage.feld} className="flex flex-col gap-1.5">
-            <span className="flex items-center gap-2 text-sm font-semibold text-ink-900">
-              {frage.label}
-              {frage.veraltet && <Badge tone="amber">bitte neu prüfen</Badge>}
-            </span>
-            <SelectFeld name={frage.feld} defaultValue={frage.wert} required>
-              <option value="">bitte wählen</option>
-              {frage.werte.map((wert) => (
-                <option key={wert} value={wert}>
-                  {wert}
-                </option>
-              ))}
-            </SelectFeld>
-          </label>
+          <GroessenFeld
+            key={frage.feld}
+            frage={frage}
+            bestaetigtAm={abfrage.bestaetigtAm}
+            pflicht
+          />
         ))}
+
+        {abfrage.initialenNoetig && (
+          <label className="flex flex-col gap-1.5">
+            <span className="text-sm font-semibold text-ink-900">Initialen</span>
+            <span className="text-xs text-ink-500">
+              Die kommen auf die Kleidung: höchstens {INITIALEN_MAX} Buchstaben oder Ziffern,
+              keine Punkte – also „KB“, nicht „K.B.“.
+            </span>
+            <input
+              name="initialen"
+              defaultValue={abfrage.initialen}
+              maxLength={INITIALEN_MAX}
+              required
+              autoComplete="off"
+              className="w-40 rounded-lg border border-ink-200 bg-white px-3 py-2 text-sm text-ink-800 focus:border-pitch-400 focus:ring-2 focus:ring-pitch-100 focus:outline-none"
+            />
+          </label>
+        )}
 
         {ergebnis.stand === "fehler" && (
           <p className="rounded-xl bg-red-50 px-3.5 py-3 text-sm text-red-800">{ergebnis.text}</p>

@@ -27,10 +27,17 @@ export async function groessenSpeichern(
     return { stand: "fehler", text: "Dieser Link funktioniert nicht mehr." };
   }
 
-  const abfrage = await ladeGroessenAbfrage(vorgang, person);
-  if (!abfrage) {
+  const abruf = await ladeGroessenAbfrage(vorgang, person);
+  // Eine Stoerung ist kein toter Link. Wer das hier liest, hat gerade seine
+  // Groesse eingetippt — er soll es gleich noch einmal versuchen und nicht
+  // glauben, sein Link sei abgelaufen.
+  if (abruf.stand === "gestoert") {
+    return { stand: "fehler", text: "kitflow kommt gerade nicht an die Daten. Bitte versuch es in einer Minute noch einmal." };
+  }
+  if (abruf.stand !== "da") {
     return { stand: "fehler", text: "Dieser Link funktioniert nicht mehr." };
   }
+  const abfrage = abruf.daten;
   if (!abfrage.offen) {
     return {
       stand: "fehler",
@@ -54,11 +61,20 @@ export async function groessenSpeichern(
     };
   }
 
-  const ok = await speichereGroessen(abfrage, eingaben);
-  if (!ok) {
+  // Die Initialen stehen nicht in `fragen`: sie haengen am Vorgang, nicht an
+  // einer Groessenart. Gelesen werden sie nur, wenn der Vorgang sie braucht.
+  if (abfrage.initialenNoetig) {
+    const wert = formular.get("initialen");
+    eingaben.initialen = typeof wert === "string" ? wert : "";
+  }
+
+  const ergebnis = await speichereGroessen(abfrage, eingaben);
+  if (!ergebnis.ok) {
     return {
       stand: "fehler",
-      text: "Das hat gerade nicht geklappt. Bitte versuch es in einer Minute noch einmal.",
+      text:
+        ergebnis.fehler ??
+        "Das hat gerade nicht geklappt. Bitte versuch es in einer Minute noch einmal.",
     };
   }
 

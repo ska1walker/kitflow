@@ -41,6 +41,46 @@ type Abfrage = {
   methode?: "GET" | "POST" | "PATCH" | "PUT";
 };
 
+/**
+ * Wie oft ein Aufruf hoechstens versucht wird, und wie lange dazwischen
+ * gewartet wird, wenn HubSpot keine eigene Wartezeit nennt.
+ */
+const VERSUCHE = 3;
+const PAUSE_MS = 300;
+/** Laenger als das warten wir nicht, auch wenn HubSpot es verlangt. */
+const PAUSE_MAX_MS = 10_000;
+
+/**
+ * Darf dieser Aufruf wiederholt werden?
+ *
+ * Nur wenn er nichts veraendert. Ein wiederholtes POST auf /objects/deals legte
+ * sonst zwei Vorgaenge an – schlimmer als der Fehler, den es heilen soll.
+ * Suchen und Stapel-Lesen sind bei HubSpot POST, lesen aber nur.
+ */
+function darfWiederholen(pfad: string, methode: string): boolean {
+  if (methode === "GET") return true;
+  if (methode !== "POST") return false;
+  return pfad.includes("/search") || pfad.endsWith("/batch/read");
+}
+
+/** Vorruebergehend: Rate-Limit oder eine Stoerung auf HubSpots Seite. */
+function istVoruebergehend(status: number): boolean {
+  return status === 429 || status >= 500;
+}
+
+function pause(versuch: number, kopf: Headers | undefined): number {
+  // HubSpot nennt bei 429 oft selbst eine Wartezeit, in Sekunden.
+  const genannt = Number(kopf?.get("retry-after"));
+  if (Number.isFinite(genannt) && genannt > 0) {
+    return Math.min(genannt * 1000, PAUSE_MAX_MS);
+  }
+  return Math.min(PAUSE_MS * 3 ** (versuch - 1), PAUSE_MAX_MS);
+}
+
+function schlafe(ms: number): Promise<void> {
+  return new Promise((f) => setTimeout(f, ms));
+}
+
 /** Nexts Signal „diese Route muss dynamisch sein“, erkennbar am digest. */
 function istDynamikSignal(fehler: unknown): boolean {
   return (
@@ -54,6 +94,9 @@ function istDynamikSignal(fehler: unknown): boolean {
  * Ein Aufruf gegen die HubSpot-API. Wirft nie: Fehler werden gemeldet und mit
  * `null` beantwortet, damit ein Ausfall die Seite nicht zerlegt.
  *
+ * Rate-Limit und Stoerungen auf HubSpots Seite werden wiederholt – aber nur,
+ * wenn der Aufruf nichts veraendert (siehe `darfWiederholen`).
+ *
  * Fehlermeldungen enthalten bewusst weder Token noch Personendaten.
  */
 export async function hubspot<T>({ pfad, koerper, methode }: Abfrage): Promise<T | null> {
@@ -63,33 +106,51 @@ export async function hubspot<T>({ pfad, koerper, methode }: Abfrage): Promise<T
   const kopf: Record<string, string> = { "Content-Type": "application/json" };
   if (token) kopf.Authorization = `Bearer ${token}`;
 
-  try {
-    const antwort = await fetch(`${BASIS}${pfad}`, {
-      method: methode ?? (koerper ? "POST" : "GET"),
-      headers: kopf,
-      body: koerper ? JSON.stringify(koerper) : undefined,
-      // Der Stand eines Vorgangs aendert sich laufend, deshalb nicht cachen.
-      cache: "no-store",
-    });
+  const art = methode ?? (koerper ? "POST" : "GET");
+  const wiederholbar = darfWiederholen(pfad, art);
+  const hoechstens = wiederholbar ? VERSUCHE : 1;
 
-    if (!antwort.ok) {
+  for (let versuch = 1; versuch <= hoechstens; versuch++) {
+    const letzter = versuch === hoechstens;
+
+    try {
+      const antwort = await fetch(`${BASIS}${pfad}`, {
+        method: art,
+        headers: kopf,
+        body: koerper ? JSON.stringify(koerper) : undefined,
+        // Der Stand eines Vorgangs aendert sich laufend, deshalb nicht cachen.
+        cache: "no-store",
+      });
+
+      if (antwort.ok) return (await antwort.json()) as T;
+
+      if (istVoruebergehend(antwort.status) && !letzter) {
+        await schlafe(pause(versuch, antwort.headers));
+        continue;
+      }
+
       console.error(`HubSpot ${antwort.status} bei ${pfad}`);
       return null;
+    } catch (fehler) {
+      // Next meldet ueber einen geworfenen Fehler, dass die Route wegen
+      // `no-store` dynamisch werden muss. Der gehoert nicht uns: schlucken wir
+      // ihn, waere die Route faelschlich statisch.
+      if (istDynamikSignal(fehler)) throw fehler;
+
+      if (!letzter) {
+        await schlafe(pause(versuch, undefined));
+        continue;
+      }
+
+      console.error(
+        `HubSpot nicht erreichbar bei ${pfad}:`,
+        fehler instanceof Error ? fehler.message : "unbekannter Fehler",
+      );
+      return null;
     }
-
-    return (await antwort.json()) as T;
-  } catch (fehler) {
-    // Next meldet ueber einen geworfenen Fehler, dass die Route wegen
-    // `no-store` dynamisch werden muss. Der gehoert nicht uns: schlucken wir
-    // ihn, waere die Route faelschlich statisch.
-    if (istDynamikSignal(fehler)) throw fehler;
-
-    console.error(
-      `HubSpot nicht erreichbar bei ${pfad}:`,
-      fehler instanceof Error ? fehler.message : "unbekannter Fehler",
-    );
-    return null;
   }
+
+  return null;
 }
 
 export type HsObjekt = {
@@ -139,6 +200,20 @@ export async function assoziierteIds(
   return daten.results.map((r) => String(r.toObjectId));
 }
 
+/** `false` heisst: HubSpot hat die Verknuepfung nicht bestaetigt. */
+export async function verknuepfen(
+  vonTyp: string,
+  vonId: string,
+  zuTyp: string,
+  zuId: string,
+): Promise<boolean> {
+  const antwort = await hubspot({
+    pfad: `/crm/v4/objects/${vonTyp}/${vonId}/associations/default/${zuTyp}/${zuId}`,
+    methode: "PUT",
+  });
+  return antwort !== null;
+}
+
 /**
  * Mehrere Objekte in einem Aufruf lesen. HubSpot nimmt 100 pro Bündel, also
  * bündeln wir selbst. Eigenschaften, die es im Portal nicht gibt, laesst
@@ -164,4 +239,31 @@ export async function batchLesen(
   }
 
   return alle;
+}
+
+/* ------------------------------------------------------------------ *
+ * Eigenschaften eines Objekts lesen
+ * ------------------------------------------------------------------ */
+
+/** Eine Eigenschaft als Text. Leer, null und fehlend sind dasselbe: undefined. */
+export function text(o: HsObjekt, feld: string): string | undefined {
+  const wert = o.properties[feld];
+  return wert === null || wert === undefined || wert === "" ? undefined : wert;
+}
+
+/** Eine Eigenschaft als Zahl. Was sich nicht rechnen laesst, ist 0. */
+export function zahl(o: HsObjekt, feld: string): number {
+  const wert = Number(o.properties[feld]);
+  return Number.isFinite(wert) ? wert : 0;
+}
+
+/**
+ * „2026-09-10“ wird zu „10.09.“. Datums-Eigenschaften stehen bei HubSpot auf
+ * Mitternacht UTC; wir zerlegen die Zeichenkette, statt sie in eine lokale Zeit
+ * zu rechnen, sonst rutscht der Tag je nach Serverzeitzone.
+ */
+export function kurzDatum(wert: string | undefined): string | undefined {
+  if (!wert) return undefined;
+  const treffer = /^(\d{4})-(\d{2})-(\d{2})/.exec(wert);
+  return treffer ? `${treffer[3]}.${treffer[2]}.` : undefined;
 }

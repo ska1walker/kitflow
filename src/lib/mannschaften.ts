@@ -13,7 +13,14 @@ export const TEAMS = [
   "Damen", "Mädchen",
 ];
 
-export const AUSSTATTUNGSARTEN = ["Trikotsatz", "Weitere Ausstattung"];
+/**
+ * Ein Vorgang, der nichts bestellt: er sammelt nur Groessen ein, damit sie am
+ * Kontakt aktuell sind. Kein Artikel, keine Anfrage, kein Haendler
+ * (docs/formulare.md).
+ */
+export const NUR_GROESSEN = "Nur Größen erfassen";
+
+export const AUSSTATTUNGSARTEN = ["Trikotsatz", "Weitere Ausstattung", NUR_GROESSEN];
 
 /** Beflockung je Artikel (docs/konzept.md). */
 export const BEFLOCKUNGEN = ["Standard", "Ohne", "Abweichend"];

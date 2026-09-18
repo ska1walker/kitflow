@@ -1,9 +1,12 @@
-import { LETZTE_STUFE, STUFEN } from "@/lib/stufen";
+import { ERSTE_STUFE, LETZTE_STUFE, STUFEN } from "@/lib/stufen";
 import { fortschrittText } from "@/lib/texte";
 import type { StufeNr } from "@/lib/typen";
 
-/** Nur die Stufen der Leiste. Stufe 9 (Abgebrochen) liegt daneben. */
-const LEISTE = STUFEN.filter((s) => s.nr <= LETZTE_STUFE);
+/**
+ * Nur die Stufen der Leiste. Stufe 0 (Voranfrage) liegt davor, Stufe 9
+ * (Abgebrochen) daneben. Die Leiste hat genau acht Segmente.
+ */
+const LEISTE = STUFEN.filter((s) => s.nr >= ERSTE_STUFE && s.nr <= LETZTE_STUFE);
 
 export type SegmentStatus = "erledigt" | "aktuell" | "offen";
 

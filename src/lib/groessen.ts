@@ -20,6 +20,18 @@ export const GROESSEN_LABEL: Record<Groessenart, string> = {
 };
 
 /**
+ * Die Größenarten, nach denen sich fragen lässt – „ohne“ ist keine: ein Ball
+ * hat keine Größe. Reihenfolge wie im Formular.
+ */
+export const GROESSENARTEN: Groessenart[] = [
+  "trikot",
+  "oberteil",
+  "trainingshose",
+  "shorts",
+  "schuhe",
+];
+
+/**
  * Die Kontakt-Eigenschaft je Größenart. `ohne` hat keine: ein Ball oder eine
  * Tasche braucht keine Größe.
  */

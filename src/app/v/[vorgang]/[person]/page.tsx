@@ -1,4 +1,5 @@
 import { KeinZugang } from "@/components/kein-zugang";
+import { Stoerung } from "@/components/stoerung";
 import { Statusseite } from "@/components/statusseite";
 import { pruefe } from "@/lib/links";
 import { fuerSpieler, ladeVorgang } from "@/lib/vorgaenge";
@@ -16,10 +17,11 @@ export default async function SpielerStatus(props: PageProps<"/v/[vorgang]/[pers
 
   if (typeof t !== "string" || !pruefe(t, "status", nummer, person)) return <KeinZugang />;
 
-  const vorgang = await ladeVorgang(nummer, person);
-  if (vorgang.quelle !== "hubspot" || vorgang.nummer !== nummer) return <KeinZugang />;
+  const ergebnis = await ladeVorgang(nummer, person);
+  if (ergebnis.stand === "gestoert") return <Stoerung />;
+  if (ergebnis.stand !== "da") return <KeinZugang />;
 
   // Erst kuerzen, dann rendern: was gar nicht erst mitgeschickt wird, kann im
   // Quelltext auch nicht stehen.
-  return <Statusseite vorgang={fuerSpieler(vorgang)} zeilen={[]} festeAnsicht="spieler" />;
+  return <Statusseite vorgang={fuerSpieler(ergebnis.vorgang)} zeilen={[]} ansicht="spieler" />;
 }

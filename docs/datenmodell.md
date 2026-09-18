@@ -33,10 +33,13 @@ Stand 10.09.2026. HubSpot ist die einzige Datenbasis. Neue Eigenschaften in der 
 | Eigenschaft | Typ | gesetzt bei |
 |---|---|---|
 | vorgangsnummer | Text, AUS-JJJJ-NNN | F1 |
-| ausstattungsart | Auswahl: Trikotsatz / Weitere Ausstattung | F1 |
-| mannschaft | Mehrfachauswahl, Werte wie Kontakt-team | F1 |
+| ausstattungsart | Auswahl: Trikotsatz / Weitere Ausstattung / Nur Größen erfassen | F1. „Nur Größen erfassen“ bestellt nichts: kein Artikel, kein Händler, nur `groessenarten` |
+| mannschaft | Mehrfachauswahl, Werte wie Kontakt-team | F1. Gilt der Vorgang einer einzelnen Person, steht hier deren eigenes `team` – sonst hielte `istJugend` den Vorgang vorsichtshalber für Jugend |
 | mannschaftscode | Text, z. B. JG2014-2015 | F1 |
+| personen_geschaetzt | Zahl, geschätzte Kadergröße; nur im einfachen Modus | F1 (Voranfrage) |
 | trainer_email, groessen_frist, lieferadresse | Text / Datum / Text | F1 |
+| initialen_noetig | Ja/Nein | F1 bzw. F1b – schaltet die Initialen-Abfrage in F2 frei |
+| groessenarten | Text | F1 „Nur Größen erfassen“ – Semikolonliste, z. B. `trikot;schuhe`. Nur gefüllt, wenn kein Artikel am Vorgang hängt: sonst sagen die Positionen, was gefragt wird |
 | ausgeschlossene_spieler | Text, Record-IDs | F2 (Trainer) |
 | torwarte | Text, Record-IDs; wer die Torwartartikel bekommt | F2 (Trainer) |
 | liste_bestaetigt_am | Datum | F3 |
@@ -69,7 +72,13 @@ Noch leer. Erste echte Artikel aus Kais Anfrage:
 
 ## Positionen (Line Items) = Person × Artikel, am Deal
 
-Produkt, Menge; angelegt: `groesse`, `rueckennummer`, `spieler_hsid`, `spieler_name`, `sponsor`.
+Produkt, Menge; angelegt: `groesse`, `rueckennummer`, `spieler_hsid`, `spieler_name`, `sponsor`,
+`groesse_von`, `groesse_bis`.
+
+`quantity` heißt **Stück je Person**, in beiden Modi von F1. Die Gesamtmenge für einen Händler ist
+`personen_geschaetzt × quantity` (Voranfrage) bzw. ergibt sich aus den Positionen je Person (ab F3);
+sie wird gerechnet, nie gespeichert. `groesse` ist die Größe **einer** Person; der Größenbereich der
+Voranfrage steht getrennt in `groesse_von` und `groesse_bis` und gilt für die ganze Position.
 
 **Eine Position ohne `spieler_hsid` ist die Artikelliste des Vorgangs.** F1 legt je gemeldetem Artikel eine solche Zeile an, F2 liest daraus, welche Größen zu fragen sind, und F3 klappt sie später zu Person mal Artikel auf. So bleibt die Artikelliste in HubSpot sichtbar und bearbeitbar, statt in einem Textfeld zu verschwinden.
 
@@ -89,7 +98,7 @@ Vorhandene Größen-Eigenschaften (Werte müssen exakt passen):
 | kurze_sporthose | derzeit nur S, M, L, XL, XXL, XXXL – um 116–176 und XS ergänzen |
 | schuhgroesse | 35–51 |
 | trikotnummer | Text |
-| initialen | Text |
+| initialen | Text, **höchstens 3 Zeichen, nur Buchstaben und Ziffern** (HubSpot prüft das selbst) |
 
 Neu: `groesse_zuletzt_bestaetigt_am`, `bekleidung_zuletzt_erhalten_am`.
 

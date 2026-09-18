@@ -5,7 +5,11 @@ import { IconArrowRight, IconBell, IconCheck, IconStop } from "./icons";
 import { LETZTE_STUFE, stufe as stufeVon } from "@/lib/stufen";
 import { naechsterSchritt, statusText } from "@/lib/texte";
 import type { Ansicht, StufeNr, Vorgang } from "@/lib/typen";
+import type { MailEmpfaenger } from "@/lib/vorgaenge";
 import { Schrittleiste } from "./schrittleiste";
+import { VoranfrageKarte } from "./voranfrage-karte";
+import { NachtragKarte } from "./nachtrag-karte";
+import { MailKarte } from "./mail-karte";
 import {
   ArtikelKarte,
   GeldKarte,
@@ -117,10 +121,19 @@ export function VorgangAnsicht({
   vorgang,
   ansicht,
   onDemo,
+  voranfrage,
+  nachtrag,
+  verteiler,
 }: {
   vorgang: Vorgang;
   ansicht: Ansicht;
   onDemo: (text: string) => void;
+  /** Nur am Trainer-Link gesetzt: die beiden Wege aus der Voranfrage heraus. */
+  voranfrage?: { ergaenzen: string; token: string };
+  /** Nur am Trainer-Link und nur auf Stufe 1: wer noch nachruecken kann. */
+  nachtrag?: { token: string; personen: { id: string; name: string }[] };
+  /** Nur am Trainer-Link und nur auf Stufe 1: wer die Größen-Mail bekommen kann. */
+  verteiler?: { token: string; frist: string; empfaenger: MailEmpfaenger[] };
 }) {
   // Bei einem Abbruch stehen die Karten auf dem Stand, den der Vorgang erreicht
   // hatte. Kopf und naechster Schritt sprechen weiter vom Abbruch selbst.
@@ -138,10 +151,15 @@ export function VorgangAnsicht({
     );
   }
 
+  // In der Voranfrage gibt es noch keine Groessen und keine Haendler. Eine
+  // Groessenkarte mit „0 von 0“ und dem Abzeichen „laeuft“ waere schlicht
+  // unwahr: es laeuft nichts, es haengt bewusst noch niemand am Vorgang.
   // Ab der Auswahl ruecken Haendler und Geld nach vorn, die Groessen sind erledigt.
   // Auf Stufe 1 gibt es noch keine Haendler, dann steht die Groessenkarte allein.
   const arbeitsKarten =
-    stand >= 4
+    stand === 0
+      ? []
+      : stand >= 4
       ? [
           <HaendlerKarte key="haendler" vorgang={vorgang} stand={stand} />,
           <GeldKarte key="geld" vorgang={vorgang} stand={stand} />,
@@ -158,16 +176,48 @@ export function VorgangAnsicht({
       <StatusKopf vorgang={vorgang} ansicht={ansicht} />
       <NaechsterSchritt vorgang={vorgang} ansicht={ansicht} />
 
-      {arbeitsKarten.length === 1 ? (
+      {vorgang.stufe === 0 && voranfrage && (
+        <VoranfrageKarte
+          vorgang={vorgang.nummer}
+          ergaenzen={voranfrage.ergaenzen}
+          token={voranfrage.token}
+        />
+      )}
+
+      {verteiler && verteiler.empfaenger.length > 0 && (
+        <MailKarte
+          vorgang={vorgang.nummer}
+          token={verteiler.token}
+          frist={verteiler.frist}
+          empfaenger={verteiler.empfaenger}
+        />
+      )}
+
+      {nachtrag && (
+        <NachtragKarte
+          vorgang={vorgang.nummer}
+          token={nachtrag.token}
+          personen={nachtrag.personen}
+        />
+      )}
+
+      {arbeitsKarten.length === 0 ? null : arbeitsKarten.length === 1 ? (
         arbeitsKarten[0]
       ) : (
         <div className="grid items-start gap-4 md:grid-cols-2">{arbeitsKarten}</div>
       )}
 
-      <div className="grid items-start gap-4 md:grid-cols-2">
-        <ArtikelKarte vorgang={vorgang} stand={stand} />
+      {/* Ein Größencheck hat keine Artikel und bekommt nie welche. „Die Artikel
+          stehen fest, sobald die Positionen am Vorgang hängen“ wäre dort ein
+          Versprechen, das niemand einlöst. */}
+      {vorgang.nurGroessen ? (
         <VerlaufKarte vorgang={vorgang} stand={vorgang.stufe} ansicht={ansicht} />
-      </div>
+      ) : (
+        <div className="grid items-start gap-4 md:grid-cols-2">
+          <ArtikelKarte vorgang={vorgang} stand={stand} />
+          <VerlaufKarte vorgang={vorgang} stand={vorgang.stufe} ansicht={ansicht} />
+        </div>
+      )}
     </>
   );
 }

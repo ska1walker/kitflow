@@ -1,4 +1,5 @@
 import { KeinZugang } from "@/components/kein-zugang";
+import { Stoerung } from "@/components/stoerung";
 import { ListeFormular } from "@/components/liste-formular";
 import { Card } from "@/components/ui";
 import { pruefe } from "@/lib/links";
@@ -16,8 +17,10 @@ export default async function ListeSeite(props: PageProps<"/b/[vorgang]">) {
 
   if (typeof t !== "string" || !pruefe(t, "bestaetigen", nummer)) return <KeinZugang />;
 
-  const liste = await ladeListe(nummer);
-  if (!liste) return <KeinZugang />;
+  const abruf = await ladeListe(nummer);
+  if (abruf.stand === "gestoert") return <Stoerung />;
+  if (abruf.stand !== "da") return <KeinZugang />;
+  const liste = abruf.daten;
 
   return (
     <main className="mx-auto w-full max-w-3xl px-4 py-10">

@@ -26,8 +26,14 @@ export async function trainerAngabenSpeichern(
     return { stand: "fehler", text: "Dieser Link funktioniert nicht mehr." };
   }
 
-  const abfrage = await ladeTrainerAbfrage(vorgang, person);
-  if (!abfrage) return { stand: "fehler", text: "Dieser Link funktioniert nicht mehr." };
+  const abruf = await ladeTrainerAbfrage(vorgang, person);
+  if (abruf.stand === "gestoert") {
+    return { stand: "fehler", text: "kitflow kommt gerade nicht an die Daten. Bitte versuch es in einer Minute noch einmal." };
+  }
+  if (abruf.stand !== "da") {
+    return { stand: "fehler", text: "Dieser Link funktioniert nicht mehr." };
+  }
+  const abfrage = abruf.daten;
   if (!abfrage.offen) {
     return { stand: "fehler", text: "Dieser Vorgang ist über die Größenphase hinaus." };
   }
@@ -41,6 +47,7 @@ export async function trainerAngabenSpeichern(
   const ergebnis = await speichereTrainerAngaben(abfrage, {
     groessen,
     nummer: String(formular.get("nummer") ?? "").trim(),
+    initialen: String(formular.get("initialen") ?? ""),
     ausgeschlossen: formular.get("ausgeschlossen") === "ja",
     torwart: formular.get("torwart") === "ja",
   });

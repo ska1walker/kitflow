@@ -95,7 +95,7 @@ export function GroessenKarte({
           ) : (
             // Bei Jugendmannschaften nennt die Seite keine Namen.
             <p className="text-sm text-ink-600">
-              {fehlen} von {vorgang.groessenGesamt} fehlen noch.
+              {fehlen} von {vorgang.groessenGesamt} {fehlen === 1 ? "fehlt" : "fehlen"} noch.
             </p>
           )}
           <div className="mt-3.5 flex flex-wrap gap-2">
@@ -241,28 +241,44 @@ function ArtikelGruppe({
         <span>{titel}</span>
         <span className="tnum">{anzahl}</span>
       </div>
-      {artikel.map((a) => (
-        <div
-          key={a.herstellernummer}
-          className="flex justify-between gap-2.5 border-t border-ink-100 py-1.5 text-[13px]"
-        >
-          <span className="min-w-0">{a.name}</span>
-          <code className="font-mono text-[11px] whitespace-nowrap text-ink-500">
-            {a.herstellernummer}
-          </code>
-        </div>
-      ))}
+      {artikel.map((a) => {
+        const bereich = a.groesseVon && a.groesseBis ? `${a.groesseVon} bis ${a.groesseBis}` : null;
+        // In der Voranfrage ist die Nummer nur ein Platzhalter. Dann zaehlt der
+        // Groessenbereich, denn er ist der Inhalt der Anfrage.
+        const platzhalter = a.herstellernummer.startsWith("VOR-");
+        return (
+          <div
+            key={a.herstellernummer}
+            className="flex justify-between gap-2.5 border-t border-ink-100 py-1.5 text-[13px]"
+          >
+            <span className="min-w-0">
+              {a.name}
+              {bereich && <span className="block text-[11px] text-ink-500">Größen {bereich}</span>}
+            </span>
+            <code className="font-mono text-[11px] whitespace-nowrap text-ink-500">
+              {platzhalter ? "Nummer folgt" : a.herstellernummer}
+            </code>
+          </div>
+        );
+      })}
     </div>
   );
 }
 
 export function ArtikelKarte({ vorgang, stand }: { vorgang: Vorgang; stand: StufeNr }) {
+  // In der Voranfrage haengt noch niemand am Vorgang; dann gilt die Schaetzung
+  // des Trainers, und sie wird ausdruecklich als Schaetzung ausgewiesen.
+  const voranfrage = stand === 0;
+  const personen = voranfrage
+    ? (vorgang.personenGeschaetzt ?? 0)
+    : vorgang.feldspielerAnzahl + vorgang.torwartAnzahl;
+
   const gruppen: { fuer: ArtikelFuer; titel: string; anzahl: number }[] = [
     // „Alle“ steht zuerst und faengt Artikel ohne Rollenzuordnung auf.
     {
       fuer: "alle",
       titel: "Alle",
-      anzahl: vorgang.feldspielerAnzahl + vorgang.torwartAnzahl,
+      anzahl: personen,
     },
     { fuer: "feldspieler", titel: "Feldspieler", anzahl: vorgang.feldspielerAnzahl },
     { fuer: "torwart", titel: "Torwart", anzahl: vorgang.torwartAnzahl },
@@ -293,7 +309,7 @@ export function ArtikelKarte({ vorgang, stand }: { vorgang: Vorgang; stand: Stuf
         <ArtikelGruppe
           key={g.fuer}
           titel={g.titel}
-          anzahl={`${g.anzahl} ${g.anzahl === 1 ? "Person" : "Personen"}`}
+          anzahl={`${voranfrage ? "geschätzt " : ""}${g.anzahl} ${g.anzahl === 1 ? "Person" : "Personen"}`}
           artikel={vorgang.artikel.filter((a) => a.fuer === g.fuer)}
         />
       ))}

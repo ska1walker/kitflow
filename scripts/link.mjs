@@ -56,6 +56,7 @@ const zeigen = (was, pfad, token) => console.log(`${was.padEnd(16)} ${BASIS}${pf
 
 zeigen("Trainer-Status", `/v/${e(vorgang)}`, signiere("status", vorgang));
 zeigen("Liste bestätigen", `/b/${e(vorgang)}`, signiere("bestaetigen", vorgang));
+zeigen("Ergänzen (F1b)", `/e/${e(vorgang)}`, signiere("ergaenzen", vorgang));
 
 if (person) {
   zeigen("Spieler-Status", `/v/${e(vorgang)}/${e(person)}`, signiere("status", vorgang, person));

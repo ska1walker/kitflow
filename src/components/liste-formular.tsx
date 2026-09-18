@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
+import { abschicken } from "./formular";
 import { Badge, Button, Card } from "./ui";
 import { IconCheck, IconStop } from "./icons";
 import { listeBestaetigen, type Ergebnis } from "@/app/b/[vorgang]/aktion";
@@ -107,6 +108,7 @@ export function ListeFormular({ liste, token }: { liste: Liste; token: string })
                 </th>
               ))}
               {liste.trikotsatz && <th className="pb-2">Nummer</th>}
+              {liste.initialenNoetig && <th className="pb-2">Initialen</th>}
               <th className="pb-2" />
             </tr>
           </thead>
@@ -143,6 +145,15 @@ export function ListeFormular({ liste, token }: { liste: Liste; token: string })
                     )}
                   </td>
                 )}
+                {liste.initialenNoetig && (
+                  <td className="py-2 pr-3">
+                    {zeile.initialen === "" ? (
+                      <Badge tone="amber">fehlt</Badge>
+                    ) : (
+                      <span>{zeile.initialen}</span>
+                    )}
+                  </td>
+                )}
                 <td className="py-2 text-right">
                   <a href={zeile.aendern} className="text-sm font-semibold text-pitch-700 underline">
                     ändern
@@ -159,7 +170,7 @@ export function ListeFormular({ liste, token }: { liste: Liste; token: string })
 
       <Card className="p-5">
         <h2 className="font-display mb-3.5 text-lg font-bold text-ink-900">
-          Prüfungen vor der Anfrage
+          {liste.nurGroessen ? "Prüfung" : "Prüfungen vor der Anfrage"}
         </h2>
         <ul className="flex flex-col">
           {liste.pruefungen.map((p) => (
@@ -173,31 +184,39 @@ export function ListeFormular({ liste, token }: { liste: Liste; token: string })
       </Card>
 
       <Card className="p-5">
-        <form action={absenden} className="flex flex-col gap-4">
-          <label className="flex flex-col gap-1.5">
-            <span className="text-sm font-semibold text-ink-900">
-              Lieferadresse{" "}
-              <span className="font-normal text-ink-500">— leer lassen heißt: bleibt wie sie ist</span>
-            </span>
-            <textarea
-              name="lieferadresse"
-              rows={3}
-              defaultValue={liste.lieferadresse}
-              className="w-full rounded-lg border border-ink-200 bg-white px-3 py-2 text-sm text-ink-800 focus:border-pitch-400 focus:ring-2 focus:ring-pitch-100 focus:outline-none"
-            />
-          </label>
+        <form onSubmit={abschicken(absenden)} className="flex flex-col gap-4">
+          {/* Lieferadresse und Händlerhinweis gehören zur Anfrage. Ein
+              Größencheck stellt keine – dann wären es zwei Felder ohne Ziel. */}
+          {!liste.nurGroessen && (
+            <>
+              <label className="flex flex-col gap-1.5">
+                <span className="text-sm font-semibold text-ink-900">
+                  Lieferadresse{" "}
+                  <span className="font-normal text-ink-500">
+                    — leer lassen heißt: bleibt wie sie ist
+                  </span>
+                </span>
+                <textarea
+                  name="lieferadresse"
+                  rows={3}
+                  defaultValue={liste.lieferadresse}
+                  className="w-full rounded-lg border border-ink-200 bg-white px-3 py-2 text-sm text-ink-800 focus:border-pitch-400 focus:ring-2 focus:ring-pitch-100 focus:outline-none"
+                />
+              </label>
 
-          <label className="flex flex-col gap-1.5">
-            <span className="text-sm font-semibold text-ink-900">
-              Hinweis an die Händler <span className="font-normal text-ink-500">— optional</span>
-            </span>
-            <textarea
-              name="hinweis"
-              rows={3}
-              defaultValue={liste.hinweisHaendler}
-              className="w-full rounded-lg border border-ink-200 bg-white px-3 py-2 text-sm text-ink-800 focus:border-pitch-400 focus:ring-2 focus:ring-pitch-100 focus:outline-none"
-            />
-          </label>
+              <label className="flex flex-col gap-1.5">
+                <span className="text-sm font-semibold text-ink-900">
+                  Hinweis an die Händler <span className="font-normal text-ink-500">— optional</span>
+                </span>
+                <textarea
+                  name="hinweis"
+                  rows={3}
+                  defaultValue={liste.hinweisHaendler}
+                  className="w-full rounded-lg border border-ink-200 bg-white px-3 py-2 text-sm text-ink-800 focus:border-pitch-400 focus:ring-2 focus:ring-pitch-100 focus:outline-none"
+                />
+              </label>
+            </>
+          )}
 
           <label className="flex items-start gap-2.5 text-sm text-ink-800">
             <input
