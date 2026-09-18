@@ -4,7 +4,7 @@ import {
   setzePersonAngaben, setzeStufe, verlauf, vermerke, vermerkeMail, vorgaengeAufStufe,
   vorgangPerNummer, loescheVorgang,
 } from "./vorgaenge-db";
-import { lese } from "./db";
+import { aendere, lese } from "./db";
 
 /** Gegen ein echtes PostgREST auf einem echten Postgres. Kein Papp-Netz. */
 
@@ -137,6 +137,37 @@ describe("Die Schicht gegen echtes PostgREST", () => {
     expect((await alleVorgaenge())!.length).toBeGreaterThan(0);
     expect((await vorgaengeAufStufe(1))!.some((v) => v.id === vorgangId)).toBe(true);
     expect((await vorgaengeAufStufe(7))!.some((v) => v.id === vorgangId)).toBe(false);
+  });
+
+  test("Geldbeträge kommen als Zahlen zurück, nicht als Zeichenketten", async () => {
+    // Gemessen statt angenommen: ich hatte `numeric` erst als Zeichenkette
+    // getippt und den Kommentar „gemessen“ schon geschrieben, bevor ich
+    // gemessen hatte. PostgREST 13.0.4 liefert eine JSON-Zahl.
+    await aendere("vorgang", { id: `eq.${vorgangId}` }, {
+      zusage_sponsor: 250.5,
+      angebot_intersport_betrag: 1234.5,
+      angebot_intersport_am: "2026-10-02",
+      lieferant_gewaehlt: "Intersport Uelzen",
+      kaskadenstufe: 2,
+      rechnung_abweichung: true,
+      erstattung_iban: "DE00 0000 0000 0000 0000 00",
+    });
+
+    const v = await vorgangPerNummer((await eineNummer())!);
+    if (v.stand !== "da") throw new Error("weg");
+    expect(v.vorgang.finanzen.zusageSponsor).toBe(250.5);
+    expect(v.vorgang.angebote.intersport).toMatchObject({ betrag: 1234.5, am: "2026-10-02" });
+    expect(v.vorgang.lieferantGewaehlt).toBe("Intersport Uelzen");
+    expect(v.vorgang.kaskadenstufe).toBe(2);
+    expect(v.vorgang.rechnungAbweichung).toBe(true);
+    expect(v.vorgang.erstattung.iban).toContain("DE00");
+    // Was nie gesetzt wurde, bleibt „nichts“ und wird nicht zu 0.
+    expect(v.vorgang.finanzen.eingangVerein).toBeUndefined();
+  });
+
+  test("ein negativer Betrag wird von der Datenbank abgewiesen", async () => {
+    // Eine Zusage von -500 schlägt sich sonst bis in die Deckungsprüfung durch.
+    expect(await aendere("vorgang", { id: `eq.${vorgangId}` }, { zusage_sponsor: -500 })).toBeNull();
   });
 
   test("eine verletzte Bedingung wird gemeldet, nicht verschluckt", async () => {

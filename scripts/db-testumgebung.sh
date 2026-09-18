@@ -28,6 +28,13 @@ fi
 
 pg_ctlcluster 16 main start 2>/dev/null || true
 
+# Erst die Dienste beenden, dann die Datenbank wegwerfen: solange PostgREST
+# noch daran haengt, laesst Postgres sie nicht fallen ("is being accessed by
+# other users") - und das Skript lief beim zweiten Aufruf auf einen Fehler.
+pkill -f "$ARBEIT/postgrest" 2>/dev/null || true
+pkill -f "$ARBEIT/adapter.mjs" 2>/dev/null || true
+sleep 1
+
 echo "Datenbank $DB neu aufsetzen ..."
 su postgres -c "psql -q -c 'drop database if exists $DB' -c 'create database $DB'"
 su postgres -c "psql -q -d $DB" <<'SQL'
@@ -77,8 +84,6 @@ createServer((ein, aus) => {
 }).listen(3344);
 JS
 
-pkill -f "$ARBEIT/postgrest" 2>/dev/null || true
-pkill -f "$ARBEIT/adapter.mjs" 2>/dev/null || true
 nohup "$ARBEIT/postgrest" "$ARBEIT/pgrst.conf" > "$ARBEIT/pgrst.log" 2>&1 &
 nohup node "$ARBEIT/adapter.mjs" > "$ARBEIT/adapter.log" 2>&1 &
 

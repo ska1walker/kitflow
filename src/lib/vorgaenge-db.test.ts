@@ -137,6 +137,50 @@ describe("Einen Vorgang lesen", () => {
   });
 });
 
+describe("Geld und Angebote", () => {
+  test("nichts eingetragen heißt: nicht null Euro, sondern nichts", async () => {
+    // Der Unterschied entscheidet die Deckungsprüfung: „null Euro zugesagt“
+    // hieße, der Sponsor hat abgesagt. „Noch nichts“ heißt: es läuft.
+    stelleDb({ "GET vorgang": { koerper: [vorgangZeile()] } });
+
+    const e = await vorgangPerNummer("AUS-2026-001");
+    if (e.stand !== "da") throw new Error("kein Vorgang");
+    expect(e.vorgang.finanzen.zusageSponsor).toBeUndefined();
+    expect(e.vorgang.angebote.intersport.betrag).toBeUndefined();
+    expect(e.vorgang.erstattung.iban).toBeUndefined();
+  });
+
+  test("eine ausdrückliche Null bleibt eine Null", async () => {
+    stelleDb({ "GET vorgang": { koerper: [vorgangZeile({ zusage_sponsor: 0 })] } });
+
+    const e = await vorgangPerNummer("AUS-2026-001");
+    if (e.stand !== "da") throw new Error("kein Vorgang");
+    expect(e.vorgang.finanzen.zusageSponsor).toBe(0);
+  });
+
+  test("Angebote und Erstattung kommen gruppiert an", async () => {
+    stelleDb({
+      "GET vorgang": {
+        koerper: [
+          vorgangZeile({
+            angebot_11teamsports_betrag: 1234.5,
+            angebot_11teamsports_am: "2026-10-02",
+            lieferant_gewaehlt: "11teamsports",
+            erstattung_betrag: 80,
+            erstattung_kontoinhaber: "Kai Böhm",
+          }),
+        ],
+      },
+    });
+
+    const e = await vorgangPerNummer("AUS-2026-001");
+    if (e.stand !== "da") throw new Error("kein Vorgang");
+    expect(e.vorgang.angebote.elfteamsports).toMatchObject({ betrag: 1234.5, am: "2026-10-02" });
+    expect(e.vorgang.lieferantGewaehlt).toBe("11teamsports");
+    expect(e.vorgang.erstattung).toMatchObject({ betrag: 80, kontoinhaber: "Kai Böhm" });
+  });
+});
+
 describe("Alle Vorgänge", () => {
   test("keine heißt keine", async () => {
     stelleDb({ "GET vorgang": { koerper: [] } });

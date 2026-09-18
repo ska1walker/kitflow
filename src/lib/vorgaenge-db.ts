@@ -74,6 +74,37 @@ type VorgangRoh = {
   hs_deal_id: string | null;
   angelegt_am: string;
   aktualisiert_am: string;
+
+  // Migration 002: was ein Vorgang nach der Groessenabfrage noch erlebt.
+  // `numeric` kommt als JSON-Zahl heraus, nicht als Zeichenkette - gemessen an
+  // PostgREST 13.0.4, festgehalten in db-postgrest.echt.ts.
+  angebot_intersport_betrag: number | null;
+  angebot_intersport_am: string | null;
+  angebot_intersport_gueltig_bis: string | null;
+  angebot_intersport_lieferzeit: string | null;
+  angebot_intersport_abweichung: string | null;
+  angebot_11teamsports_betrag: number | null;
+  angebot_11teamsports_am: string | null;
+  angebot_11teamsports_gueltig_bis: string | null;
+  angebot_11teamsports_lieferzeit: string | null;
+  angebot_11teamsports_abweichung: string | null;
+  lieferant_gewaehlt: string | null;
+  kaskadenstufe: number | null;
+  zusage_sponsor: number | null;
+  eingang_verein: number | null;
+  eingang_am: string | null;
+  vorkasse_bestaetigt: number | null;
+  spartenbudget_freigegeben: number | null;
+  zahlweg_mannschaft: string | null;
+  rechnungsempfaenger: string | null;
+  bestellt_am: string | null;
+  geliefert_am: string | null;
+  rechnung_betrag: number | null;
+  rechnung_abweichung: boolean | null;
+  erstattung_betrag: number | null;
+  erstattet_am: string | null;
+  erstattung_kontoinhaber: string | null;
+  erstattung_iban: string | null;
   vorgang_artikel?: ArtikelRoh[];
   vorgang_person?: PersonRoh[];
 };
@@ -98,6 +129,38 @@ export type PersonSatz = {
   ausgeschlossen: boolean;
   torwart: boolean;
   trikotnummer?: string;
+};
+
+/** Ein Angebot eines Händlers. Leere Felder heißen: noch nichts da. */
+export type AngebotSatz = {
+  betrag?: number;
+  am?: string;
+  gueltigBis?: string;
+  lieferzeit?: string;
+  abweichung?: string;
+};
+
+/**
+ * Das Geld. Zusage und Eingang stehen getrennt, weil sie Verschiedenes sind:
+ * bestellt wird erst, wenn das Geld da ist (docs/konzept.md). Eine Zusage
+ * allein macht nie bestellbar.
+ */
+export type FinanzenSatz = {
+  zusageSponsor?: number;
+  eingangVerein?: number;
+  eingangAm?: string;
+  vorkasseBestaetigt?: number;
+  spartenbudgetFreigegeben?: number;
+  zahlwegMannschaft?: string;
+  rechnungsempfaenger?: string;
+};
+
+export type ErstattungSatz = {
+  betrag?: number;
+  am?: string;
+  kontoinhaber?: string;
+  /** Nach Abschluss des Vorgangs löschen (docs/datenmodell.md). */
+  iban?: string;
 };
 
 export type VorgangSatz = {
@@ -126,11 +189,32 @@ export type VorgangSatz = {
   aktualisiertAm: string;
   artikel: ArtikelSatz[];
   personen: PersonSatz[];
+
+  angebote: { intersport: AngebotSatz; elfteamsports: AngebotSatz };
+  lieferantGewaehlt?: string;
+  kaskadenstufe?: number;
+  finanzen: FinanzenSatz;
+  bestelltAm?: string;
+  geliefertAm?: string;
+  rechnungBetrag?: number;
+  rechnungAbweichung?: boolean;
+  erstattung: ErstattungSatz;
 };
 
 /** `null` und `""` sind dasselbe wie „nicht gesetzt“ – wie `text()` bei HubSpot. */
 function wert(roh: string | null): string | undefined {
   return roh === null || roh === "" ? undefined : roh;
+}
+
+/**
+ * Ein Geldbetrag.
+ *
+ * `null` heißt „noch nichts“ und wird zu `undefined` — nicht zu 0. Der
+ * Unterschied entscheidet die Deckungsprüfung: „null Euro zugesagt“ und „noch
+ * nichts zugesagt“ sind zweierlei, und nur das Zweite darf warten.
+ */
+function betrag(roh: number | null): number | undefined {
+  return roh === null || !Number.isFinite(roh) ? undefined : roh;
 }
 
 /** Eine Stufe, die es gibt. Alles andere wäre ein Datenfehler und kein Vorgang. */
@@ -200,6 +284,44 @@ function ausVorgang(roh: VorgangRoh): VorgangSatz | undefined {
     aktualisiertAm: roh.aktualisiert_am,
     artikel: (roh.vorgang_artikel ?? []).sort((a, b) => a.reihenfolge - b.reihenfolge).map(ausArtikel),
     personen: (roh.vorgang_person ?? []).map(ausPerson),
+
+    angebote: {
+      intersport: {
+        betrag: betrag(roh.angebot_intersport_betrag),
+        am: wert(roh.angebot_intersport_am),
+        gueltigBis: wert(roh.angebot_intersport_gueltig_bis),
+        lieferzeit: wert(roh.angebot_intersport_lieferzeit),
+        abweichung: wert(roh.angebot_intersport_abweichung),
+      },
+      elfteamsports: {
+        betrag: betrag(roh.angebot_11teamsports_betrag),
+        am: wert(roh.angebot_11teamsports_am),
+        gueltigBis: wert(roh.angebot_11teamsports_gueltig_bis),
+        lieferzeit: wert(roh.angebot_11teamsports_lieferzeit),
+        abweichung: wert(roh.angebot_11teamsports_abweichung),
+      },
+    },
+    lieferantGewaehlt: wert(roh.lieferant_gewaehlt),
+    kaskadenstufe: roh.kaskadenstufe ?? undefined,
+    finanzen: {
+      zusageSponsor: betrag(roh.zusage_sponsor),
+      eingangVerein: betrag(roh.eingang_verein),
+      eingangAm: wert(roh.eingang_am),
+      vorkasseBestaetigt: betrag(roh.vorkasse_bestaetigt),
+      spartenbudgetFreigegeben: betrag(roh.spartenbudget_freigegeben),
+      zahlwegMannschaft: wert(roh.zahlweg_mannschaft),
+      rechnungsempfaenger: wert(roh.rechnungsempfaenger),
+    },
+    bestelltAm: wert(roh.bestellt_am),
+    geliefertAm: wert(roh.geliefert_am),
+    rechnungBetrag: betrag(roh.rechnung_betrag),
+    rechnungAbweichung: roh.rechnung_abweichung ?? undefined,
+    erstattung: {
+      betrag: betrag(roh.erstattung_betrag),
+      am: wert(roh.erstattet_am),
+      kontoinhaber: wert(roh.erstattung_kontoinhaber),
+      iban: wert(roh.erstattung_iban),
+    },
   };
 }
 

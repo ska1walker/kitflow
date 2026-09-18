@@ -47,6 +47,15 @@ nicht je Mensch: wer diese Runde im Tor steht, ist nächste Runde Feldspieler.
 | `mail_versand` | welche Mail wann an wen, und ob `MAIL_NUR_AN` sie umgeleitet hat |
 | `vorgang_zaehler` | eine Zeile je Jahr, für die Vorgangsnummer |
 
+**Migration 002** hängt an `vorgang` an, was ein Vorgang nach der Größenabfrage noch erlebt:
+die Angebote beider Händler, der gewählte Lieferant, die Kaskadenstufe, Finanzierung und
+Zahlweg, Bestellung und Lieferung, Rechnung und Erstattung. Sie standen bisher nur als
+Deal-Eigenschaften da, und `haendlerAus` und `verlaufAus` in `src/lib/vorgaenge.ts` lesen sie —
+ohne sie bliebe die Statusseite ab Stufe 2 leer, sobald die Datenbank die Quelle ist.
+Geschrieben werden sie heute von niemandem (es gibt keine Formulare F4 bis F8); gepflegt
+werden sie ab Schritt 3 über `/sparte`. Die Geldspalten dürfen nicht negativ sein — eine
+Zusage von −500 schlüge sich bis in die Deckungsprüfung durch.
+
 Dazu zwei Funktionen: `naechste_vorgangsnummer()` (unter Sperre, zählt zusätzlich die höchste
 wirklich vergebene Nummer mit, damit ein Import keine Nummer doppelt vergibt) und der Trigger
 `vorgang_zeitstempel` (setzt `aktualisiert_am`, und `stufe_seit` nur beim Stufenwechsel — eine
@@ -144,6 +153,11 @@ Folge im Betrieb wäre gewesen: ein Nachzügler, der schon am Vorgang hängt, h�
 scheitern lassen — und beim Anlegen eines Vorgangs hätte eine doppelte Kontakt-ID den
 **ganzen Vorgang zurückgenommen**. `schreibe()` verlangt deshalb jetzt die Spalten als Text
 statt eines Ja/Nein: wer sie nicht nennen kann, will kein Ignorieren.
+
+**Und eine zweite Annahme fiel dabei**, diesmal meine eigene: `numeric` kommt von PostgREST als
+**JSON-Zahl** heraus, nicht als Zeichenkette. Ich hatte es andersherum getippt und den
+Kommentar „gemessen“ schon geschrieben, bevor ich gemessen hatte. Der Test dazu steht jetzt in
+`db-postgrest.echt.ts`, damit die Behauptung an etwas hängt.
 
 Mitgeprüft und in Ordnung: die eingebetteten Kinder `vorgang_artikel(*),vorgang_person(*)` in
 einem Aufruf, das Array `mannschaften`, `is.null` und `is.false`, `order`, `limit`, DELETE,
