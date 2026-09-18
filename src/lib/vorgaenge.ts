@@ -43,6 +43,7 @@ import {
   aendereVorgang,
   haengePersonAn,
   setzePersonAngaben,
+  setzeFreigabe,
   setzeStufe,
   verlauf as verlaufLesen,
   mailsJePerson,
@@ -53,11 +54,18 @@ import {
   type VorgangSatz,
 } from "./vorgaenge-db";
 import { spiegele, spiegelePersonen } from "./spiegel";
-import { anfrageHaendler } from "./haendler-adressen";
+import { anfrageHaendler, haendlerAktiv } from "./haendler-adressen";
 import { alsCsv, baueAnfrage, summenText } from "./anfrage";
-import { absolut, mailAktiv, sendeM2a, sendeM4, sendeM5 } from "./mail";
+import {
+  freigabeWeg,
+  freigeberName,
+  ruftZurFreigabe,
+  type Freigeber,
+  type FreigabeRuf,
+} from "./freigabe";
+import { absolut, mailAktiv, sendeM2a, sendeM4, sendeM4b, sendeM5 } from "./mail";
 import { kontakteDerMannschaft } from "./bedarf";
-import { groessenLink, statusLink, trainerLink } from "./links";
+import { bestaetigenLink, groessenLink, statusLink, trainerLink } from "./links";
 import type { Pruefung } from "./pruefungen";
 import { pruefeInitialen } from "./typen";
 import type { Groessenart, StufeNr, Vorgang } from "./typen";
@@ -506,31 +514,35 @@ export type BestaetigungsErgebnis = {
   anHaendler: number;
   /** Kein Haendler hinterlegt – die Anfrage bleibt liegen. */
   ohneHaendler: boolean;
+  /** Die Anfrage wartet auf die Freigabe der Spartenleitung. */
+  wartetAufFreigabe: boolean;
 };
 
 /**
- * Nimmt die Bestaetigung des Trainers entgegen und schickt die Anfrage raus.
+ * Nimmt die Bestaetigung des Trainers entgegen und beantragt die Freigabe.
  *
- * Bis zur Freigabe von M4 endete die Kette hier: die Stufe blieb stehen, weil
- * „Anfrage raus“ ohne verschickte Anfrage eine Behauptung gewesen waere.
- * Jetzt geht sie wirklich raus — an die Haendler aus `HAENDLER`, ohne einen
- * einzigen Spielernamen (`anfrage.ts`), und der Trainer bekommt M5.
+ * **Hier geht nichts mehr nach draussen.** Bis zum 18.09.2026 loeste diese
+ * Funktion M4 unmittelbar aus. Das war falsch herum: M4 geht an zwei echte
+ * Geschaeftspartner und ist nicht zurueckzuholen, und ein Trainer sollte sie
+ * nicht allein ausloesen koennen. Kais Ansage: die Spartenleitung genehmigt.
+ * Der Versand steht jetzt in `gibFrei`.
  *
- * **Ohne hinterlegte Haendler bleibt die Stufe stehen.** Die Bestaetigung
- * selbst gilt trotzdem: der Trainer hat seinen Teil getan, und ihn dafuer
- * scheitern zu lassen waere falsch. Die Spartenleitung sieht den Vorgang dann
- * auf Stufe 1 liegen, und der Verlauf sagt, warum.
- *
- * **Die Stufe wandert erst, wenn wirklich etwas rausging.** Schlaegt der
- * Versand an alle Haendler fehl, bleibt der Vorgang, wo er ist — sonst stuende
- * „Anfrage raus“ an einem Vorgang, zu dem kein Haendler je etwas bekam.
+ * **Die Bestaetigung gilt trotzdem sofort.** Der Trainer hat seinen Teil getan;
+ * ihn scheitern zu lassen, weil noch jemand zustimmen muss, waere falsch. Sein
+ * Datum, seine Lieferadresse und sein Hinweis stehen am Vorgang, und die
+ * Freigabe wartet daneben.
  */
 export async function bestaetigeListe(
   nummer: string,
   lieferadresse: string,
   hinweis: string,
 ): Promise<BestaetigungsErgebnis> {
-  const misserfolg = { ok: false, anHaendler: 0, ohneHaendler: false };
+  const misserfolg = {
+    ok: false,
+    anHaendler: 0,
+    ohneHaendler: false,
+    wartetAufFreigabe: false,
+  };
 
   const ergebnis = await vorgangPerNummer(nummer);
   if (ergebnis.stand !== "da") return misserfolg;
@@ -551,10 +563,201 @@ export async function bestaetigeListe(
 
   // Ein reiner Groessencheck geht an keinen Haendler: es gibt nichts zu
   // bestellen. Er endet mit der Bestaetigung, und das ist richtig so.
-  if (nurGroessen(satz)) return { ok: true, anHaendler: 0, ohneHaendler: false };
+  if (nurGroessen(satz)) {
+    return { ok: true, anHaendler: 0, ohneHaendler: false, wartetAufFreigabe: false };
+  }
 
-  const anHaendler = await verschickeAnfrage(nummer, lieferadresse || satz.lieferadresse || "", hinweis || satz.hinweisHaendler || "");
-  return { ok: true, anHaendler: anHaendler.verschickt, ohneHaendler: anHaendler.ohneHaendler };
+  // Ohne hinterlegte Haendler gibt es nichts freizugeben. Das jetzt schon zu
+  // sagen ist ehrlicher, als eine Freigabe zu erbitten, die ins Leere liefe.
+  if (!haendlerAktiv()) {
+    await vermerke(satz.id, {
+      art: "anfrage_offen",
+      text: "Anfrage nicht vorbereitet: kein Händler hinterlegt",
+      intern: true,
+      abStufe: 1,
+    });
+    return { ok: true, anHaendler: 0, ohneHaendler: true, wartetAufFreigabe: false };
+  }
+
+  return beantrageFreigabe(satz);
+}
+
+/**
+ * Stellt den Vorgang auf „Freigabe offen“ und ruft die Spartenleitung.
+ *
+ * **Die Naht fuer die spaetere Automatik** (Kai, 18.09.2026): sagt
+ * `freigabeWeg()` eine Regel, gibt diese Funktion sofort frei, statt zu fragen.
+ * Heute sagt sie nie eine — der Mensch entscheidet, und das steht so im Code
+ * und nicht in einem Kommentar.
+ */
+async function beantrageFreigabe(satz: VorgangSatz): Promise<BestaetigungsErgebnis> {
+  const gesetzt = await setzeFreigabe(satz.id, "offen");
+  if (!gesetzt) {
+    return { ok: false, anHaendler: 0, ohneHaendler: false, wartetAufFreigabe: false };
+  }
+
+  await vermerke(satz.id, {
+    art: "freigabe_offen",
+    text: "Die Händleranfrage wartet auf die Freigabe der Spartenleitung",
+    intern: true,
+    abStufe: 1,
+  });
+
+  // Laeuft es automatisch, ist der Antrag im selben Atemzug erledigt.
+  const regel = freigabeWeg(satz);
+  if (regel) {
+    const frei = await gibFrei(satz.nummer, regel);
+    return {
+      ok: frei.ok,
+      anHaendler: frei.anHaendler,
+      ohneHaendler: frei.ohneHaendler,
+      wartetAufFreigabe: false,
+    };
+  }
+
+  await ruftZurFreigabe(satz.id, rufVon(satz));
+  return { ok: true, anHaendler: 0, ohneHaendler: false, wartetAufFreigabe: true };
+}
+
+/** Was in der Telegram-Nachricht und der Todoist-Aufgabe steht. Ohne Namen. */
+function rufVon(satz: VorgangSatz): FreigabeRuf {
+  // Die Stueckzahl wird aus Artikeln und Personen geschaetzt, nicht aus der
+  // fertigen Anfrage: die zu bauen hiesse, die Liste samt Namen zu laden, nur
+  // um eine Zahl in eine Chatnachricht zu schreiben.
+  const koepfe = satz.personen.filter((p) => !p.ausgeschlossen).length;
+  const jeKopf = satz.artikel.reduce((summe, a) => summe + Math.max(1, a.stueck), 0);
+
+  return {
+    nummer: satz.nummer,
+    mannschaft: satz.mannschaften.join(", ") || satz.mannschaftscode || "Ohne Mannschaft",
+    gegenstand: satz.ausstattungsart,
+    stueck: koepfe * jeKopf,
+    haendler: anfrageHaendler().length,
+    link: absolut("/sparte") ?? "",
+  };
+}
+
+export type FreigabeErgebnis = {
+  ok: boolean;
+  anHaendler: number;
+  ohneHaendler: boolean;
+  /** Warum es nicht ging – für die Rückmeldung auf /sparte. */
+  grund?: string;
+};
+
+/**
+ * Gibt die Anfrage frei und schickt sie raus.
+ *
+ * Erst jetzt geht M4 an die Haendler und M5 an den Trainer. Der Stand wandert
+ * nur dann auf `freigegeben`, wenn wirklich etwas rausging: eine Freigabe, nach
+ * der nichts passiert ist, waere schlimmer als gar keine, weil niemand mehr
+ * hinsieht.
+ */
+export async function gibFrei(nummer: string, wer: Freigeber): Promise<FreigabeErgebnis> {
+  const ergebnis = await vorgangPerNummer(nummer);
+  if (ergebnis.stand === "gestoert") {
+    return { ok: false, anHaendler: 0, ohneHaendler: false, grund: "gestoert" };
+  }
+  if (ergebnis.stand !== "da") {
+    return { ok: false, anHaendler: 0, ohneHaendler: false, grund: "unbekannt" };
+  }
+  const satz = ergebnis.vorgang;
+
+  // Nur was wirklich offen ist. Sonst gingen zwei Klicks auf denselben Vorgang
+  // als zwei Anfragen an die Haendler raus – und die zweite waere nicht zu
+  // erklaeren.
+  if (satz.freigabe.stand !== "offen") {
+    return { ok: false, anHaendler: 0, ohneHaendler: false, grund: "nicht_offen" };
+  }
+
+  const verschickt = await verschickeAnfrage(
+    nummer,
+    satz.lieferadresse ?? "",
+    satz.hinweisHaendler ?? "",
+  );
+
+  if (verschickt.verschickt === 0) {
+    await vermerke(satz.id, {
+      art: "freigabe_ohne_versand",
+      text: verschickt.ohneHaendler
+        ? "Freigabe erteilt, aber kein Händler hinterlegt – nichts verschickt"
+        : "Freigabe erteilt, aber die Anfrage ging nicht raus",
+      sub: freigeberName(wer),
+      intern: true,
+      abStufe: 1,
+    });
+    return {
+      ok: false,
+      anHaendler: 0,
+      ohneHaendler: verschickt.ohneHaendler,
+      grund: verschickt.ohneHaendler ? "ohne_haendler" : "versand",
+    };
+  }
+
+  await setzeFreigabe(satz.id, "freigegeben", freigeberName(wer));
+  await vermerke(satz.id, {
+    art: "freigabe_erteilt",
+    text:
+      wer.art === "mensch"
+        ? "Die Spartenleitung hat die Händleranfrage freigegeben"
+        : "Die Händleranfrage lief automatisch durch",
+    sub: freigeberName(wer),
+    intern: true,
+    abStufe: 1,
+  });
+
+  return { ok: true, anHaendler: verschickt.verschickt, ohneHaendler: false };
+}
+
+/**
+ * Lehnt die Anfrage ab, mit Grund.
+ *
+ * Der Grund ist Pflicht und kein Beiwerk: ohne ihn bliebe der Vorgang stumm
+ * liegen und der Trainer wuesste nicht, was er aendern soll. Er geht deshalb
+ * auch per Mail an ihn.
+ */
+export async function lehneAb(
+  nummer: string,
+  wer: Freigeber,
+  grund: string,
+): Promise<FreigabeErgebnis> {
+  const ergebnis = await vorgangPerNummer(nummer);
+  if (ergebnis.stand === "gestoert") {
+    return { ok: false, anHaendler: 0, ohneHaendler: false, grund: "gestoert" };
+  }
+  if (ergebnis.stand !== "da") {
+    return { ok: false, anHaendler: 0, ohneHaendler: false, grund: "unbekannt" };
+  }
+  const satz = ergebnis.vorgang;
+
+  if (satz.freigabe.stand !== "offen") {
+    return { ok: false, anHaendler: 0, ohneHaendler: false, grund: "nicht_offen" };
+  }
+
+  const gesetzt = await setzeFreigabe(satz.id, "abgelehnt", freigeberName(wer), grund);
+  if (!gesetzt) return { ok: false, anHaendler: 0, ohneHaendler: false, grund: "versand" };
+
+  await vermerke(satz.id, {
+    art: "freigabe_abgelehnt",
+    text: `Die Händleranfrage wurde nicht freigegeben: ${grund}`,
+    sub: freigeberName(wer),
+    intern: true,
+    abStufe: 1,
+  });
+
+  // Der Trainer erfaehrt es. Ohne diese Mail steht er vor einer bestaetigten
+  // Liste, bei der nichts passiert – und das sieht aus wie ein Fehler.
+  if (satz.trainerEmail && mailAktiv()) {
+    const liste = absolut(bestaetigenLink(satz.nummer) ?? "");
+    await sendeM4b(satz.trainerEmail, {
+      vorgang: satz.nummer,
+      mannschaft: satz.mannschaften.join(", ") || satz.mannschaftscode || "deine Mannschaft",
+      grund,
+      listeLink: liste ?? "",
+    });
+  }
+
+  return { ok: true, anHaendler: 0, ohneHaendler: false };
 }
 
 /**

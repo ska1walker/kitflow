@@ -6,8 +6,9 @@ import { StufenKarte } from "@/components/stufen-karte";
 import { FristKarte } from "@/components/frist-karte";
 import { Abmelden } from "@/components/abmelden";
 import { Stoerung } from "@/components/stoerung";
+import { FreigabeKarte } from "@/components/freigabe-karte";
 import { spartenLeitung } from "@/lib/anmeldung";
-import { ladeZeilen } from "@/lib/uebersicht";
+import { ladeFreigaben, ladeZeilen } from "@/lib/uebersicht";
 
 export const metadata = { title: "Spartenleitung · kitflow" };
 
@@ -38,7 +39,7 @@ export default async function Sparte() {
   const wer = await spartenLeitung();
   if (!wer) redirect("/anmelden");
 
-  const zeilen = await ladeZeilen();
+  const [zeilen, freigaben] = await Promise.all([ladeZeilen(), ladeFreigaben()]);
 
   return (
     <>
@@ -46,6 +47,23 @@ export default async function Sparte() {
 
       <main className="pt-5 pb-14">
         <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4">
+          {/* Ganz oben: es ist das Einzige auf dieser Seite, das jemanden
+              aufhält. Eine Störung beim Laden wird benannt und nicht als
+              „nichts zu tun“ verschwiegen — genau darin läge der Schaden. */}
+          {freigaben === null ? (
+            <Card className="border-amber-200 bg-amber-50 p-5">
+              <h2 className="font-display text-base font-bold text-ink-900">
+                Offene Freigaben nicht abrufbar
+              </h2>
+              <p className="mt-1 text-sm text-ink-700">
+                kitflow kommt gerade nicht an die Freigaben. Das heißt nicht, dass keine offen
+                sind. Bitte lade die Seite in einer Minute neu.
+              </p>
+            </Card>
+          ) : (
+            <FreigabeKarte offen={freigaben} />
+          )}
+
           {zeilen === null ? (
             // `null` heißt „konnte nicht fragen“. Eine leere Liste hieße
             // „keine Vorgänge“ — das wäre hier die gefährlichere Auskunft.

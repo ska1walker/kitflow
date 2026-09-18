@@ -12,9 +12,11 @@ import "server-only";
  * Spartenleitung kommt dort nur mit gültigem Token hinein.
  */
 
-import { alleVorgaenge, type VorgangSatz } from "./vorgaenge-db";
+import { alleVorgaenge, offeneFreigaben, type VorgangSatz } from "./vorgaenge-db";
 import { ausgeschlossene } from "./ansicht";
+import { anfrageHaendler } from "./haendler-adressen";
 import { statusLink } from "./links";
+import type { OffeneFreigabe } from "@/components/freigabe-karte";
 import type { StufeNr, VorgangsZeile } from "./typen";
 
 /** Ganze Tage seit einem Zeitpunkt. `null`, wenn es keinen gibt. */
@@ -102,6 +104,39 @@ export async function ladeZeilen(): Promise<VorgangsZeile[] | null> {
   const vorgaenge = await alleVorgaenge();
   if (vorgaenge === null) return null;
   return vorgaenge.map(zurZeile);
+}
+
+/**
+ * Die Vorgänge, deren Händleranfrage auf Freigabe wartet.
+ *
+ * Steht hier und nicht in der Karte, weil die Zahlen serverseitig entstehen
+ * müssen: Stückzahl und Personenzahl kommen aus dem Vorgang, die Zahl der
+ * Händler aus einer Umgebungsvariablen, und beides hat im Browser nichts zu
+ * suchen.
+ *
+ * **Keine Namen.** Was die Spartenleitung zum Entscheiden braucht, sind
+ * Stückzahlen — nicht, wer in der Mannschaft ist.
+ */
+export async function ladeFreigaben(): Promise<OffeneFreigabe[] | null> {
+  const vorgaenge = await offeneFreigaben();
+  if (vorgaenge === null) return null;
+
+  const haendler = anfrageHaendler().length;
+
+  return vorgaenge.map((satz) => {
+    const koepfe = personenZahl(satz);
+    const jeKopf = satz.artikel.reduce((summe, a) => summe + Math.max(1, a.stueck), 0);
+
+    return {
+      nummer: satz.nummer,
+      mannschaft: satz.mannschaften.join(", ") || satz.mannschaftscode || "Ohne Mannschaft",
+      gegenstand: satz.ausstattungsart,
+      stueck: koepfe * jeKopf,
+      haendler,
+      personen: koepfe,
+      href: statusLink(satz.nummer) ?? undefined,
+    };
+  });
 }
 
 /**

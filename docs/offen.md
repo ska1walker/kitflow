@@ -28,6 +28,8 @@ Stand 18.09.2026
 - **M3 (Größenliste zum Prüfen) ist gebaut** und läuft im täglichen Lauf mit: alle da oder Frist erreicht, höchstens eine je Vorgang.
 - **M6 entfällt** — die Prüfungen weisen eine unvollständige Liste schon auf der Seite ab, bevor etwas geschrieben wird.
 - **M4 und M5 sind gebaut** — auf Kais ausdrückliche Freigabe am 18.09.2026, mit seiner Auflage: **keine Spielernamen nach draußen**. Die Anfrage nennt nur Artikel, Größe, Stückzahl, Rückennummer und Initialen (`src/lib/anfrage.ts`). **Neu zu setzen: `HAENDLER`** — fehlt die Variable, geht keine Anfrage raus, die Bestätigung gilt trotzdem und der Vorgang bleibt auf Stufe 1 liegen.
+- **M4 geht erst nach Freigabe der Spartenleitung raus** (Kai, 18.09.2026). Der Trainer bestätigt, die Spartenleitung gibt auf `/sparte` frei oder stoppt mit Grund; erst dann M4 und M5. Benachrichtigung über **Telegram** und eine **Todoist-Aufgabe**. Details und die offenen Fragen zur späteren Automatik in docs/freigabe.md. **Neu zu setzen: `TELEGRAM_TOKEN`, `TELEGRAM_CHAT`, `TODOIST_TOKEN`** (und optional `TODOIST_PROJEKT`); Migration `20260918150000_freigabe.sql` einspielen.
+- **M4b (Rückfrage an den Trainer) ist gebaut** — sie geht raus, wenn die Spartenleitung stoppt, und nennt den Grund wörtlich. Ohne sie stünde der Trainer vor einer bestätigten Liste, bei der nichts passiert.
 - M7 offen: der Fall steht heute auf der Seite. Eine Mail wäre für den, der sie zu früh schließt.
 - Noch offen: der Anhang Merkblatt_Zahlwege.pdf.
 

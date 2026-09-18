@@ -66,7 +66,11 @@ export function ListeFormular({ liste, token }: { liste: Liste; token: string })
           </span>
           <div>
             <h1 className="font-display text-xl font-bold tracking-tight text-ink-900">
-              {ergebnis.anHaendler > 0 ? "Die Anfrage ist raus" : "Liste bestätigt"}
+              {ergebnis.anHaendler > 0
+                ? "Die Anfrage ist raus"
+                : ergebnis.wartetAufFreigabe
+                  ? "Liste bestätigt – die Anfrage geht zur Freigabe"
+                  : "Liste bestätigt"}
             </h1>
             <p className="mt-1.5 text-sm text-ink-600">
               {ergebnis.anHaendler > 0 ? (
@@ -74,6 +78,12 @@ export function ListeFormular({ liste, token }: { liste: Liste; token: string })
                   Die Bestätigung steht am Vorgang {liste.vorgang}, und die Anfrage ist an{" "}
                   {ergebnis.anHaendler === 1 ? "einen Händler" : `${ergebnis.anHaendler} Händler`}{" "}
                   gegangen. Die Angebote kommen in Kopie an dich.
+                </>
+              ) : ergebnis.wartetAufFreigabe ? (
+                <>
+                  Die Bestätigung steht am Vorgang {liste.vorgang}. Die Spartenleitung gibt die
+                  Anfrage an die Händler frei – erst dann geht sie raus. Du bekommst Bescheid,
+                  sobald es soweit ist.
                 </>
               ) : ergebnis.ohneHaendler ? (
                 <>
@@ -87,7 +97,7 @@ export function ListeFormular({ liste, token }: { liste: Liste; token: string })
                 </>
               )}
             </p>
-            {ergebnis.anHaendler > 0 && (
+            {(ergebnis.anHaendler > 0 || ergebnis.wartetAufFreigabe) && (
               <p className="mt-3 text-sm text-ink-500">
                 In der Anfrage stehen keine Namen deiner Spielerinnen und Spieler – nur
                 Stückzahlen, Größen und Nummern.

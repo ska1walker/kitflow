@@ -75,6 +75,14 @@ type VorgangRoh = {
   angelegt_am: string;
   aktualisiert_am: string;
 
+  // Migration 004: die Freigabe der Haendleranfrage. Nullable, obwohl die
+  // Spalte `not null` ist: ein Vorgang, der vor der Migration gelesen wurde,
+  // hat sie nicht, und ein fehlender Stand darf nicht als „freigegeben“ enden.
+  freigabe_stand: string | null;
+  freigabe_von: string | null;
+  freigabe_am: string | null;
+  freigabe_grund: string | null;
+
   // Migration 002: was ein Vorgang nach der Groessenabfrage noch erlebt.
   // `numeric` kommt als JSON-Zahl heraus, nicht als Zeichenkette - gemessen an
   // PostgREST 13.0.4, festgehalten in db-postgrest.echt.ts.
@@ -163,6 +171,24 @@ export type ErstattungSatz = {
   iban?: string;
 };
 
+/**
+ * Die vier Stände einer Freigabe.
+ *
+ * `keine` und `offen` sind ausdrücklich verschiedene Dinge: „noch nie
+ * bestätigt“ ist nicht „wartet auf jemanden“. Wer beides zusammenwirft,
+ * blendet entweder eine fällige Freigabe aus oder erfindet eine.
+ */
+export type FreigabeStand = "keine" | "offen" | "freigegeben" | "abgelehnt";
+
+export type FreigabeSatz = {
+  stand: FreigabeStand;
+  /** Adresse eines Spartenleiters oder Name der Regel, die entschied. */
+  von?: string;
+  am?: string;
+  /** Nur beim Ablehnen. */
+  grund?: string;
+};
+
 export type VorgangSatz = {
   id: string;
   nummer: string;
@@ -190,6 +216,9 @@ export type VorgangSatz = {
   artikel: ArtikelSatz[];
   personen: PersonSatz[];
 
+  /** Freigabe der Händleranfrage (Migration 004). */
+  freigabe: FreigabeSatz;
+
   angebote: { intersport: AngebotSatz; elfteamsports: AngebotSatz };
   lieferantGewaehlt?: string;
   kaskadenstufe?: number;
@@ -200,6 +229,19 @@ export type VorgangSatz = {
   rechnungAbweichung?: boolean;
   erstattung: ErstattungSatz;
 };
+
+/**
+ * Der Freigabe-Stand aus der Zeile.
+ *
+ * Alles, was nicht wortwörtlich einer der vier Stände ist, wird `keine` — und
+ * damit „die Anfrage darf nicht raus“. Ein Tippfehler in der Spalte, eine
+ * künftige Migration mit einem fünften Wert, eine Zeile aus der Zeit vor
+ * Migration 004: keiner dieser Fälle darf als Freigabe durchgehen.
+ */
+function alsFreigabeStand(roh: string | null): FreigabeStand {
+  if (roh === "offen" || roh === "freigegeben" || roh === "abgelehnt") return roh;
+  return "keine";
+}
 
 /** `null` und `""` sind dasselbe wie „nicht gesetzt“ – wie `text()` bei HubSpot. */
 function wert(roh: string | null): string | undefined {
@@ -284,6 +326,13 @@ function ausVorgang(roh: VorgangRoh): VorgangSatz | undefined {
     aktualisiertAm: roh.aktualisiert_am,
     artikel: (roh.vorgang_artikel ?? []).sort((a, b) => a.reihenfolge - b.reihenfolge).map(ausArtikel),
     personen: (roh.vorgang_person ?? []).map(ausPerson),
+
+    freigabe: {
+      stand: alsFreigabeStand(roh.freigabe_stand),
+      von: wert(roh.freigabe_von),
+      am: wert(roh.freigabe_am),
+      grund: wert(roh.freigabe_grund),
+    },
 
     angebote: {
       intersport: {
@@ -534,6 +583,50 @@ async function vollstaendig(id: string): Promise<VorgangSatz | null> {
 /* ------------------------------------------------------------------ *
  * Ändern
  * ------------------------------------------------------------------ */
+
+/**
+ * Den Freigabe-Stand setzen (Migration 004).
+ *
+ * Eigene Funktion und kein Feld in `aendereVorgang`, weil das hier kein Ändern
+ * eines Wertes ist, sondern ein Übergang: `von`, `am` und `grund` gehören zum
+ * Stand und dürfen nicht getrennt davon irgendwo stehenbleiben. Auf `offen`
+ * werden sie deshalb ausdrücklich geleert — sonst trüge eine erneut bestätigte
+ * Liste noch die Unterschrift der vorigen Freigabe.
+ */
+export async function setzeFreigabe(
+  vorgangId: string,
+  stand: FreigabeStand,
+  von?: string,
+  grund?: string,
+): Promise<boolean> {
+  const entschieden = stand === "freigegeben" || stand === "abgelehnt";
+  const werte: Record<string, unknown> = {
+    freigabe_stand: stand,
+    freigabe_von: entschieden ? (von ?? null) : null,
+    freigabe_am: entschieden ? new Date().toISOString() : null,
+    freigabe_grund: stand === "abgelehnt" ? (grund ?? null) : null,
+  };
+  const zeilen = await aendere("vorgang", { id: `eq.${vorgangId}` }, werte);
+  return zeilen !== null && zeilen.length > 0;
+}
+
+/**
+ * Die Vorgänge, deren Freigabe aussteht.
+ *
+ * Eine eigene Abfrage statt eines Filters über `alleVorgaenge`: `null` muss
+ * hier „konnte nicht fragen“ heißen und darf nicht als „keine offenen
+ * Freigaben“ durchgehen. Auf einer Seite, die Freigaben zeigt, wäre eine
+ * verschluckte Störung die gefährlichere Auskunft.
+ */
+export async function offeneFreigaben(): Promise<VorgangSatz[] | null> {
+  const zeilen = await lese<VorgangRoh>("vorgang", {
+    select: MIT_KINDERN,
+    freigabe_stand: "eq.offen",
+    order: "angelegt_am.asc",
+  });
+  if (zeilen === null) return null;
+  return zeilen.map(ausVorgang).filter((v): v is VorgangSatz => v !== undefined);
+}
 
 /**
  * Die Stufe setzen. `abbruchBei` hält fest, wo der Vorgang stand – ein

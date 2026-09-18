@@ -19,6 +19,7 @@ import { redirect } from "next/navigation";
 import { authClient, spartenLeitung } from "@/lib/anmeldung";
 import { dbAktiv } from "@/lib/db";
 import { aendereVorgang, setzeStufe, vermerke, vorgangPerNummer } from "@/lib/vorgaenge-db";
+import { gibFrei, lehneAb } from "@/lib/vorgaenge";
 import { spiegele } from "@/lib/spiegel";
 import { stufe as stufeVon } from "@/lib/stufen";
 import type { StufeNr } from "@/lib/typen";
@@ -184,4 +185,87 @@ export async function fristSetzen(_bisher: FristStand, formular: FormData): Prom
   // Tippfehler. Verschwiegen wird sie nicht: der Erinnerungslauf rührt sich
   // danach nie wieder.
   return { stand: "fertig", nummer, frist: deutsch(frist), vergangen: tag.getTime() < Date.now() };
+}
+
+/* ------------------------------------------------------------------ *
+ * Die Freigabe der Händleranfrage
+ * ------------------------------------------------------------------ */
+
+export type FreigabeStand =
+  | { stand: "leer" }
+  | { stand: "raus"; nummer: string; anHaendler: number }
+  | { stand: "gestoppt"; nummer: string }
+  | { stand: "fehler"; text: string };
+
+/** Was schiefgehen kann, in Worten für einen Menschen. */
+function freigabeFehler(grund: string | undefined, nummer: string): string {
+  switch (grund) {
+    case "gestoert":
+      return "kitflow kommt gerade nicht an die Daten. Bitte versuch es in einer Minute noch einmal.";
+    case "unbekannt":
+      return `Vorgang ${nummer} gibt es nicht.`;
+    case "nicht_offen":
+      return `Für ${nummer} steht gerade keine Freigabe aus. Lade die Seite neu.`;
+    case "ohne_haendler":
+      return "Es ist kein Händler hinterlegt (HAENDLER). Die Anfrage kann nicht rausgehen.";
+    default:
+      return "Die Anfrage ging nicht raus. Am Vorgang steht, woran es lag.";
+  }
+}
+
+/**
+ * Die Anfrage an die Händler freigeben.
+ *
+ * Das ist die einzige Stelle, an der ein Mensch eine Mail nach draußen auslöst.
+ * Sie prüft die Anmeldung selbst — der `proxy` prüft ausdrücklich optimistisch,
+ * und eine Server Action ist eine eigene Adresse.
+ */
+export async function freigeben(
+  _bisher: FreigabeStand,
+  formular: FormData,
+): Promise<FreigabeStand> {
+  const wer = await spartenLeitung();
+  if (!wer) return { stand: "fehler", text: "Dafür musst du angemeldet sein." };
+
+  const nummer = String(formular.get("vorgang") ?? "").trim();
+  if (!nummer) return { stand: "fehler", text: "Bitte einen Vorgang wählen." };
+
+  if (!dbAktiv()) {
+    return { stand: "fehler", text: "Das hat gerade nicht geklappt. Bitte versuch es später." };
+  }
+
+  const ergebnis = await gibFrei(nummer, { art: "mensch", email: wer });
+  if (!ergebnis.ok) return { stand: "fehler", text: freigabeFehler(ergebnis.grund, nummer) };
+
+  return { stand: "raus", nummer, anHaendler: ergebnis.anHaendler };
+}
+
+/**
+ * Die Anfrage stoppen, mit Grund.
+ *
+ * Der Grund ist Pflicht: ohne ihn bliebe der Vorgang stumm liegen, und der
+ * Trainer wüsste nicht, was er ändern soll. Er geht ihm auch per Mail zu.
+ */
+export async function ablehnen(
+  _bisher: FreigabeStand,
+  formular: FormData,
+): Promise<FreigabeStand> {
+  const wer = await spartenLeitung();
+  if (!wer) return { stand: "fehler", text: "Dafür musst du angemeldet sein." };
+
+  const nummer = String(formular.get("vorgang") ?? "").trim();
+  const grund = String(formular.get("grund") ?? "").trim();
+  if (!nummer) return { stand: "fehler", text: "Bitte einen Vorgang wählen." };
+  if (grund.length < 5) {
+    return { stand: "fehler", text: "Bitte schreib dazu, was geändert werden soll." };
+  }
+
+  if (!dbAktiv()) {
+    return { stand: "fehler", text: "Das hat gerade nicht geklappt. Bitte versuch es später." };
+  }
+
+  const ergebnis = await lehneAb(nummer, { art: "mensch", email: wer }, grund);
+  if (!ergebnis.ok) return { stand: "fehler", text: freigabeFehler(ergebnis.grund, nummer) };
+
+  return { stand: "gestoppt", nummer };
 }

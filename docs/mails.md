@@ -239,8 +239,14 @@ keine: „alle haben eingetragen" wäre dort eine Lüge.
 ## M4 · Angebotsanfrage (→ Intersport Uelzen und 11teamsports, je eine Mail)
 
 Gebaut am 18.09.2026 auf Kais Freigabe, mit **einer Auflage: es gehen keine
-Spielernamen raus.** Verschickt aus `bestaetigeListe`, sobald der Trainer die
-Liste bestätigt (`src/lib/vorgaenge.ts`).
+Spielernamen raus.**
+
+**Verschickt aus `gibFrei`, nicht aus `bestaetigeListe`** (`src/lib/vorgaenge.ts`).
+Der Trainer bestätigt die Liste; raus geht die Anfrage erst, wenn die
+Spartenleitung sie freigibt — noch am selben Tag Kais zweite Ansage. M4 ist die
+einzige Mail, die das Haus verlässt, sie geht an zwei echte Geschäftspartner und
+ist nicht zurückzuholen; ein Trainer sollte sie nicht allein auslösen können. Der
+ganze Ablauf steht in **docs/freigabe.md**.
 
 ### Die Auflage
 
@@ -323,9 +329,26 @@ Spartenleiter Fußball · Eintracht Munster 2020 e.V.
 
 ---
 
+## M4b · Rückfrage zur Händleranfrage (→ Trainer)
+
+Gebaut: `sendeM4b` in `src/lib/mail.ts`. Geht raus, wenn die Spartenleitung die
+Anfrage **stoppt** (docs/freigabe.md). Der Grund steht wörtlich drin — ohne diese
+Mail stünde der Trainer vor einer bestätigten Liste, bei der nichts passiert, und
+das sähe aus wie ein Fehler in kitflow statt nach einer Entscheidung.
+
+Kein „leider“ und keine Entschuldigung: es ist eine normale Rückfrage im Verein,
+keine Absage. Die Mail sagt auch, wie es weitergeht — Liste ändern, noch einmal
+bestätigen, dann geht sie erneut zur Freigabe.
+
+**Betreff:** {{vorgang}} · Rückfrage zur Händleranfrage
+
+---
+
 ## M5 · Anfrage ist raus (→ Trainer)
 
-Gebaut: `sendeM5` in `src/lib/mail.ts`, verschickt direkt nach M4. Sie nennt die
+Gebaut: `sendeM5` in `src/lib/mail.ts`, verschickt direkt nach M4 — also **erst
+nach der Freigabe** der Spartenleitung, nicht schon bei der Bestätigung des
+Trainers (docs/freigabe.md). Sie nennt die
 Händler beim Namen, sagt, dass die Angebote in Kopie kommen — und dass in der
 Anfrage keine Namen seiner Spielerinnen und Spieler standen.
 

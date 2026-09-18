@@ -27,6 +27,7 @@ export function satz(mehr: Partial<VorgangSatz> = {}): VorgangSatz {
     angebote: { intersport: {}, elfteamsports: {} },
     finanzen: {},
     erstattung: {},
+    freigabe: { stand: "keine" },
     ...mehr,
   };
 }
@@ -147,5 +148,9 @@ export function alsZeile(v: VorgangSatz): Record<string, unknown> {
     erstattet_am: v.erstattung.am ?? null,
     erstattung_kontoinhaber: v.erstattung.kontoinhaber ?? null,
     erstattung_iban: v.erstattung.iban ?? null,
+    freigabe_stand: v.freigabe.stand,
+    freigabe_von: v.freigabe.von ?? null,
+    freigabe_am: v.freigabe.am ?? null,
+    freigabe_grund: v.freigabe.grund ?? null,
   };
 }

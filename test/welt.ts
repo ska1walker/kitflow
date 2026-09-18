@@ -43,10 +43,16 @@ export type Welt = {
   entwuerfe?: { id: string; email: string; daten: unknown; angelegt_am: string }[];
   /** Nur `vorgang_entwurf` antwortet nicht. */
   entwuerfeGestoert?: boolean;
+  /**
+   * Telegram und Todoist antworten nicht. Eigener Schalter, weil beides nur
+   * benachrichtigt: ein Ausfall darf die Freigabe nicht kosten, und das laesst
+   * sich nur pruefen, wenn er sich einzeln herbeifuehren laesst.
+   */
+  meldenGestoert?: boolean;
 };
 
 export type Aufruf = {
-  host: "db" | "hubspot" | "resend";
+  host: "db" | "hubspot" | "resend" | "telegram" | "todoist";
   methode: string;
   pfad: string;
   suche: Record<string, string>;
@@ -97,12 +103,22 @@ export function stelleWelt(welt: Welt) {
     const adresse = new URL(String(url));
     const beiHubspot = adresse.host === "api.hubapi.com";
     const beiResend = adresse.host === "api.resend.com";
+    const beiTelegram = adresse.host === "api.telegram.org";
+    const beiTodoist = adresse.host === "api.todoist.com";
     const pfad = beiHubspot ? adresse.pathname : adresse.pathname.replace(/^\/rest\/v1\//, "");
     const methode = o?.method ?? (o?.body ? "POST" : "GET");
     const koerper = o?.body ? JSON.parse(String(o.body)) : undefined;
 
     aufrufe.push({
-      host: beiResend ? "resend" : beiHubspot ? "hubspot" : "db",
+      host: beiResend
+        ? "resend"
+        : beiHubspot
+          ? "hubspot"
+          : beiTelegram
+            ? "telegram"
+            : beiTodoist
+              ? "todoist"
+              : "db",
       methode,
       pfad,
       suche: Object.fromEntries(adresse.searchParams),
@@ -112,6 +128,16 @@ export function stelleWelt(welt: Welt) {
     if (beiResend) {
       if (welt.resendGestoert) return json({ message: "kaputt" }, 422);
       return json({ id: "mail-1" });
+    }
+
+    if (beiTelegram) {
+      if (welt.meldenGestoert) return json({ ok: false }, 403);
+      return json({ ok: true });
+    }
+
+    if (beiTodoist) {
+      if (welt.meldenGestoert) return json({ error: "kaputt" }, 500);
+      return json({ id: "aufgabe-1" });
     }
 
     if (beiHubspot) {
@@ -200,6 +226,10 @@ function dbAntwort(
       if (id && id !== `eq.${vorgang.id}`) return json([]);
       const stufe = suche.get("stufe");
       if (stufe && stufe !== `eq.${vorgang.stufe}`) return json([]);
+      // `offeneFreigaben` sucht danach. Ohne diesen Filter faende die Abfrage
+      // jeden Vorgang, und ein Test auf „nichts offen“ waere blind.
+      const freigabe = suche.get("freigabe_stand");
+      if (freigabe && freigabe !== `eq.${vorgang.freigabe.stand}`) return json([]);
       return json([alsZeile(vorgang)]);
     }
     if (methode === "POST") {
@@ -227,6 +257,7 @@ function dbAntwort(
         angebote: { intersport: {}, elfteamsports: {} },
         finanzen: {},
         erstattung: {},
+        freigabe: { stand: "keine" },
       };
       setze(neu);
       return json([alsZeile(neu)]);
@@ -242,6 +273,17 @@ function dbAntwort(
       if ("initialen_noetig" in zu) neu.initialenNoetig = Boolean(zu.initialen_noetig);
       if ("sponsor" in zu) neu.sponsor = String(zu.sponsor);
       if ("hs_deal_id" in zu) neu.hsDealId = String(zu.hs_deal_id);
+      // Die Freigabe wandert immer als Ganzes: Stand, Wer, Wann und Grund
+      // gehoeren zusammen. Uebernaehme das Papp-Netz nur den Stand, liesse sich
+      // nicht pruefen, dass eine neue Bestaetigung die alte Unterschrift loescht.
+      if ("freigabe_stand" in zu) {
+        neu.freigabe = {
+          stand: String(zu.freigabe_stand) as VorgangSatz["freigabe"]["stand"],
+          von: (zu.freigabe_von as string) ?? undefined,
+          am: (zu.freigabe_am as string) ?? undefined,
+          grund: (zu.freigabe_grund as string) ?? undefined,
+        };
+      }
       setze(neu);
       return json([alsZeile(neu)]);
     }

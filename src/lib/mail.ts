@@ -691,3 +691,49 @@ export async function sendeM5(an: string, d: M5Daten): Promise<string | null> {
     html: alsHtml(rahmen),
   });
 }
+
+export type M4bDaten = {
+  vorgang: string;
+  mannschaft: string;
+  grund: string;
+  listeLink: string;
+};
+
+/**
+ * M4b · die Spartenleitung hat die Anfrage nicht freigegeben (docs/mails.md).
+ *
+ * Ohne diese Mail steht der Trainer vor einer bestätigten Liste, bei der nichts
+ * passiert — und das sieht aus wie ein Fehler in kitflow, nicht wie eine
+ * Entscheidung. Der Grund steht deshalb wörtlich drin und nicht in Andeutungen.
+ *
+ * Kein „leider“ und keine Entschuldigung: es ist eine normale Rückfrage im
+ * Verein, keine Absage.
+ */
+export async function sendeM4b(an: string, d: M4bDaten): Promise<string | null> {
+  const rahmen: Rahmen = {
+    eyebrow: `Vorgang ${d.vorgang}`,
+    titel: "Die Anfrage geht so noch nicht raus",
+    vorschau: `${d.mannschaft}: die Spartenleitung hat eine Rückfrage.`,
+    bloecke: [
+      {
+        art: "absatz",
+        text: `Die Spartenleitung hat die Händleranfrage für ${d.mannschaft} noch nicht freigegeben. Der Grund:`,
+      },
+      { art: "hinweis", text: d.grund },
+      {
+        art: "absatz",
+        text: "Du kannst die Liste ändern und sie danach noch einmal bestätigen. Dann geht sie erneut zur Freigabe.",
+      },
+      ...(d.listeLink
+        ? [{ art: "links" as const, zeilen: [{ name: "Zur Liste", href: d.listeLink }] }]
+        : []),
+    ],
+  };
+
+  return sendeMail({
+    an,
+    betreff: `${d.vorgang} · Rückfrage zur Händleranfrage`,
+    text: alsText(rahmen),
+    html: alsHtml(rahmen),
+  });
+}

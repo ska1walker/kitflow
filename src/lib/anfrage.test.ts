@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { bestaetigeListe } from "./vorgaenge";
+import { bestaetigeListe, gibFrei } from "./vorgaenge";
 import { alsCsv, baueAnfrage } from "./anfrage";
 import { anfrageHaendler } from "./haendler-adressen";
 import { artikel, kontakt, person, satz } from "../../test/satz";
@@ -15,6 +15,12 @@ import { raeumeUmgebung, stelleUmgebung, stelleWelt, type Welt } from "../../tes
  * Diese Datei prüft vor allem das. Nicht „steht der richtige Name an der
  * richtigen Stelle“, sondern: steht überhaupt irgendwo einer. Alles andere —
  * Stückzahlen, Größen, Nummern — ist Handwerk und darunter geprüft.
+ *
+ * **Seit dem 18.09.2026 sind es zwei Schritte**: der Trainer bestätigt, die
+ * Spartenleitung gibt frei. Erst dann geht M4 raus. Die Tests hier gehen
+ * deshalb über `bestaetigenUndFreigeben` — sie prüfen den Inhalt der Anfrage,
+ * nicht wer sie auslöst. Dass ohne Freigabe nichts rausgeht, steht in
+ * `freigabe.test.ts`.
  */
 
 const HAENDLER =
@@ -67,6 +73,17 @@ function briefe(aufrufe: { host: string; koerper: unknown }[]) {
   );
 }
 
+/**
+ * Bestätigen und freigeben — die beiden Schritte, nach denen M4 rausgeht.
+ *
+ * Die Tests unten interessiert, was in der Anfrage steht. Dass sie ohne den
+ * zweiten Schritt liegenbleibt, ist Gegenstand von `freigabe.test.ts`.
+ */
+async function bestaetigenUndFreigeben(nummer = "AUS-2026-001") {
+  await bestaetigeListe(nummer, "Am Sportplatz 14", "");
+  return gibFrei(nummer, { art: "mensch", email: "kai@example.invalid" });
+}
+
 /** Der Anhang, ausgepackt. */
 function anhangText(brief: { attachments?: { content: string }[] }): string {
   const inhalt = brief.attachments?.[0]?.content ?? "";
@@ -95,7 +112,7 @@ describe("Kein Spielername verlässt den Verein", () => {
   test("nicht in der Mail an die Händler", async () => {
     const { aufrufe } = welt();
 
-    await bestaetigeListe("AUS-2026-001", "Am Sportplatz 14", "");
+    await bestaetigenUndFreigeben();
 
     const anHaendler = briefe(aufrufe).filter((b) =>
       b.to[0].includes("hillebrecht") || b.to[0].includes("bormann"),
@@ -115,7 +132,7 @@ describe("Kein Spielername verlässt den Verein", () => {
     // Nachnamen. Genau das ist raus.
     const { aufrufe } = welt();
 
-    await bestaetigeListe("AUS-2026-001", "Am Sportplatz 14", "");
+    await bestaetigenUndFreigeben();
 
     const csv = anhangText(briefe(aufrufe).find((b) => b.attachments) ?? {});
     expect(csv.length).toBeGreaterThan(0);
@@ -128,7 +145,7 @@ describe("Kein Spielername verlässt den Verein", () => {
 
   test("auch die Trainer-Adresse steht nicht in der Tabelle", async () => {
     const { aufrufe } = welt();
-    await bestaetigeListe("AUS-2026-001", "Am Sportplatz 14", "");
+    await bestaetigenUndFreigeben();
 
     const csv = anhangText(briefe(aufrufe).find((b) => b.attachments) ?? {});
     expect(csv).not.toContain("@example.invalid");
@@ -138,7 +155,7 @@ describe("Kein Spielername verlässt den Verein", () => {
     // Damit der Händler nicht nachfragt und der Verein nicht doch eine Liste
     // hinterherschickt.
     const { aufrufe } = welt();
-    await bestaetigeListe("AUS-2026-001", "Am Sportplatz 14", "");
+    await bestaetigenUndFreigeben();
 
     expect(briefe(aufrufe)[0].text).toContain("keine Namen");
   });
@@ -159,7 +176,7 @@ describe("Was stattdessen drinsteht", () => {
       kontakte: [kontakt("111", { firstname: "Anna", trikot: "M", initialen: "AK" })],
     });
 
-    await bestaetigeListe("AUS-2026-001", "Am Sportplatz 14", "");
+    await bestaetigenUndFreigeben();
 
     const csv = anhangText(briefe(aufrufe).find((b) => b.attachments) ?? {});
     expect(csv).toContain("Rueckennummer");
@@ -173,7 +190,7 @@ describe("Was stattdessen drinsteht", () => {
     // Bei Trainingsjacken druckt niemand eine Rückennummer auf.
     const { aufrufe } = welt();
 
-    await bestaetigeListe("AUS-2026-001", "Am Sportplatz 14", "");
+    await bestaetigenUndFreigeben();
 
     const csv = anhangText(briefe(aufrufe).find((b) => b.attachments) ?? {});
     expect(csv).not.toContain("Rueckennummer");
@@ -188,7 +205,7 @@ describe("Was stattdessen drinsteht", () => {
       ],
     });
 
-    await bestaetigeListe("AUS-2026-001", "Am Sportplatz 14", "");
+    await bestaetigenUndFreigeben();
 
     const csv = anhangText(briefe(aufrufe).find((b) => b.attachments) ?? {});
     // Kopfzeile plus genau eine Datenzeile.
@@ -200,7 +217,7 @@ describe("An wen sie geht", () => {
   test("an jeden hinterlegten Händler, einzeln", async () => {
     const { aufrufe } = welt();
 
-    const ergebnis = await bestaetigeListe("AUS-2026-001", "Am Sportplatz 14", "");
+    const ergebnis = await bestaetigenUndFreigeben();
 
     expect(ergebnis.anHaendler).toBe(2);
     const adressen = briefe(aufrufe).map((b) => b.to[0]);
@@ -210,7 +227,7 @@ describe("An wen sie geht", () => {
 
   test("mit der richtigen Anrede je Händler", async () => {
     const { aufrufe } = welt();
-    await bestaetigeListe("AUS-2026-001", "Am Sportplatz 14", "");
+    await bestaetigenUndFreigeben();
 
     const an = (adresse: string) => briefe(aufrufe).find((b) => b.to[0] === adresse)?.text ?? "";
     expect(an("hillebrecht@example.invalid")).toContain("Sehr geehrter Herr Hillebrecht");
@@ -219,14 +236,14 @@ describe("An wen sie geht", () => {
 
   test("Antworten gehen zum Verein, nicht an kitflow", async () => {
     const { aufrufe } = welt();
-    await bestaetigeListe("AUS-2026-001", "Am Sportplatz 14", "");
+    await bestaetigenUndFreigeben();
 
     expect(briefe(aufrufe)[0].reply_to).toContain("@");
   });
 
   test("der Trainer bekommt M5", async () => {
     const { aufrufe } = welt();
-    await bestaetigeListe("AUS-2026-001", "Am Sportplatz 14", "");
+    await bestaetigenUndFreigeben();
 
     const anTrainer = briefe(aufrufe).find((b) => b.to[0] === "trainer@example.invalid");
     expect(anTrainer?.subject).toContain("Anfrage an die Händler verschickt");
@@ -238,6 +255,9 @@ describe("Ohne hinterlegte Händler", () => {
   test("geht nichts raus, und die Bestätigung gilt trotzdem", async () => {
     // Der Trainer hat seinen Teil getan. Ihn dafür scheitern zu lassen wäre
     // falsch – die Spartenleitung sieht den Vorgang liegen.
+    //
+    // Es wird auch keine Freigabe erbeten: ohne Händler gäbe es nichts
+    // freizugeben, und eine Anfrage, die ins Leere liefe, ist keine Aufgabe.
     delete process.env.HAENDLER;
     const { aufrufe } = welt();
 
@@ -246,6 +266,7 @@ describe("Ohne hinterlegte Händler", () => {
     expect(ergebnis.ok).toBe(true);
     expect(ergebnis.ohneHaendler).toBe(true);
     expect(ergebnis.anHaendler).toBe(0);
+    expect(ergebnis.wartetAufFreigabe).toBe(false);
     expect(briefe(aufrufe)).toHaveLength(0);
   });
 
@@ -282,7 +303,7 @@ describe("Nach dem Versand", () => {
   test("wandert der Vorgang auf „Anfrage raus“", async () => {
     const { aufrufe } = welt();
 
-    await bestaetigeListe("AUS-2026-001", "Am Sportplatz 14", "");
+    await bestaetigenUndFreigeben();
 
     const stufe = aufrufe.find(
       (a) =>
@@ -300,7 +321,7 @@ describe("Nach dem Versand", () => {
     // etwas bekommen hat.
     const { aufrufe } = welt({ resendGestoert: true });
 
-    const ergebnis = await bestaetigeListe("AUS-2026-001", "Am Sportplatz 14", "");
+    const ergebnis = await bestaetigenUndFreigeben();
 
     expect(ergebnis.anHaendler).toBe(0);
     const stufe = aufrufe.find(

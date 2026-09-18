@@ -3,9 +3,12 @@
 /**
  * Server Action von F3 · Liste bestätigen.
  *
- * Sie prüft das Token selbst, wie jede Action. Seit der Freigabe von M4 geht
- * hier auch die Anfrage an die Händler raus — ohne einen einzigen
- * Spielernamen (`anfrage.ts`).
+ * Sie prüft das Token selbst, wie jede Action.
+ *
+ * **Hier geht nichts mehr nach draußen.** Die Bestätigung stellt die Anfrage
+ * nur noch zur Freigabe (`freigabe.ts`); verschickt wird sie erst, wenn die
+ * Spartenleitung zustimmt. Ein Trainer soll die Mail an zwei echte
+ * Geschäftspartner nicht allein auslösen können.
  */
 
 import { pruefe } from "@/lib/links";
@@ -16,10 +19,14 @@ export type Ergebnis =
   | { stand: "leer" }
   | {
       stand: "bestaetigt";
-      /** An wie viele Haendler die Anfrage ging. 0 bei einem Groessencheck. */
+      /** An wie viele Haendler die Anfrage ging. Heute immer 0: erst die
+       *  Freigabe verschickt. Bleibt im Typ, weil eine automatische Freigabe
+       *  (freigabe.ts) direkt hier zuschlagen kann. */
       anHaendler: number;
-      /** Es ist kein Haendler hinterlegt – die Anfrage liegt bei der Spartenleitung. */
+      /** Es ist kein Haendler hinterlegt – es gibt nichts freizugeben. */
       ohneHaendler: boolean;
+      /** Die Anfrage liegt jetzt bei der Spartenleitung. */
+      wartetAufFreigabe: boolean;
     }
   | { stand: "fehler"; text: string };
 
@@ -77,5 +84,6 @@ export async function listeBestaetigen(
     stand: "bestaetigt",
     anHaendler: bestaetigt.anHaendler,
     ohneHaendler: bestaetigt.ohneHaendler,
+    wartetAufFreigabe: bestaetigt.wartetAufFreigabe,
   };
 }
