@@ -289,10 +289,6 @@ export async function bedarfMelden(_bisher: Ergebnis, formular: FormData): Promi
     statusLink: absolut(ergebnis.trainerStatus) ?? "",
     bestaetigenLink: absolut(ergebnis.bestaetigen) ?? undefined,
     ergaenzenLink: absolut(ergebnis.ergaenzen) ?? undefined,
-    personen: ergebnis.personen.map((p) => ({
-      name: p.name,
-      groessen: absolut(p.groessen) ?? "",
-    })),
   });
 
   // `/neu` hat kein Token. Die Namen und die persoenlichen Links bleiben

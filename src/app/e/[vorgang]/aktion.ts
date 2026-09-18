@@ -133,10 +133,6 @@ export async function angabenErgaenzen(
         groessenFrist,
         statusLink: absolut(ergebnis.trainerStatus) ?? "",
         bestaetigenLink: absolut(ergebnis.bestaetigen) ?? undefined,
-        personen: ergebnis.personen.map((p) => ({
-          name: p.name,
-          groessen: absolut(p.groessen) ?? "",
-        })),
       });
 
   return { stand: "fertig", ergebnis: { ...ergebnis, mailAn: mailAn ?? undefined } };

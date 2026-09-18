@@ -90,6 +90,15 @@ export async function sendeMail({ an, betreff, text, html }: Mail): Promise<stri
   }
 }
 
+/**
+ * „2026-09-19“ wird „19.09.“ — das Formular liefert ISO, die Mail liest ein
+ * Mensch. Was schon kurz ist, bleibt, wie es ist.
+ */
+function kurzesDatum(wert: string): string {
+  const treffer = /^(\d{4})-(\d{2})-(\d{2})$/.exec(wert.trim());
+  return treffer ? `${treffer[3]}.${treffer[2]}.` : wert;
+}
+
 /** „Hallo Kai" oder schlicht „Hallo". Ein leerer Name darf nicht auffallen. */
 function anrede(vorname: string): string {
   return vorname.trim() ? `Hallo ${vorname.trim()},` : "Hallo,";
@@ -104,9 +113,8 @@ export type M1Daten = {
   vorname: string;
   mannschaft: string;
   artikel: { name: string; detail: string }[];
-  /** Nur im vollständigen Modus: Frist und die Links für die Mannschaft. */
+  /** Nur im vollständigen Modus. */
   groessenFrist?: string;
-  personen?: { name: string; groessen: string }[];
   /** Der Vorgang bestellt nichts, er sammelt nur Groessen ein. */
   nurGroessen?: boolean;
   statusLink: string;
@@ -154,7 +162,7 @@ function m1Voranfrage(d: M1Daten): { betreff: string; rahmen: Rahmen } {
 
 /** M1 für den vollständigen Weg: die Größenabfrage läuft ab sofort. */
 function m1Vollstaendig(d: M1Daten): { betreff: string; rahmen: Rahmen } {
-  const frist = d.groessenFrist ?? "zur Frist";
+  const frist = kurzesDatum(d.groessenFrist ?? "") || "zur Frist";
   // Ein Groessencheck hat keine Artikel und geht an keinen Haendler. Der Satz
   // „erst nach deiner Bestaetigung geht die Anfrage raus“ waere dort eine
   // Ankuendigung, die nie eintritt.
@@ -167,7 +175,10 @@ function m1Vollstaendig(d: M1Daten): { betreff: string; rahmen: Rahmen } {
       titel: "Die Größenabfrage läuft",
       vorschau: `${d.mannschaft}: Größen bitte bis ${frist} eintragen.`,
       bloecke: [
-        { art: "absatz", text: `${anrede(d.vorname)} deine Angaben sind vollständig. Bitte gib die Nummer ${d.vorgang} bei allen Rückfragen an.` },
+        {
+          art: "absatz",
+          text: `${anrede(d.vorname)} deine Angaben für ${d.mannschaft} sind vollständig. Bitte gib die Nummer ${d.vorgang} bei allen Rückfragen an.`,
+        },
         ...(nur
           ? ([
               {
@@ -183,7 +194,7 @@ function m1Vollstaendig(d: M1Daten): { betreff: string; rahmen: Rahmen } {
         {
           art: "schritte",
           punkte: [
-            "Schick den Text unten in die Elterngruppe, die persönlichen Links stehen schon drin.",
+            "Öffne deine Statusseite und verschick die Größen-Mail. Dort hakst du an, wer eine bekommen soll — jede Person bekommt ihren eigenen Link.",
             `Größen bitte bis ${frist} eintragen.`,
             ...(nur
               ? ["Wenn alle eingetragen haben, prüfst du die Liste. Danach ist der Vorgang fertig – bestellt wird nichts."]
@@ -193,26 +204,17 @@ function m1Vollstaendig(d: M1Daten): { betreff: string; rahmen: Rahmen } {
                 ]),
           ],
         },
-        { art: "knopf", text: "Liste prüfen und bestätigen", href: d.bestaetigenLink ?? d.statusLink },
-        { art: "titel", text: "Text für die Elterngruppe" },
+        { art: "knopf", text: "Größen-Mail verschicken", href: d.statusLink },
         {
-          art: "zitat",
+          art: "absatz",
+          text: "Wer keine E-Mail-Adresse hinterlegt hat, steht dort grau in der Liste — diese Größen trägst du selbst ein.",
+        },
+        {
+          art: "links",
           zeilen: [
-            "Hallo zusammen,",
-            nur
-              ? `für ${d.mannschaft} sammeln wir gerade die aktuellen Größen ein. Bestellt wird damit nichts.`
-              : `für ${d.mannschaft} wird neue Ausstattung angefragt: ${d.artikel.map((a) => a.name).join(", ")}.`,
-            nur
-              ? `Bitte tragt bis ${frist} über den persönlichen Link die aktuelle Größe eures Kindes ein. Das dauert eine Minute.`
-              : `Bitte tragt bis ${frist} über den persönlichen Link die aktuelle Größe eures Kindes ein. Das dauert eine Minute. Beflockte Sachen können nicht umgetauscht werden, im Zweifel lieber eine Nummer größer.`,
-            "",
-            ...(d.personen ?? []).map((p) => `${p.name}: ${p.groessen}`),
-            "",
-            "Danke!",
-            d.vorname.trim() || "Euer Trainer",
+            { name: "Liste prüfen und bestätigen", href: d.bestaetigenLink ?? d.statusLink },
           ],
         },
-        { art: "links", zeilen: [{ name: "Deine Statusseite", href: d.statusLink }] },
         ...(nur
           ? ([] as Rahmen["bloecke"])
           : ([
@@ -258,10 +260,11 @@ export type M2aDaten = {
  * sonst noch in der Mannschaft ist, geht sie nichts an (CLAUDE.md).
  */
 export async function sendeM2a(an: string, d: M2aDaten): Promise<string | null> {
+  const frist = kurzesDatum(d.frist);
   const rahmen: Rahmen = {
     eyebrow: `Vorgang ${d.vorgang}`,
     titel: "Deine Größe fehlt noch",
-    vorschau: `${d.mannschaft}: ${d.arten} bitte bis ${d.frist} eintragen.`,
+    vorschau: `${d.mannschaft}: ${d.arten} bitte bis ${frist} eintragen.`,
     bloecke: [
       {
         art: "absatz",
@@ -273,7 +276,7 @@ export async function sendeM2a(an: string, d: M2aDaten): Promise<string | null> 
       },
       {
         art: "absatz",
-        text: `Bitte trag sie bis ${d.frist} ein. Das dauert eine Minute.`,
+        text: `Bitte trag sie bis ${frist} ein. Das dauert eine Minute.`,
       },
       { art: "knopf", text: "Größe eintragen", href: d.groessenLink },
       {
@@ -291,7 +294,7 @@ export async function sendeM2a(an: string, d: M2aDaten): Promise<string | null> 
 
   return sendeMail({
     an,
-    betreff: `${d.mannschaft}: Größe bitte bis ${d.frist} eintragen`,
+    betreff: `${d.mannschaft}: Größe bitte bis ${frist} eintragen`,
     text: alsText(rahmen),
     html: alsHtml(rahmen),
   });

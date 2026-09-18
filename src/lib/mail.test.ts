@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { sendeM1, sendeMail, type M1Daten } from "./mail";
+import { sendeM1, sendeM2a, sendeMail, type M1Daten } from "./mail";
 
 /**
  * Eine Mail wird als Liste von Blöcken beschrieben, nicht als HTML. Daraus
@@ -32,10 +32,10 @@ function daten(mehr: Partial<M1Daten> = {}): M1Daten {
     vorname: "Kai",
     mannschaft: "Ü40 Team 3",
     artikel: [{ name: "adidas Trainingsjacke", detail: "1 Stück je Person" }],
-    groessenFrist: "30.09.",
+    // So, wie es aus dem Formular kommt: ISO. Die Mail liest ein Mensch.
+    groessenFrist: "2026-09-30",
     statusLink: "https://zz.example.invalid/v/AUS-2026-001?t=abc",
     bestaetigenLink: "https://zz.example.invalid/b/AUS-2026-001?t=def",
-    personen: [{ name: "ZZ Eins", groessen: "https://zz.example.invalid/g/AUS-2026-001/111?t=ghi" }],
     ...mehr,
   };
 }
@@ -62,13 +62,7 @@ describe("Beide Fassungen tragen dieselbe Substanz", () => {
     await sendeM1("zz@example.invalid", daten());
     const { text, html } = brief();
 
-    for (const inhalt of [
-      "AUS-2026-001",
-      "adidas Trainingsjacke",
-      "30.09.",
-      "ZZ Eins",
-      "Ü40 Team 3",
-    ]) {
+    for (const inhalt of ["AUS-2026-001", "adidas Trainingsjacke", "30.09.", "Ü40 Team 3"]) {
       expect(html, `im HTML: ${inhalt}`).toContain(inhalt);
       expect(text, `im Text: ${inhalt}`).toContain(inhalt);
     }
@@ -80,7 +74,7 @@ describe("Beide Fassungen tragen dieselbe Substanz", () => {
 
     // Abgeschnitten wäre schlimmer als gar nicht da: niemand merkt es.
     expect(text).toContain("https://zz.example.invalid/v/AUS-2026-001?t=abc");
-    expect(text).toContain("https://zz.example.invalid/g/AUS-2026-001/111?t=ghi");
+    expect(text).toContain("https://zz.example.invalid/b/AUS-2026-001?t=def");
   });
 
   test("die Textfassung ist Text, kein halbes HTML", async () => {
@@ -107,21 +101,41 @@ describe("Fremder Text wird nicht zu Markup", () => {
 });
 
 describe("Die drei Zuschnitte von M1", () => {
-  test("vollständig: Größen-Links und ein Text für die Elterngruppe", async () => {
+  test("vollständig: weiter zur Statusseite, keine fremden Links", async () => {
+    // M1 trug bis hierher die Größen-Links der ganzen Mannschaft und dazu einen
+    // fertigen Text zum Weiterleiten in die Elterngruppe. Jeder dieser Links
+    // öffnet die Größen genau einer Person; einmal weitergeleitet, hat ihn die
+    // halbe Elternschaft. Verschickt werden sie jetzt einzeln, über die
+    // Statusseite (`sendeM2a`).
     await sendeM1("zz@example.invalid", daten());
-    const { subject, text } = brief();
+    const { subject, text, html } = brief();
 
     expect(subject).toContain("AUS-2026-001");
-    expect(text).toContain("Elterngruppe");
+    expect(text).toContain("Größen-Mail verschicken");
+    expect(text).toContain("https://zz.example.invalid/v/AUS-2026-001?t=abc");
     expect(text).toContain("Intersport Uelzen");
     expect(text).toContain("Bestellt wird erst");
+
+    // Kein persönlicher Größen-Link und keine Anleitung zum Weitergeben.
+    for (const fassung of [text, html]) {
+      expect(fassung).not.toContain("/g/");
+      expect(fassung).not.toContain("Elterngruppe");
+    }
+  });
+
+  test("die Frist steht deutsch da, nicht als ISO-Datum", async () => {
+    // Im ersten echten Versand stand „Größen bitte bis 2026-09-19 eintragen“.
+    await sendeM1("zz@example.invalid", daten());
+    const { text } = brief();
+
+    expect(text).toContain("30.09.");
+    expect(text).not.toContain("2026-09-30");
   });
 
   test("Voranfrage: niemand ist angeschrieben worden", async () => {
     await sendeM1("zz@example.invalid", {
       ...daten(),
       ergaenzenLink: "https://zz.example.invalid/e/AUS-2026-001?t=jkl",
-      personen: [],
       bestaetigenLink: undefined,
     });
     const { text } = brief();
@@ -139,6 +153,39 @@ describe("Die drei Zuschnitte von M1", () => {
     // Ein Größencheck geht an keinen Händler.
     expect(text).not.toContain("Intersport Uelzen");
     expect(text).not.toContain("Bestellt wird erst");
+  });
+});
+
+describe("M2a · der persönliche Größen-Link", () => {
+  function m2a(mehr: Partial<Parameters<typeof sendeM2a>[1]> = {}) {
+    return sendeM2a("zz@example.invalid", {
+      vorgang: "AUS-2026-001",
+      vorname: "Kai",
+      mannschaft: "Ü40 Team 3",
+      arten: "Oberteil und Trainingshose",
+      frist: "2026-09-30",
+      nurGroessen: false,
+      groessenLink: "https://zz.example.invalid/g/AUS-2026-001/111?t=ghi",
+      ...mehr,
+    });
+  }
+
+  test("Betreff, Vorschau und Text nennen die Frist deutsch", async () => {
+    await m2a();
+    const { subject, text } = brief();
+
+    expect(subject).toContain("30.09.");
+    expect(subject).not.toContain("2026-09-30");
+    expect(text).toContain("30.09.");
+    expect(text).not.toContain("2026-09-30");
+  });
+
+  test("nur der eigene Link, kein fremder Name", async () => {
+    await m2a();
+    const { text } = brief();
+
+    expect(text).toContain("https://zz.example.invalid/g/AUS-2026-001/111?t=ghi");
+    expect(text).toContain("gilt nur für dich");
   });
 });
 

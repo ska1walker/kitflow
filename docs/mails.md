@@ -12,48 +12,50 @@ Reply-To: kai.boehm@eintrachtmunster.de – dort landen Antworten, Angebote und 
 
 ## M1 · Vorgang angelegt (AUS-1 → Trainer)
 
+Gebaut: `sendeM1` in `src/lib/mail.ts`, drei Zuschnitte (Voranfrage · vollständig · Größencheck).
+
 **Betreff:** {{vorgang}} · Größenabfrage für {{mannschaft}} läuft
 
 Hallo {{trainer_vorname}},
 
-danke für deine Meldung. Dein Vorgang hat die Nummer **{{vorgang}}**. Bitte gib sie bei allen Rückfragen an.
+deine Angaben für {{mannschaft}} sind vollständig. Bitte gib die Nummer **{{vorgang}}** bei allen Rückfragen an.
 
 **Was angefragt wird**
 {{artikelliste}}
 
 **So geht es weiter**
-1. Unten findest du für jede Spielerin und jeden Spieler einen persönlichen Link. Schick den Text für die Elterngruppe weiter, die Links stehen schon drin.
+1. Öffne deine Statusseite und verschick die Größen-Mail. Dort hakst du an, wer eine bekommen soll — jede Person bekommt ihren eigenen Link.
 2. Größen bitte bis **{{groessen_frist}}** eintragen.
-3. Wenn alle eingetragen haben, bekommst du die Liste zum Prüfen. Erst nach deiner Bestätigung geht die Anfrage an Intersport Uelzen und 11teamsports.
+3. Wenn alle eingetragen haben, prüfst du die Liste. Erst nach deiner Bestätigung geht die Anfrage an Intersport Uelzen und 11teamsports.
 4. Die Angebote kommen in Kopie an dich.
 
-**Deine eigenen Links**
-Bei dir kannst du zusätzlich Rückennummern vergeben und Spieler für diese Runde herausnehmen:
-{{trainer_links}}
+[Größen-Mail verschicken] → {{status_link}}
+
+Wer keine E-Mail-Adresse hinterlegt hat, steht dort grau in der Liste — diese Größen trägst du selbst ein.
+
+Liste prüfen und bestätigen: {{bestaetigen_link}}
 
 **Wichtig zur Bezahlung**
-Bestellt wird erst, wenn die Finanzierung steht und das Geld da ist. Wie das genau läuft, steht im Merkblatt im Anhang.
+Bestellt wird erst, wenn die Finanzierung steht und das Geld da ist. Zahlt der Verein, muss das Geld auf dem Vereinskonto sein. Legt die Mannschaft aus, überweist sie vorab direkt an den Händler.
 
 Sportliche Grüße
 Kai Böhm
 Spartenleiter Fußball · Eintracht Munster
 
-*Anhang: Merkblatt_Zahlwege.pdf*
+**M1 trägt keinen einzigen persönlichen Größen-Link.** Jeder dieser Links öffnet die Größen genau einer Person; stünden sie in M1, hinge die ganze Mannschaft an einer Mail, die weitergeleitet wird. Verschickt werden sie einzeln über die Statusseite, als M2a.
+
+Die Frist steht deutsch (`19.09.`), nicht als ISO-Datum. Das Formular liefert `2026-09-19`; `kurzesDatum` in `mail.ts` setzt es um. Im ersten echten Versand stand die Rohfassung in der Mail.
 
 ---
 
-## M1a · Text für die Elterngruppe (Baustein in M1)
+## M1a · Text für die Elterngruppe — **abgeschafft**
 
-> Hallo zusammen,
-> für {{mannschaft}} wird neue Ausstattung angefragt: {{artikel_kurz}}.
-> Bitte tragt bis {{groessen_frist}} über den persönlichen Link die aktuelle Größe eures Kindes ein. Das dauert eine Minute. Beflockte Sachen können nicht umgetauscht werden, im Zweifel lieber eine Nummer größer.
->
-> {{liste_name_link}}
->
-> Danke!
-> {{trainer_vorname}}
+M1 trug einen fertigen Absatz zum Weiterleiten in die Elterngruppe, mit je einer Zeile „Vorname
+Nachname: Link“. Das war zweimal falsch: es verteilte die Namen einer ganzen Jugendmannschaft in
+eine Gruppe, und jeder dieser Links ist ein Zugang zu den Größen einer einzelnen Person.
 
-`{{liste_name_link}}` = je Zeile „Vorname Nachname: Link“. Make baut die Zeilen aus den verknüpften Spielern.
+Ersetzt durch M2a: eine Mail je Person, mit genau deren Link. Der Trainer wählt auf der
+Statusseite aus, wer sie bekommt (`src/components/mail-karte.tsx`).
 
 ---
 
