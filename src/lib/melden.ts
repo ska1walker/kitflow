@@ -88,6 +88,19 @@ export type Aufgabe = {
  *
  * Ohne `TODOIST_PROJEKT` landet die Aufgabe im Posteingang. Das ist kein
  * Fehler, sondern der brauchbarere Ausfall: gesehen wird sie dort auch.
+ *
+ * **Warum `/api/v1/` und nicht `/rest/v2/`.** Die Projekt-ID dieses Kontos ist
+ * `6f8v4J3qcVwmhc7M` — alphanumerisch, das neue Format. So steht sie im
+ * laufenden Make-Szenario „Kosten einreichen“, und so gibt Todoist sie auch
+ * sonst heraus. REST v2 ist die abgekündigte Schnittstelle mit numerischen IDs;
+ * ihr eine Kennung im neuen Format zu schicken, hätte sehr wahrscheinlich einen
+ * 400er ergeben.
+ *
+ * **Nicht geprüft**: `api.todoist.com` und `developer.todoist.com` sind aus der
+ * Entwicklungsumgebung gesperrt. Der Pfad ist nach dem ID-Format geschlossen,
+ * nicht nachgelesen. Fällt er falsch aus, kostet das keine Freigabe — es steht
+ * dann „Todoist hat die Aufgabe nicht angelegt“ im Verlauf, und der Status-Code
+ * im Log sagt, was zu ändern ist.
  */
 export async function todoist(aufgabe: Aufgabe): Promise<string | null> {
   const token = process.env.TODOIST_TOKEN;
@@ -99,7 +112,7 @@ export async function todoist(aufgabe: Aufgabe): Promise<string | null> {
   if (process.env.TODOIST_PROJEKT) koerper.project_id = process.env.TODOIST_PROJEKT;
 
   try {
-    const antwort = await fetch("https://api.todoist.com/rest/v2/tasks", {
+    const antwort = await fetch("https://api.todoist.com/api/v1/tasks", {
       method: "POST",
       headers: {
         authorization: `Bearer ${token}`,
