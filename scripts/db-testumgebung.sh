@@ -17,7 +17,7 @@ fehlt() { echo "FEHLT: $1"; echo "   $2"; exit 1; }
 
 command -v psql >/dev/null || fehlt "psql" "apt-get install -y postgresql-16"
 [ -d /usr/lib/postgresql ] || fehlt "PostgreSQL-Server" "apt-get install -y postgresql-16"
-mkdir -p "$ARBEIT"
+mkdir -p "$ARBEIT" "$ARBEIT/ablage"
 
 if [ ! -x "$ARBEIT/postgrest" ]; then
   echo "PostgREST fehlt, wird geholt ..."
@@ -72,7 +72,54 @@ CONF
 # Adapter schneidet nur das Praefix ab, damit der echte Pfad aus db.ts laeuft.
 cat > "$ARBEIT/adapter.mjs" <<'JS'
 import { createServer, request } from "node:http";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import path from "node:path";
+
+// Dazu die Ablage: Supabase Storage ist aus der Bauumgebung gesperrt (403 vom
+// Proxy). Hier liegen die Dateien auf der Platte, und nachgestellt sind genau
+// die drei Aufrufe, die src/lib/ablage.ts wirklich schickt.
+const ABLAGE = process.env.ABLAGE_VERZEICHNIS ?? "/tmp/kitflow-db-test/ablage";
+const EIMER = "/storage/v1/object/kitflow/";
+
+/** Kein ../ aus dem Eimer heraus — dieselbe Sorgfalt wie im Echten. */
+function imEimer(p) {
+  const ziel = path.resolve(ABLAGE, p);
+  return ziel.startsWith(ABLAGE + path.sep) ? ziel : null;
+}
+
+async function ablage(ein, aus, pfad) {
+  const datei = imEimer(decodeURIComponent(pfad));
+  if (!datei) { aus.writeHead(400); return aus.end("pfad"); }
+  try {
+    if (ein.method === "POST" || ein.method === "PUT") {
+      const stuecke = [];
+      for await (const s of ein) stuecke.push(s);
+      await mkdir(path.dirname(datei), { recursive: true });
+      await writeFile(datei, Buffer.concat(stuecke));
+      await writeFile(datei + ".typ", ein.headers["content-type"] ?? "image/png");
+      aus.writeHead(200, { "content-type": "application/json" });
+      return aus.end(JSON.stringify({ Key: "kitflow/" + pfad }));
+    }
+    if (ein.method === "DELETE") {
+      await rm(datei, { force: true });
+      await rm(datei + ".typ", { force: true });
+      aus.writeHead(200, { "content-type": "application/json" });
+      return aus.end("{}");
+    }
+    const inhalt = await readFile(datei);
+    const typ = await readFile(datei + ".typ", "utf8").catch(() => "image/png");
+    aus.writeHead(200, { "content-type": typ, "content-length": inhalt.length });
+    return aus.end(inhalt);
+  } catch {
+    aus.writeHead(404);
+    return aus.end("");
+  }
+}
+
 createServer((ein, aus) => {
+  const ohneSuche = ein.url.split("?")[0];
+  if (ohneSuche.startsWith(EIMER)) return ablage(ein, aus, ohneSuche.slice(EIMER.length));
+
   const pfad = ein.url.replace(/^\/rest\/v1/, "") || "/";
   const weiter = request(
     { host: "127.0.0.1", port: 3333, path: pfad, method: ein.method,

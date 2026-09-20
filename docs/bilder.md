@@ -90,6 +90,27 @@ ein Bild, das der Trainer gerade weggenommen hat.
 Danach ein Bild hochladen und die Größenabfrage einer Testperson öffnen. Das ist
 der Punkt, an dem sich entscheidet, ob die Annahmen unten stimmen.
 
+## Im Browser geprüft
+
+`npm run test:ui` fährt die Karte mit Playwright durch — 22 Prüfungen: hochladen,
+ersetzen, entfernen, das getarnte PDF, die Größengrenze, ob das Vorschaubild
+wirklich lädt (`naturalWidth > 0`) und ob `/api/bild` ohne Token 404 gibt.
+
+Voraussetzung sind `bash scripts/db-testumgebung.sh` (Postgres, PostgREST und
+die Ablage-Attrappe) und ein laufendes `npx next start`. Nicht Teil der
+PR-Prüfung — die bleibt netzfrei.
+
+**Der Lauf hat sich sofort bezahlt gemacht.** Er fand, was kein Unit-Test finden
+konnte: **Next kappt den Körper einer Server Action bei 1 MB**, und diese Absage
+erreicht den eigenen Code nie. Die Grenze in `ablage.ts` war damit unerreichbar,
+und statt „höchstens 2 MB" brach die Seite mit „This page couldn't load" ab.
+
+Ein Handyfoto hat 3 bis 8 MB. Das hätte **jeden** Trainer getroffen, der ein Foto
+seiner Trainingsjacke hochlädt. Zwei Änderungen: `serverActions.bodySizeLimit`
+steht jetzt über der eigenen Grenze, und das Formular misst schon im Browser, so
+dass eine zu große Datei gar nicht erst losgeschickt wird. Die Prüfung im Browser
+ist Höflichkeit, die in `ablage.ts` bleibt die Sicherung.
+
 ## Was hier nicht geprüft ist
 
 **Supabase Storage selbst.** `*.supabase.co` ist aus der Bauumgebung gesperrt

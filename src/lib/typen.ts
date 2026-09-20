@@ -231,3 +231,17 @@ export function pruefeInitialen(roh: string): { wert: string } | { fehler: strin
   }
   return { wert };
 }
+
+/**
+ * Die Grenze fuer hochgeladene Bilder: 2 MB.
+ *
+ * Steht hier und nicht in `ablage.ts`, weil der Browser sie auch braucht. Das
+ * ist kein Komfort: Next kappt den Koerper einer Server Action, und diese
+ * Absage erreicht den eigenen Code nie — die Seite bricht mit „This page
+ * couldn't load" ab. Ein Handyfoto hat 3 bis 8 MB, das traefe einen Trainer
+ * also regelmaessig. Deshalb wird im Browser gemessen, bevor etwas losgeht.
+ *
+ * Die Pruefung im Browser ist Hoeflichkeit, die Grenze in `ablage.ts` ist die
+ * Sicherung. Wer das Formular umbaut, kommt an der zweiten nicht vorbei.
+ */
+export const BILD_GRENZE_BYTES = 2 * 1024 * 1024;

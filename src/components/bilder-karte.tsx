@@ -1,9 +1,9 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { bildSetzen, type BildErgebnis } from "@/app/v/[vorgang]/aktion";
 import { Button, Card } from "./ui";
-import type { Artikel } from "@/lib/typen";
+import { BILD_GRENZE_BYTES, type Artikel } from "@/lib/typen";
 
 /**
  * Bilder zum Vorgang: das Sponsorlogo für den Händler und Produktfotos für die
@@ -54,6 +54,15 @@ function Feld({
   const daIst =
     ergebnis.stand === "gespeichert" ? true : ergebnis.stand === "entfernt" ? false : vorhanden;
 
+  // **Im Browser messen, bevor etwas losgeht.** Next kappt den Körper einer
+  // Server Action; diese Absage erreicht die Action nie, und die Seite bricht
+  // mit „This page couldn't load" ab — der Trainer sähe nicht, was los ist.
+  // Ein Handyfoto hat 3 bis 8 MB, das träfe ihn also regelmäßig.
+  //
+  // Die Prüfung in `ablage.ts` bleibt: die hier ist Höflichkeit, jene ist die
+  // Sicherung.
+  const [zuGross, setZuGross] = useState(false);
+
   return (
     <form action={absenden} className="flex flex-col gap-2 border-t border-ink-100 pt-4">
       <input type="hidden" name="art" value={art} />
@@ -89,9 +98,10 @@ function Feld({
           type="file"
           name="bild"
           accept="image/png,image/jpeg,image/webp"
+          onChange={(e) => setZuGross((e.target.files?.[0]?.size ?? 0) > BILD_GRENZE_BYTES)}
           className="min-w-0 flex-1 text-xs text-ink-600 file:mr-3 file:rounded-lg file:border-0 file:bg-ink-100 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-ink-800"
         />
-        <Button type="submit" disabled={laeuft}>
+        <Button type="submit" disabled={laeuft || zuGross}>
           {laeuft ? "…" : daIst ? "Ersetzen" : "Hochladen"}
         </Button>
         {daIst && (
@@ -107,7 +117,13 @@ function Feld({
         )}
       </div>
 
-      {ergebnis.stand === "fehler" && (
+      {zuGross && (
+        <p className="text-xs text-red-700">
+          Das Bild ist zu groß. Bitte höchstens 2 MB – ein Handyfoto muss meist verkleinert
+          werden.
+        </p>
+      )}
+      {!zuGross && ergebnis.stand === "fehler" && (
         <p className="text-xs text-red-700">{ergebnis.text}</p>
       )}
       {ergebnis.stand === "gespeichert" && (

@@ -21,6 +21,8 @@ import "server-only";
  * aus der Statusseite heraus gerufen, hinter dem Trainer-Link.
  */
 
+import { BILD_GRENZE_BYTES } from "./typen";
+
 const EIMER = "kitflow";
 
 /** Was angenommen wird. Alles andere wird abgewiesen, bevor es hochgeht. */
@@ -42,7 +44,7 @@ const ERLAUBT: Record<string, Uint8Array[]> = {
  * weist zu große Dateien ab, statt sie klaglos anzunehmen und langsam
  * auszuliefern.
  */
-export const GRENZE_BYTES = 2 * 1024 * 1024;
+export const GRENZE_BYTES = BILD_GRENZE_BYTES;
 
 const ZEITGRENZE_MS = 15_000;
 

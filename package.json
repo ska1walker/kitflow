@@ -12,7 +12,8 @@
     "hubspot-setup": "node --use-env-proxy scripts/hubspot-setup.mjs",
     "link": "node scripts/link.mjs",
     "test:db": "vitest run --config vitest.echt.mts",
-    "test:browser": "playwright test"
+    "test:browser": "playwright test",
+    "test:ui": "node test-ui/bilder.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",
