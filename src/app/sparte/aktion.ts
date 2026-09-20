@@ -20,11 +20,14 @@ import { authClient, spartenLeitung } from "@/lib/anmeldung";
 import { dbAktiv } from "@/lib/db";
 import {
   aendereVorgang,
+  setzeAngebot,
   setzeFreigabe,
   setzeStufe,
   vermerke,
   vorgangPerNummer,
+  type HaendlerSpalte,
 } from "@/lib/vorgaenge-db";
+import { GRENZE_BYTES, lade, ladeFehlerText } from "@/lib/ablage";
 import { gibFrei, lehneAb, type FreigabeGrund } from "@/lib/vorgaenge";
 import { istGedeckt } from "@/lib/ansicht";
 import { spiegele } from "@/lib/spiegel";
@@ -355,4 +358,190 @@ export async function ablehnen(
   }
 
   return { stand: "gestoppt", nummer: zugang.nummer };
+}
+
+/* ------------------------------------------------------------------ *
+ * Angebote der Händler
+ * ------------------------------------------------------------------ */
+
+export type AngebotStand =
+  | { stand: "leer" }
+  | { stand: "fertig"; nummer: string; haendler: string; beide: boolean }
+  | { stand: "gewaehlt"; nummer: string; haendler: string }
+  | { stand: "fehler"; text: string };
+
+/** Der Anzeigename der Händler auf die Spalten der Datenbank. */
+const SPALTE: Record<string, HaendlerSpalte> = {
+  "Intersport Uelzen": "intersport",
+  "11teamsports": "11teamsports",
+};
+
+/**
+ * Ein Angebot eintragen.
+ *
+ * **Warum von Hand und nicht als Upload-Strecke für die Händler.** Bormann und
+ * Hillebrecht schicken seit Jahren PDFs per Mail; ob sie stattdessen einen Link
+ * benutzen, entscheidet kein Code, sondern ein Gespräch. Und zwei Angebote ein
+ * paar Mal im Jahr abzutippen sind Minuten. Sobald die Frage geklärt ist, kann
+ * derselbe Weg auch von außen bedient werden — geschrieben wird dann dasselbe.
+ *
+ * Das PDF ist freiwillig, aber der eigentliche Gewinn: ohne es lag das Angebot
+ * in einem Postfach, und wer später wissen wollte, warum dort 840 Euro stehen,
+ * musste im Mailarchiv suchen.
+ *
+ * **Leer heißt streichen.** Das Formular schickt immer alle Felder; ein
+ * geleertes Feld korrigiert einen Tippfehler, statt ihn stehen zu lassen.
+ */
+export async function angebotSetzen(
+  _bisher: AngebotStand,
+  formular: FormData,
+): Promise<AngebotStand> {
+  const zugang = await werUndNummer(formular);
+  if ("text" in zugang) return { stand: "fehler", text: zugang.text };
+
+  const haendler = String(formular.get("haendler") ?? "");
+  const spalte = SPALTE[haendler];
+  if (!spalte) return { stand: "fehler", text: "Bitte einen Händler wählen." };
+
+  const abruf = await vorgangPerNummer(zugang.nummer);
+  if (abruf.stand === "gestoert") return { stand: "fehler", text: NICHT_ERREICHBAR };
+  if (abruf.stand !== "da") {
+    return { stand: "fehler", text: `Vorgang ${zugang.nummer} gibt es nicht.` };
+  }
+  const vorgang = abruf.vorgang;
+
+  // Vor der Anfrage gibt es nichts anzubieten. Ein Angebot an einem Vorgang auf
+  // Stufe 1 waere entweder ein Tippfehler oder ein Angebot, das niemand
+  // angefragt hat — beides will man merken, nicht speichern.
+  if (vorgang.stufe < 2) {
+    return { stand: "fehler", text: `Für ${zugang.nummer} ist noch keine Anfrage raus.` };
+  }
+
+  const roh = String(formular.get("betrag") ?? "").trim().replace(",", ".");
+  let betrag: number | null = null;
+  if (roh) {
+    const zahl = Number(roh);
+    if (!Number.isFinite(zahl) || zahl <= 0) {
+      return { stand: "fehler", text: "Der Betrag sieht nicht wie eine Zahl aus." };
+    }
+    betrag = Math.round(zahl * 100) / 100;
+  }
+
+  // Das PDF zuerst: liegt es nicht, soll auch kein Betrag dastehen, der auf ein
+  // Angebot verweist, das niemand nachlesen kann.
+  let datei: string | undefined;
+  const hochgeladen = formular.get("datei");
+  if (hochgeladen instanceof File && hochgeladen.size > 0) {
+    if (hochgeladen.size > GRENZE_BYTES) {
+      return { stand: "fehler", text: ladeFehlerText("zu_gross") };
+    }
+    const ergebnis = await lade(
+      "angebot",
+      `${vorgang.id}-${spalte}`,
+      new Uint8Array(await hochgeladen.arrayBuffer()),
+      "bild_oder_pdf",
+    );
+    if (!ergebnis.ok) {
+      const text =
+        ergebnis.grund === "falscher_typ"
+          ? "Nur ein PDF oder ein Bild."
+          : ladeFehlerText(ergebnis.grund);
+      return { stand: "fehler", text };
+    }
+    datei = ergebnis.pfad;
+  }
+
+  const gesetzt = await setzeAngebot(vorgang.id, spalte, {
+    betrag,
+    am: String(formular.get("am") ?? ""),
+    gueltigBis: String(formular.get("gueltig_bis") ?? ""),
+    lieferzeit: String(formular.get("lieferzeit") ?? ""),
+    abweichung: String(formular.get("abweichung") ?? ""),
+    ...(datei ? { datei } : {}),
+  });
+  if (!gesetzt) return { stand: "fehler", text: NICHT_GEKLAPPT };
+
+  await vermerke(vorgang.id, {
+    art: "angebot",
+    text: betrag
+      ? `Angebot von ${haendler}: ${betrag.toFixed(2)} €${datei ? " (mit PDF)" : ""}`
+      : `Angebot von ${haendler} zurückgenommen`,
+    sub: zugang.wer,
+    intern: true,
+    abStufe: 2,
+  });
+
+  // Beide da und der Vorgang noch auf „Anfrage raus“? Dann ist er weiter. Das
+  // ist der einzige Stufenwechsel zwischen 2 und 8, der sich aus den Daten
+  // ergibt statt aus einer Meinung — alles andere bleibt Handarbeit.
+  const frisch = await vorgangPerNummer(zugang.nummer);
+  let beide = false;
+  if (frisch.stand === "da") {
+    const a = frisch.vorgang.angebote;
+    beide = Boolean(a.intersport.betrag && a.elfteamsports.betrag);
+    if (beide && frisch.vorgang.stufe === 2) {
+      await setzeStufe(frisch.vorgang.id, 3);
+      await vermerke(frisch.vorgang.id, {
+        art: "stufe-gesetzt",
+        text: "Beide Angebote sind da",
+        sub: zugang.wer,
+        intern: true,
+        abStufe: 2,
+      });
+    }
+    await spiegele(frisch.vorgang);
+  }
+
+  return { stand: "fertig", nummer: zugang.nummer, haendler, beide };
+}
+
+/**
+ * Den Händler wählen, bei dem bestellt wird.
+ *
+ * Damit steht erst der Betrag fest, an dem die Deckung gemessen wird
+ * (`istGedeckt`). Ohne diese Wahl ist jeder Vorgang ungedeckt — das war bis
+ * zum 20.09.2026 der Zustand, weil es die Wahl nirgends gab.
+ */
+export async function lieferantWaehlen(
+  _bisher: AngebotStand,
+  formular: FormData,
+): Promise<AngebotStand> {
+  const zugang = await werUndNummer(formular);
+  if ("text" in zugang) return { stand: "fehler", text: zugang.text };
+
+  const haendler = String(formular.get("haendler") ?? "");
+  if (!SPALTE[haendler]) return { stand: "fehler", text: "Bitte einen Händler wählen." };
+
+  const abruf = await vorgangPerNummer(zugang.nummer);
+  if (abruf.stand === "gestoert") return { stand: "fehler", text: NICHT_ERREICHBAR };
+  if (abruf.stand !== "da") {
+    return { stand: "fehler", text: `Vorgang ${zugang.nummer} gibt es nicht.` };
+  }
+
+  // Ohne Betrag ist die Wahl leer: die Deckung haette nichts zu messen, und der
+  // Vorgang saehe gewaehlt aus, ohne es zu sein.
+  const satz = abruf.vorgang;
+  const betrag =
+    SPALTE[haendler] === "intersport"
+      ? satz.angebote.intersport.betrag
+      : satz.angebote.elfteamsports.betrag;
+  if (!betrag) {
+    return { stand: "fehler", text: `Für ${haendler} steht noch kein Betrag.` };
+  }
+
+  if (!(await aendereVorgang(satz.id, { lieferantGewaehlt: haendler }))) {
+    return { stand: "fehler", text: NICHT_GEKLAPPT };
+  }
+  await vermerke(satz.id, {
+    art: "angebot",
+    text: `${haendler} gewählt (${betrag.toFixed(2)} €)`,
+    sub: zugang.wer,
+    intern: true,
+    abStufe: 3,
+  });
+
+  const frisch = await vorgangPerNummer(zugang.nummer);
+  if (frisch.stand === "da") await spiegele(frisch.vorgang);
+
+  return { stand: "gewaehlt", nummer: zugang.nummer, haendler };
 }

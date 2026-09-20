@@ -86,8 +86,9 @@ zweiter Lauf schadet nicht.
 | `supabase/migrations/20260920080000_wappen.sql` | `vorgang.wappen_mit` | der Haken in F1 lässt sich nicht speichern |
 | `supabase/migrations/20260920090000_bilder.sql` | `vorgang.sponsor_logo`, `vorgang_artikel.bild` | Sponsorlogo und Produktfotos lassen sich nicht hinterlegen |
 | `supabase/migrations/20260920100000_wunschtermin.sql` | `vorgang.wunschtermin` | die Händleranfrage sagt weiter ausnahmslos „nach Absprache" |
+| `supabase/migrations/20260920110000_angebot_datei.sql` | zwei Spalten für das Angebots-PDF | die Angebotskarte speichert die Zahlen, aber nicht die Datei |
 
-**Alle fünf sind wiederholbar**, und alle vier sind gegen ein echtes PostgreSQL
+**Alle sechs sind wiederholbar**, und alle vier sind gegen ein echtes PostgreSQL
 16 gelaufen, nicht nur geschrieben (`npm run test:db`).
 
 ### 2.1b Ein Eimer für die Bilder

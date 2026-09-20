@@ -46,6 +46,19 @@ Stand 18.09.2026
 - **Die Deckungsprüfung ist eine Rückfrage, keine Sperre.** Der Sprung auf „Bestellt" ohne nachgewiesenes Geld verlangt jetzt eine ausdrückliche Bestätigung, die mit Namen im Verlauf steht. Eine echte Sperre geht noch nicht: **keine einzige Stelle der Anwendung schreibt die Finanzfelder** (`eingang_verein`, `spartenbudget_freigegeben`, `vorkasse_bestaetigt`) oder den gewählten Händler. `istGedeckt` ist damit heute immer `false`. Sobald die Felder pflegbar sind, kann aus der Rückfrage eine Sperre werden.
 - **Die Automatik endet bei Stufe 2.** 0→1→2 laufen von selbst, 3 bis 8 ausschließlich von Hand über `/sparte`. Der tägliche Lauf sieht nur Stufe 1. Auf „Anfrage raus" bis „Geliefert" wacht nichts – kein Wecker, keine Erinnerung. Für Phase 1 vertretbar, sollte aber eine Entscheidung sein und kein Versehen.
 
+## Der Weg zurück vom Händler – gebaut (20.09.2026)
+Kais Frage: „wie bekommen wir das Angebot am besten zurück, soll der Händler eine Upload-Möglichkeit haben?"
+
+Der Befund war: **halb bedacht.** Die zehn Spalten (Betrag, Datum, Gültigkeit, Lieferzeit, Abweichung — je Händler fünf) gibt es seit Migration 001, und M4 fragt genau danach. Geschrieben hat sie **niemand**; es gab keinen Weg hinein. Das reichte weiter, als es aussah: ohne Betrag keine Deckung, und ohne Deckung ist „Bestellt" nur eine Rückfrage.
+
+Gebaut ist jetzt die Karte **„Angebot eintragen"** auf `/sparte`: fünf Felder je Händler, das PDF freiwillig in die Ablage (Migration 008), dazu **„Händler wählen"**, womit `lieferant_gewaehlt` und damit die Deckung erst messbar wird. Stehen beide Beträge, wandert der Vorgang von selbst auf Stufe 3 — der einzige Stufenwechsel zwischen 2 und 8, der sich aus den Daten ergibt statt aus einer Meinung.
+
+**Warum von Hand und nicht als Upload für die Händler.** Bormann und Hillebrecht schicken seit Jahren PDFs per Mail; ob sie stattdessen einen Link benutzen, entscheidet kein Code, sondern ein Gespräch — dieselbe offene Frage wie bei der Voranfrage. Zwei Angebote ein paar Mal im Jahr abzutippen sind Minuten. Wird die Frage anders beantwortet, bedient derselbe Weg auch eine Strecke von außen; geschrieben wird dasselbe. Ein Upload-Link nach draußen müsste dann **nur schreiben** und nichts über den Vorgang preisgeben.
+
+**Später denkbar (C):** eingehende Mails über Resend auswerten. Die Vorgangsnummer steht schon im Betreff, weil M4 genau darum bittet — das PDF landet dann automatisch am richtigen Vorgang. Den Betrag liest das nicht aus; ein falsch gelesener Betrag ist schlimmer als keiner.
+
+**Weiterhin offen:** die **Finanzfelder** (`eingang_verein`, `spartenbudget_freigegeben`, `vorkasse_bestaetigt`) schreibt nach wie vor niemand. Erst mit ihnen kann aus der Deckungs-Rückfrage eine Sperre werden. Das ist das letzte fehlende Stück für Stufe 4 und 5.
+
 ## Vor Phase 2
 - Mit den Händlern: Rechnung auf Sponsor oder Mannschaft möglich, Vorkasserechnung, Bestätigung per Link
 - Beleg-Tabelle mit Schatzmeister bzw. Steuerberater abstimmen (ich bin kein Steuerberater)

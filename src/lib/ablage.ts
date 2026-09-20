@@ -32,7 +32,14 @@ const ERLAUBT: Record<string, Uint8Array[]> = {
   "image/png": [new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])],
   "image/jpeg": [new Uint8Array([0xff, 0xd8, 0xff])],
   "image/webp": [new Uint8Array([0x52, 0x49, 0x46, 0x46])], // "RIFF", danach WEBP
+  // Seit dem 20.09.2026 auch Angebote: Bormann und Hillebrecht schicken PDFs,
+  // und die gehoeren an den Vorgang statt in ein Postfach. Ein PDF ist kein
+  // Bild, deshalb nimmt es nur `ladeDatei` an — `lade` bleibt bei Bildern.
+  "application/pdf": [new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d])], // "%PDF-"
 };
+
+/** Nur diese drei sind Bilder. Ein PDF taugt nicht als Vorschau in F2. */
+const BILDTYPEN = ["image/png", "image/jpeg", "image/webp"];
 
 /**
  * 2 MB. Großzügig für ein Logo, knapp für ein Handyfoto — und genau das ist
@@ -65,10 +72,13 @@ export type LadeErgebnis =
   | { ok: true; pfad: string }
   | { ok: false; grund: "zu_gross" | "falscher_typ" | "nicht_eingerichtet" | "gestoert" };
 
+/** Was an einer Stelle angenommen wird: nur Bilder, oder auch ein PDF. */
+export type Erlaubt = "bild" | "bild_oder_pdf";
+
 export function ladeFehlerText(grund: Exclude<LadeErgebnis, { ok: true }>["grund"]): string {
   switch (grund) {
     case "zu_gross":
-      return "Das Bild ist zu groß. Bitte höchstens 2 MB.";
+      return "Die Datei ist zu groß. Bitte höchstens 2 MB.";
     case "falscher_typ":
       return "Nur PNG, JPEG oder WebP.";
     case "nicht_eingerichtet":
@@ -102,7 +112,10 @@ export function typVonBytes(bytes: Uint8Array): string | null {
 }
 
 function endung(typ: string): string {
-  return typ === "image/png" ? "png" : typ === "image/jpeg" ? "jpg" : "webp";
+  if (typ === "image/png") return "png";
+  if (typ === "image/jpeg") return "jpg";
+  if (typ === "application/pdf") return "pdf";
+  return "webp";
 }
 
 /**
@@ -118,6 +131,7 @@ export async function lade(
   ordner: string,
   name: string,
   bytes: Uint8Array,
+  erlaubt: Erlaubt = "bild",
 ): Promise<LadeErgebnis> {
   const url = basis();
   const key = schluessel();
@@ -126,7 +140,11 @@ export async function lade(
   if (bytes.byteLength > GRENZE_BYTES) return { ok: false, grund: "zu_gross" };
 
   const typ = typVonBytes(bytes);
-  if (!typ) return { ok: false, grund: "falscher_typ" };
+  // Ein PDF nur dort, wo eines erwartet wird. Als Produktfoto in F2 waere es
+  // ein leerer Rahmen, und der Spieler saehe nicht, worum es geht.
+  if (!typ || (erlaubt === "bild" && !BILDTYPEN.includes(typ))) {
+    return { ok: false, grund: "falscher_typ" };
+  }
 
   const pfad = `${ordner}/${name}.${endung(typ)}`;
 

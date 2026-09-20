@@ -99,11 +99,13 @@ type VorgangRoh = {
   angebot_intersport_gueltig_bis: string | null;
   angebot_intersport_lieferzeit: string | null;
   angebot_intersport_abweichung: string | null;
+  angebot_intersport_datei?: string | null;
   angebot_11teamsports_betrag: number | null;
   angebot_11teamsports_am: string | null;
   angebot_11teamsports_gueltig_bis: string | null;
   angebot_11teamsports_lieferzeit: string | null;
   angebot_11teamsports_abweichung: string | null;
+  angebot_11teamsports_datei?: string | null;
   lieferant_gewaehlt: string | null;
   kaskadenstufe: number | null;
   zusage_sponsor: number | null;
@@ -156,7 +158,19 @@ export type AngebotSatz = {
   gueltigBis?: string;
   lieferzeit?: string;
   abweichung?: string;
+  /** Pfad des PDF in der Ablage (Migration 008). Nie die Bytes. */
+  datei?: string;
 };
+
+/**
+ * Die beiden Händler als Spaltenpräfix.
+ *
+ * Nicht der Anzeigename: der steht in `HAENDLER` und kann sich ändern, die
+ * Spalten nicht. Wer hier „11teamsports" mit „elfteamsports" verwechselt —
+ * letzteres ist der Name im Objekt, ersteres der in der Datenbank —, schreibt
+ * stumm ins Leere.
+ */
+export type HaendlerSpalte = "intersport" | "11teamsports";
 
 /**
  * Das Geld. Zusage und Eingang stehen getrennt, weil sie Verschiedenes sind:
@@ -360,6 +374,7 @@ function ausVorgang(roh: VorgangRoh): VorgangSatz | undefined {
         gueltigBis: wert(roh.angebot_intersport_gueltig_bis),
         lieferzeit: wert(roh.angebot_intersport_lieferzeit),
         abweichung: wert(roh.angebot_intersport_abweichung),
+        datei: wert(roh.angebot_intersport_datei ?? null),
       },
       elfteamsports: {
         betrag: betrag(roh.angebot_11teamsports_betrag),
@@ -367,6 +382,7 @@ function ausVorgang(roh: VorgangRoh): VorgangSatz | undefined {
         gueltigBis: wert(roh.angebot_11teamsports_gueltig_bis),
         lieferzeit: wert(roh.angebot_11teamsports_lieferzeit),
         abweichung: wert(roh.angebot_11teamsports_abweichung),
+        datei: wert(roh.angebot_11teamsports_datei ?? null),
       },
     },
     lieferantGewaehlt: wert(roh.lieferant_gewaehlt),
@@ -691,6 +707,7 @@ export async function aendereVorgang(
     sponsorLogo: string;
     sponsor: string;
     hsDealId: string;
+    lieferantGewaehlt: string;
   }>,
 ): Promise<boolean> {
   const zu: Record<string, unknown> = {};
@@ -706,6 +723,7 @@ export async function aendereVorgang(
     sponsorLogo: "sponsor_logo",
     sponsor: "sponsor",
     hsDealId: "hs_deal_id",
+    lieferantGewaehlt: "lieferant_gewaehlt",
   };
 
   for (const [feld, inhalt] of Object.entries(werte)) {
@@ -949,4 +967,44 @@ async function loesche(tabelle: string, suche: Record<string, string>): Promise<
 /** Entfernt einen Vorgang samt Artikeln, Personen, Verlauf und Mailspuren. */
 export async function loescheVorgang(vorgangId: string): Promise<boolean> {
   return loesche("vorgang", { id: `eq.${vorgangId}` });
+}
+
+/**
+ * Ein Angebot eines Händlers eintragen.
+ *
+ * Ein eigener Weg statt `aendereVorgang`, weil die Spaltennamen aus dem Händler
+ * folgen — und weil hier **leer ausdrücklich „streichen" heißt**: ein Trainer
+ * korrigiert ein falsch abgetipptes Angebot, indem er das Feld leert, nicht
+ * indem er einen Platzhalter hineinschreibt.
+ *
+ * `betrag: null` löscht den Betrag; `undefined` lässt ihn stehen. Der
+ * Unterschied ist hier wichtig: das Formular schickt immer alle Felder, und ein
+ * leeres Feld soll leeren statt zu überspringen.
+ */
+export async function setzeAngebot(
+  vorgangId: string,
+  haendler: HaendlerSpalte,
+  werte: {
+    betrag?: number | null;
+    am?: string;
+    gueltigBis?: string;
+    lieferzeit?: string;
+    abweichung?: string;
+    datei?: string;
+  },
+): Promise<boolean> {
+  const p = `angebot_${haendler}_`;
+  const zu: Record<string, unknown> = {};
+
+  if (werte.betrag !== undefined) zu[`${p}betrag`] = werte.betrag;
+  if (werte.am !== undefined) zu[`${p}am`] = werte.am || null;
+  if (werte.gueltigBis !== undefined) zu[`${p}gueltig_bis`] = werte.gueltigBis || null;
+  if (werte.lieferzeit !== undefined) zu[`${p}lieferzeit`] = werte.lieferzeit || null;
+  if (werte.abweichung !== undefined) zu[`${p}abweichung`] = werte.abweichung || null;
+  if (werte.datei !== undefined) zu[`${p}datei`] = werte.datei || null;
+
+  if (Object.keys(zu).length === 0) return true;
+
+  const zeilen = await aendere("vorgang", { id: `eq.${vorgangId}` }, zu);
+  return zeilen !== null && zeilen.length > 0;
 }

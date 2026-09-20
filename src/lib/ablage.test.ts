@@ -50,13 +50,42 @@ describe("was hineindarf", () => {
     expect(typVonBytes(WEBP)).toBe("image/webp");
   });
 
-  test("ein PDF mit Bildnamen kommt nicht durch", async () => {
+  test("ein PDF kommt nicht als Bild durch", async () => {
     stelleWelt({});
-    // %PDF- — ein Händler schickt sein Logo gern als PDF, und ein Browser
-    // meldet als Typ, was die Endung nahelegt. Gemessen wird der Inhalt.
+    // Ein Haendler schickt sein Logo gern als PDF, und ein Browser meldet als
+    // Typ, was die Endung nahelegt. Erkannt wird es seit Migration 008 — aber
+    // als Produktfoto in F2 waere es ein leerer Rahmen.
     const pdf = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31]);
-    expect(typVonBytes(pdf)).toBeNull();
+    expect(typVonBytes(pdf)).toBe("application/pdf");
     expect(await lade("sponsor", "v1", pdf)).toEqual({ ok: false, grund: "falscher_typ" });
+  });
+
+  test("dasselbe PDF geht durch, wo ein Angebot erwartet wird", async () => {
+    stelleWelt({});
+    const pdf = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31]);
+    expect(await lade("angebot", "v1", pdf, "bild_oder_pdf")).toEqual({
+      ok: true,
+      pfad: "angebot/v1.pdf",
+    });
+  });
+
+  test("und ein Bild auch dort", async () => {
+    stelleWelt({});
+    expect(await lade("angebot", "v2", PNG, "bild_oder_pdf")).toEqual({
+      ok: true,
+      pfad: "angebot/v2.png",
+    });
+  });
+
+  test("etwas, das keines von beidem ist, nirgends", async () => {
+    stelleWelt({});
+    // Ein ZIP-Archiv: "PK\x03\x04".
+    const zip = new Uint8Array([0x50, 0x4b, 0x03, 0x04, 0x00]);
+    expect(typVonBytes(zip)).toBeNull();
+    expect(await lade("angebot", "v3", zip, "bild_oder_pdf")).toEqual({
+      ok: false,
+      grund: "falscher_typ",
+    });
   });
 
   test("RIFF allein ist kein WebP", () => {

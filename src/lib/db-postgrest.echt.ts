@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
 import {
   aendereVorgang, alleVorgaenge, haengePersonAn, legeVorgangAn, mailsAn, naechsteNummer,
   setzePersonAngaben, setzeStufe, verlauf, vermerke, vermerkeMail, vorgaengeAufStufe,
-  vorgangPerNummer, loescheVorgang,
+  vorgangPerNummer, loescheVorgang, setzeAngebot,
 } from "./vorgaenge-db";
 import { aendere, lese } from "./db";
 
@@ -277,5 +277,85 @@ describe("Wappen, Sponsorlogo und Artikelbild gegen echtes PostgREST", () => {
     // `not null` steht im Schema, nicht im Code. Faellt es weg, merkt es nur
     // ein Lauf wie dieser.
     expect(await aendere("vorgang", { id: `eq.${id}` }, { wappen_mit: null })).toBeNull();
+  });
+});
+
+/**
+ * Die Angebote gegen das echte Schema.
+ *
+ * `setzeAngebot` baut seine Spaltennamen aus dem Händler zusammen
+ * (`angebot_${haendler}_betrag`). Genau das kann das Papp-Netz nicht prüfen: es
+ * nimmt jeden Namen an, den ich ihm gebe, und spiegelt meine eigene Annahme
+ * zurück. Ein Tippfehler — „11teamsports" gegen „elfteamsports" — schriebe hier
+ * stumm ins Leere, und auf der Seite stünde weiter kein Betrag.
+ */
+describe("Angebote gegen echtes PostgREST", () => {
+  let id = "";
+
+  beforeAll(async () => {
+    const v = await legeVorgangAn({
+      mannschaften: ["Ü40 Team 3"],
+      ausstattungsart: "Weitere Ausstattung",
+      stufe: 2,
+    });
+    id = v!.id;
+  });
+  afterAll(async () => {
+    if (id) await loescheVorgang(id);
+  });
+
+  test("beide Haendler schreiben in ihre eigenen Spalten", async () => {
+    expect(
+      await setzeAngebot(id, "intersport", {
+        betrag: 840.5,
+        am: "2026-10-02",
+        gueltigBis: "2026-11-02",
+        lieferzeit: "3 Wochen",
+        abweichung: "Farbe nur in Marine",
+        datei: "angebot/x-intersport.pdf",
+      }),
+    ).toBe(true);
+    expect(await setzeAngebot(id, "11teamsports", { betrag: 799 })).toBe(true);
+
+    const ab = await vorgangPerNummer((await lese<{ nummer: string }>("vorgang", {
+      select: "nummer", id: `eq.${id}`,
+    }))![0].nummer);
+    if (ab.stand !== "da") throw new Error("Vorgang weg");
+
+    expect(ab.vorgang.angebote.intersport.betrag).toBe(840.5);
+    expect(ab.vorgang.angebote.intersport.lieferzeit).toBe("3 Wochen");
+    expect(ab.vorgang.angebote.intersport.datei).toBe("angebot/x-intersport.pdf");
+    // Der zweite Haendler darf den ersten nicht ueberschrieben haben.
+    expect(ab.vorgang.angebote.elfteamsports.betrag).toBe(799);
+    expect(ab.vorgang.angebote.elfteamsports.lieferzeit).toBeUndefined();
+  });
+
+  test("ein leeres Feld streicht, ein fehlendes laesst stehen", async () => {
+    await setzeAngebot(id, "intersport", { abweichung: "" });
+
+    const zeilen = await lese<{
+      angebot_intersport_abweichung: string | null;
+      angebot_intersport_lieferzeit: string | null;
+    }>("vorgang", { select: "angebot_intersport_abweichung,angebot_intersport_lieferzeit", id: `eq.${id}` });
+
+    expect(zeilen?.[0]?.angebot_intersport_abweichung).toBeNull();
+    // Nicht mitgeschickt, also unangetastet.
+    expect(zeilen?.[0]?.angebot_intersport_lieferzeit).toBe("3 Wochen");
+  });
+
+  test("der Betrag laesst sich zuruecknehmen", async () => {
+    await setzeAngebot(id, "11teamsports", { betrag: null });
+    const zeilen = await lese<{ angebot_11teamsports_betrag: number | null }>("vorgang", {
+      select: "angebot_11teamsports_betrag", id: `eq.${id}`,
+    });
+    expect(zeilen?.[0]?.angebot_11teamsports_betrag).toBeNull();
+  });
+
+  test("der gewaehlte Haendler laesst sich setzen", async () => {
+    expect(await aendereVorgang(id, { lieferantGewaehlt: "Intersport Uelzen" })).toBe(true);
+    const zeilen = await lese<{ lieferant_gewaehlt: string | null }>("vorgang", {
+      select: "lieferant_gewaehlt", id: `eq.${id}`,
+    });
+    expect(zeilen?.[0]?.lieferant_gewaehlt).toBe("Intersport Uelzen");
   });
 });

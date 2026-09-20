@@ -4,6 +4,7 @@ import { Kopfzeile } from "@/components/kopfzeile";
 import { SpartenAnsicht } from "@/components/sparten-ansicht";
 import { StufenKarte } from "@/components/stufen-karte";
 import { FristKarte } from "@/components/frist-karte";
+import { AngebotKarte } from "@/components/angebot-karte";
 import { Abmelden } from "@/components/abmelden";
 import { Stoerung } from "@/components/stoerung";
 import { FreigabeKarte } from "@/components/freigabe-karte";
@@ -82,6 +83,7 @@ export default async function Sparte() {
             <>
               <SpartenAnsicht zeilen={zeilen} />
               <FristKarte zeilen={zeilen} />
+              <AngebotKarte zeilen={zeilen} />
               <StufenKarte zeilen={zeilen} />
             </>
           )}
