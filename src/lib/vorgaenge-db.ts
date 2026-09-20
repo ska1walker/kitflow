@@ -69,6 +69,8 @@ type VorgangRoh = {
   liste_bestaetigt_am: string | null;
   lieferadresse: string | null;
   initialen_noetig: boolean;
+  /** Migration 005: Wappen an die Haendleranfrage. */
+  wappen_mit?: boolean;
   sponsor: string | null;
   hinweis_haendler: string | null;
   hs_deal_id: string | null;
@@ -208,6 +210,7 @@ export type VorgangSatz = {
   listeBestaetigtAm?: string;
   lieferadresse?: string;
   initialenNoetig: boolean;
+  wappenMit: boolean;
   sponsor?: string;
   hinweisHaendler?: string;
   hsDealId?: string;
@@ -319,6 +322,8 @@ function ausVorgang(roh: VorgangRoh): VorgangSatz | undefined {
     listeBestaetigtAm: wert(roh.liste_bestaetigt_am),
     lieferadresse: wert(roh.lieferadresse),
     initialenNoetig: roh.initialen_noetig,
+    // Fehlt die Spalte (vor Migration 005), gilt „kein Wappen“ — nie umgekehrt.
+    wappenMit: roh.wappen_mit ?? false,
     sponsor: wert(roh.sponsor),
     hinweisHaendler: wert(roh.hinweis_haendler),
     hsDealId: wert(roh.hs_deal_id),
@@ -482,6 +487,7 @@ export type NeuerVorgang = {
   groessenFrist?: string;
   lieferadresse?: string;
   initialenNoetig?: boolean;
+  wappenMit?: boolean;
   sponsor?: string;
   hinweisHaendler?: string;
   artikel?: NeuerArtikel[];
@@ -521,6 +527,7 @@ export async function legeVorgangAn(neu: NeuerVorgang): Promise<VorgangSatz | nu
     groessen_frist: neu.groessenFrist || null,
     lieferadresse: neu.lieferadresse ?? null,
     initialen_noetig: neu.initialenNoetig ?? false,
+    wappen_mit: neu.wappenMit ?? false,
     sponsor: neu.sponsor ?? null,
     hinweis_haendler: neu.hinweisHaendler ?? null,
   });
@@ -654,6 +661,7 @@ export async function aendereVorgang(
     lieferadresse: string;
     hinweisHaendler: string;
     initialenNoetig: boolean;
+    wappenMit: boolean;
     sponsor: string;
     hsDealId: string;
   }>,
@@ -666,6 +674,7 @@ export async function aendereVorgang(
     lieferadresse: "lieferadresse",
     hinweisHaendler: "hinweis_haendler",
     initialenNoetig: "initialen_noetig",
+    wappenMit: "wappen_mit",
     sponsor: "sponsor",
     hsDealId: "hs_deal_id",
   };

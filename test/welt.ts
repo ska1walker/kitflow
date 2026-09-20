@@ -250,6 +250,7 @@ function dbAntwort(
         groessenFrist: (zeile.groessen_frist as string) ?? undefined,
         lieferadresse: (zeile.lieferadresse as string) ?? undefined,
         initialenNoetig: Boolean(zeile.initialen_noetig),
+        wappenMit: Boolean(zeile.wappen_mit),
         sponsor: (zeile.sponsor as string) ?? undefined,
         hinweisHaendler: (zeile.hinweis_haendler as string) ?? undefined,
         personenGeschaetzt: (zeile.personen_geschaetzt as number) ?? undefined,
@@ -274,6 +275,7 @@ function dbAntwort(
       if ("hinweis_haendler" in zu) neu.hinweisHaendler = String(zu.hinweis_haendler);
       if ("liste_bestaetigt_am" in zu) neu.listeBestaetigtAm = String(zu.liste_bestaetigt_am);
       if ("initialen_noetig" in zu) neu.initialenNoetig = Boolean(zu.initialen_noetig);
+      if ("wappen_mit" in zu) neu.wappenMit = Boolean(zu.wappen_mit);
       if ("sponsor" in zu) neu.sponsor = String(zu.sponsor);
       if ("hs_deal_id" in zu) neu.hsDealId = String(zu.hs_deal_id);
       // Die Freigabe wandert immer als Ganzes: Stand, Wer, Wann und Grund

@@ -848,6 +848,9 @@ async function verschickeAnfrage(satz: VorgangSatz): Promise<AnfrageVersand> {
       trainerEmail: satz.trainerEmail ?? "",
       antwortAn,
       csv,
+      // Nur hier. M1, M2, M3 und M5 bleiben ohne Wappen — die gehen an Leute,
+      // die den Verein kennen (Kais Schnitt vom 20.09.2026).
+      wappen: satz.wappenMit,
     });
     if (!ging) continue;
     verschickt += 1;

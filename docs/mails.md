@@ -14,10 +14,34 @@ umgekehrt: „kitflow“ groß in Neon, der Verein klein. Bei einer Mail an eine
 Händler ist das verkehrt herum — der kennt kitflow nicht. Die Farben bleiben die
 aus docs/design-coachbase.md.
 
-**Der Platz für das Vereinswappen ist vorbereitet, aber leer.** Kommt es, wird es
-als Anhang mit Content-ID eingebunden (`cid:`) und nicht als externe Adresse:
-Outlook und Gmail blockieren fremde Bilder standardmäßig, und ein blockiertes
-Logo hinterlässt ein leeres Loch im Kopf.
+**Das Vereinswappen ist gebaut, die Datei fehlt noch.** Es kommt als Anhang mit
+Content-ID (`cid:wappen`) und nie als externe Adresse: Outlook und Gmail
+blockieren fremde Bilder standardmäßig.
+
+Drei Regeln, alle mit Tests belegt (`src/lib/wappen.test.ts`):
+
+- **Nur nach draußen.** Das Wappen erscheint ausschließlich in M4, der Anfrage
+  an Bormann und Hillebrecht. M1, M2, M3, M5 und M4b bleiben ohne — wer eine
+  Mail vom eigenen Verein bekommt, weiß, von wem sie ist (Kai, 20.09.2026).
+- **Nur angehakt.** Ein Haken in F1 je Vorgang (`vorgang.wappen_mit`,
+  Migration 005), Voreinstellung aus. Ein Logo, das ungefragt an einen
+  Geschäftspartner geht, ist der teurere Fehler.
+- **Nie ein Verweis ins Leere.** Ist der Haken gesetzt und keine Datei
+  hinterlegt, wird *beides* weggelassen — `cid:` im HTML ohne Anhang ergibt in
+  jedem Programm ein kaputtes Bildsymbol.
+
+Es steht **neben** der Wortmarke, nicht an ihrer Stelle. Fällt das Inline-Bild
+aus, fehlt ein Bild; der Vereinsname steht weiter da. Das ist keine Kosmetik:
+ob Resend das Feld `content_id` so annimmt, ist aus der Bauumgebung nicht
+nachprüfbar (403 vom Proxy, wie bei Supabase und Telegram).
+
+Die Datei gehört als `src/assets/wappen.png` ins Projekt — kein Upload, sie
+ändert sich nie. Maße und Format stehen in `src/assets/README.md`.
+
+**Anhänge sind seit dem 20.09.2026 entweder Text oder Bytes** (`Anhang` in
+`mail.ts`). Vorher gab es nur `inhalt: string`, und `sendeMail` machte daraus
+`Buffer.from(inhalt, "utf8")` — für die CSV richtig, für ein PNG tödlich: die
+Datei wäre still zerstört beim Händler angekommen.
 
 Was am Rahmen sonst noch steckt, weil es sonst beim Empfänger schiefgeht:
 

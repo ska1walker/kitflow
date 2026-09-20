@@ -237,6 +237,7 @@ export async function bedarfMelden(_bisher: Ergebnis, formular: FormData): Promi
   // Nur im vollstaendigen Modus gefragt. Die Voranfrage kennt noch keine
   // Beflockung, dort holt F1b das nach (docs/formulare.md).
   let initialenNoetig = false;
+  let wappenMit = false;
 
   if (modus === "voranfrage") {
     personenZahl = Number(formular.get("personen") ?? 0);
@@ -260,6 +261,7 @@ export async function bedarfMelden(_bisher: Ergebnis, formular: FormData): Promi
       }
 
       initialenNoetig = formular.get("initialen_noetig") === "ja";
+      wappenMit = formular.get("wappen_mit") === "ja";
     }
   }
 
@@ -279,6 +281,7 @@ export async function bedarfMelden(_bisher: Ergebnis, formular: FormData): Promi
     groessenFrist,
     lieferadresse,
     initialenNoetig,
+    wappenMit,
     sponsor: pflicht(formular, "sponsor"),
     hinweise: pflicht(formular, "hinweise"),
   };

@@ -43,6 +43,7 @@ function eingabe(mehr: Partial<BedarfEingabe> = {}): BedarfEingabe {
     groessenFrist: "2026-09-30",
     lieferadresse: "Am Sportplatz 14",
     initialenNoetig: false,
+    wappenMit: false,
     sponsor: "",
     hinweise: "",
     ...mehr,

@@ -1,6 +1,7 @@
 import "server-only";
 
 import { alsHtml, alsText, type Rahmen } from "./mail-rahmen";
+import { wappenAnhang } from "./wappen";
 
 /**
  * Mailversand über Resend (docs/mails.md).
@@ -45,11 +46,43 @@ export function mailAktiv(): boolean {
   return Boolean(process.env.RESEND_API_KEY) && basis() !== null;
 }
 
-export type Anhang = {
-  dateiname: string;
-  /** Der Inhalt als Text. Base64 macht `sendeMail` daraus. */
-  inhalt: string;
-};
+/**
+ * Ein Anhang.
+ *
+ * **Text und Binaerdaten sind zwei Faelle, nicht ein Feld mit Sonderbehandlung.**
+ * Bis zum 20.09.2026 gab es nur `inhalt: string`, und `sendeMail` machte daraus
+ * `Buffer.from(inhalt, "utf8")`. Fuer die CSV an M4 geht das; ein PNG durch
+ * `utf8` zu schicken **zerstoert die Datei** — ohne Fehler, ohne Logzeile, der
+ * Haendler bekaeme einen unbrauchbaren Anhang. Deshalb muss der Aufrufer sagen,
+ * was er hat.
+ */
+export type Anhang =
+  | {
+      art: "text";
+      dateiname: string;
+      /** Der Inhalt als Text. Base64 macht `sendeMail` daraus. */
+      inhalt: string;
+    }
+  | {
+      art: "binaer";
+      dateiname: string;
+      bytes: Uint8Array;
+      /** MIME-Typ, etwa `image/png`. */
+      typ: string;
+      /**
+       * Gesetzt macht den Anhang zu einem **Inline-Bild**: das HTML verweist
+       * mit `cid:<inlineId>` darauf, statt eine fremde Adresse zu laden —
+       * Outlook und Gmail blockieren externe Bilder standardmaessig.
+       *
+       * **Nicht geprueft**: `resend.com` ist aus der Bauumgebung gesperrt (403
+       * vom Proxy, wie Supabase und Telegram). Das Feld heisst bei Resend nach
+       * meinem Kenntnisstand `content_id`. Stimmt das nicht, kommt das Bild als
+       * gewoehnlicher Anhang an statt im Kopf — deshalb steht das Wappen im
+       * Rahmen **neben** dem Vereinsnamen und nicht an seiner Stelle: faellt es
+       * aus, fehlt ein Bild, nicht der Absender.
+       */
+      inlineId?: string;
+    };
 
 type Mail = {
   an: string;
@@ -93,10 +126,21 @@ export async function sendeMail({
         subject: betreff,
         ...(anhaenge && anhaenge.length > 0
           ? {
-              attachments: anhaenge.map((a) => ({
-                filename: a.dateiname,
-                content: Buffer.from(a.inhalt, "utf8").toString("base64"),
-              })),
+              attachments: anhaenge.map((a) =>
+                a.art === "text"
+                  ? {
+                      filename: a.dateiname,
+                      content: Buffer.from(a.inhalt, "utf8").toString("base64"),
+                    }
+                  : {
+                      filename: a.dateiname,
+                      // Kein "utf8" — die Bytes sind schon Bytes. Genau hier ging
+                      // ein Bild vorher kaputt.
+                      content: Buffer.from(a.bytes).toString("base64"),
+                      content_type: a.typ,
+                      ...(a.inlineId ? { content_id: a.inlineId } : {}),
+                    },
+              ),
             }
           : {}),
         text: umleitung && umleitung !== an ? `[Testumleitung, eigentlich an ${an}]\n\n${text}` : text,
@@ -578,6 +622,8 @@ export type M4Daten = {
   trainerEmail: string;
   antwortAn: string;
   csv: string;
+  /** Vereinswappen in den Kopf (Migration 005, Haken in F1). */
+  wappen?: boolean;
 };
 
 /**
@@ -597,7 +643,13 @@ export type M4Daten = {
  * Anwendung — deshalb ein eigenes Reply-To.
  */
 export async function sendeM4(an: string, d: M4Daten): Promise<string | null> {
+  // Erst nachsehen, ob wirklich eine Datei da ist, dann den Kopf darauf
+  // verweisen lassen. Andersherum stünde bei angehaktem Wappen und fehlender
+  // Datei ein kaputtes Bildsymbol in der Mail an den Händler.
+  const wappen = d.wappen ? await wappenAnhang() : null;
+
   const rahmen: Rahmen = {
+    wappen: wappen !== null,
     eyebrow: `Anfrage ${d.vorgang}`,
     titel: `Angebotsanfrage ${d.mannschaft}`,
     vorschau: `${d.gesamtStueck} Stück, Eintracht Munster 2020 e.V.`,
@@ -653,7 +705,10 @@ export async function sendeM4(an: string, d: M4Daten): Promise<string | null> {
     text: alsText(rahmen),
     html: alsHtml(rahmen),
     antwortAn: d.antwortAn,
-    anhaenge: [{ dateiname: `${d.vorgang}_Anfrage.csv`, inhalt: d.csv }],
+    anhaenge: [
+      { art: "text", dateiname: `${d.vorgang}_Anfrage.csv`, inhalt: d.csv },
+      ...(wappen ? [wappen] : []),
+    ],
   });
 }
 

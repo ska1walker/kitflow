@@ -83,6 +83,7 @@ export type BedarfEingabe = {
   lieferadresse: string;
   /** Werden Initialen aufgedruckt? Schaltet die Abfrage in F2 frei. */
   initialenNoetig: boolean;
+  wappenMit: boolean;
   sponsor: string;
   hinweise: string;
 };
@@ -321,6 +322,7 @@ export async function meldeBedarf(eingabe: BedarfEingabe): Promise<BedarfErgebni
     groessenFrist: eingabe.groessenFrist,
     lieferadresse: eingabe.lieferadresse || undefined,
     initialenNoetig: eingabe.initialenNoetig,
+    wappenMit: eingabe.wappenMit,
     sponsor: eingabe.sponsor || undefined,
     hinweisHaendler: eingabe.hinweise || undefined,
     artikel,

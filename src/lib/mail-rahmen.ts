@@ -1,5 +1,9 @@
 import "server-only";
 
+// Nur die Kennung, kein Laufzeit-Kreis: `wappen.ts` holt sich aus `mail.ts`
+// ausschliesslich einen Typ, und der ist nach dem Uebersetzen weg.
+import { WAPPEN_CID } from "./wappen";
+
 /**
  * Der Rahmen für alle Mails (docs/design-coachbase.md).
  *
@@ -159,6 +163,13 @@ export type Rahmen = {
   bloecke: Block[];
   /** Die Zeile, die manche Programme neben dem Betreff zeigen. */
   vorschau: string;
+  /**
+   * Das Vereinswappen in den Kopf, als Inline-Anhang (`cid:wappen`). Nur für
+   * Mails nach draußen. Der Aufrufer muss den Anhang dann auch wirklich
+   * mitschicken (`wappenAnhang()`) — ein `cid:`-Verweis ohne Anhang ergibt in
+   * jedem Programm ein kaputtes Bildsymbol.
+   */
+  wappen?: boolean;
 };
 
 export function alsText(r: Rahmen): string {
@@ -181,16 +192,27 @@ export function alsText(r: Rahmen): string {
  * daneben. Bei einer Mail an einen Händler ist das verkehrt herum — der kennt
  * kitflow nicht und soll den Verein sehen, nicht das Werkzeug.
  *
- * **Der Platz für das Wappen ist vorbereitet, aber leer.** Kommt es, wird es
- * als Anhang mit Content-ID eingebunden (`cid:wappen`) und nicht als externe
- * Adresse: Outlook und Gmail blockieren fremde Bilder standardmäßig, und ein
- * blockiertes Logo hinterlässt ein leeres Loch im Kopf. Bis dahin steht dort
- * eine Wortmarke — die lädt immer.
+ * **Das Wappen steht neben der Wortmarke, nicht an ihrer Stelle.** Es kommt als
+ * Anhang mit Content-ID (`cid:wappen`) und nie als externe Adresse: Outlook und
+ * Gmail blockieren fremde Bilder standardmäßig. Und weil auch ein Inline-Bild
+ * ausfallen kann — bei Resend ist das Feld dafür aus dieser Umgebung nicht
+ * nachprüfbar —, darf der Kopf nicht davon abhängen. Fällt das Bild aus, fehlt
+ * ein Bild; der Vereinsname steht weiter da.
+ *
+ * `width`/`height` am Bild sind Pflicht, nicht Kosmetik: Outlook rendert ein
+ * Bild ohne Maße in Originalgröße, und ein 1000-Pixel-Wappen sprengte den Kopf.
  */
-function kopf(): string {
+function kopf(mitWappen = false): string {
+  const wappen = mitWappen
+    ? `<td valign="middle" width="44" style="padding-right:12px;">
+            <img src="cid:${WAPPEN_CID}" width="36" height="36" alt=""
+              style="display:block;width:36px;height:36px;border:0;outline:none;text-decoration:none;">
+          </td>`
+    : "";
+
   return `<tr><td bgcolor="${INK_950}" style="padding:20px 22px;border-radius:16px;" class="kopf-feld">
         <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"><tr>
-          <td>
+          ${wappen}<td>
             <div style="font-size:20px;line-height:1.25;font-weight:800;letter-spacing:-0.025em;color:${WEISS};" class="marke">Eintracht Munster 2020 e.&nbsp;V.</div>
             <div style="margin-top:3px;font-size:12px;line-height:1.4;color:${INK_400};">Sparte Fußball</div>
           </td>
@@ -258,7 +280,7 @@ export function alsHtml(r: Rahmen): string {
   <tr><td align="center" style="padding:28px 14px;">
     <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" style="max-width:600px;width:100%;font-family:${SCHRIFT};">
 
-      ${kopf()}
+      ${kopf(r.wappen)}
 
       <tr><td style="height:14px;line-height:14px;">&nbsp;</td></tr>
 

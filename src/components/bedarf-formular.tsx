@@ -549,6 +549,25 @@ export function BedarfFormular() {
                 </span>
               </label>
             )}
+            {/* Nach draußen, nicht nach innen: das Wappen steht nur in der Anfrage
+                an die Händler, nie in einer Mail an die eigene Mannschaft. */}
+            {!nurGroessen && (
+              <label className="flex items-start gap-2.5 text-sm text-ink-800">
+                <input
+                  type="checkbox"
+                  name="wappen_mit"
+                  value="ja"
+                  className="mt-0.5 h-4 w-4 flex-none accent-pitch-600"
+                />
+                <span>
+                  Vereinswappen auf die Händleranfrage.
+                  <span className="mt-0.5 block text-xs text-ink-500">
+                    Erscheint im Kopf der Mail an die Händler. Die Mails an deine Mannschaft
+                    bleiben unverändert.
+                  </span>
+                </span>
+              </label>
+            )}
           </>
         )}
         {!nurGroessen && (
