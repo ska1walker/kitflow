@@ -85,8 +85,9 @@ zweiter Lauf schadet nicht.
 | `supabase/migrations/20260918150000_freigabe.sql` | vier Spalten an `vorgang` | keine Freigabe möglich, die Anfrage bleibt liegen |
 | `supabase/migrations/20260920080000_wappen.sql` | `vorgang.wappen_mit` | der Haken in F1 lässt sich nicht speichern |
 | `supabase/migrations/20260920090000_bilder.sql` | `vorgang.sponsor_logo`, `vorgang_artikel.bild` | Sponsorlogo und Produktfotos lassen sich nicht hinterlegen |
+| `supabase/migrations/20260920100000_wunschtermin.sql` | `vorgang.wunschtermin` | die Händleranfrage sagt weiter ausnahmslos „nach Absprache" |
 
-**Alle vier sind wiederholbar**, und alle vier sind gegen ein echtes PostgreSQL
+**Alle fünf sind wiederholbar**, und alle vier sind gegen ein echtes PostgreSQL
 16 gelaufen, nicht nur geschrieben (`npm run test:db`).
 
 ### 2.1b Ein Eimer für die Bilder

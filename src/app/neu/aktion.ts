@@ -234,6 +234,7 @@ export async function bedarfMelden(_bisher: Ergebnis, formular: FormData): Promi
   let personenZahl = 0;
   let groessenFrist = "";
   let lieferadresse = "";
+  let wunschtermin = "";
   // Nur im vollstaendigen Modus gefragt. Die Voranfrage kennt noch keine
   // Beflockung, dort holt F1b das nach (docs/formulare.md).
   let initialenNoetig = false;
@@ -261,6 +262,14 @@ export async function bedarfMelden(_bisher: Ergebnis, formular: FormData): Promi
       }
 
       initialenNoetig = formular.get("initialen_noetig") === "ja";
+
+      // Freiwillig, also kein Abbruch bei Unsinn — aber auch nichts, was
+      // ungeprueft in eine Haendlermail wandert.
+      const termin = pflicht(formular, "wunschtermin");
+      if (termin && !/^\d{4}-\d{2}-\d{2}$/.test(termin)) {
+        return { stand: "fehler", text: "Der Wunschtermin sieht nicht wie ein Datum aus." };
+      }
+      wunschtermin = termin;
       wappenMit = formular.get("wappen_mit") === "ja";
     }
   }
@@ -280,6 +289,7 @@ export async function bedarfMelden(_bisher: Ergebnis, formular: FormData): Promi
     personenZahl,
     groessenFrist,
     lieferadresse,
+    wunschtermin,
     initialenNoetig,
     wappenMit,
     sponsor: pflicht(formular, "sponsor"),

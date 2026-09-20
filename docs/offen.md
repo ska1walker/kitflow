@@ -40,6 +40,12 @@ Stand 18.09.2026
 - **Neu einzurichten**: Migrationen 005 und 006, dazu der Eimer `kitflow` mit *Public bucket: aus*. Details in docs/bilder.md.
 - **Offen geblieben**: Bilder werden **nicht verkleinert** (das bräuchte `sharp`, kitflow hat außer Next und React keine Abhängigkeit). Stattdessen eine harte Grenze bei 2 MB. Wenn Trainer regelmäßig daran scheitern, ist das der Moment, über `sharp` zu reden – nicht vorher.
 
+## Ablaufprüfung 20.09.2026 – was dabei herauskam
+- ~~Eine offene Freigabe überlebte den Stufenwechsel~~ – behoben. `offeneFreigaben` und `gibFrei` prüfen jetzt beide die Stufe, und ein Stufenwechsel weg von 1 nimmt eine wartende Freigabe zurück. Vorher schickte ein Klick auf die stehengebliebene Karte M4 an die Händler und holte einen **abgebrochenen** Vorgang auf Stufe 2 zurück.
+- ~~`stufe_frist` trug zwei Bedeutungen~~ – behoben mit Migration 007. Der Wunschtermin hat eine eigene Spalte und wird in F1 gefragt; `stufe_frist` bleibt die Frist der Stufe. Vorher sagte M4 ausnahmslos „nach Absprache", und ab Stufe 2 trug kein Vorgang auf `/sparte` eine Frist.
+- **Die Deckungsprüfung ist eine Rückfrage, keine Sperre.** Der Sprung auf „Bestellt" ohne nachgewiesenes Geld verlangt jetzt eine ausdrückliche Bestätigung, die mit Namen im Verlauf steht. Eine echte Sperre geht noch nicht: **keine einzige Stelle der Anwendung schreibt die Finanzfelder** (`eingang_verein`, `spartenbudget_freigegeben`, `vorkasse_bestaetigt`) oder den gewählten Händler. `istGedeckt` ist damit heute immer `false`. Sobald die Felder pflegbar sind, kann aus der Rückfrage eine Sperre werden.
+- **Die Automatik endet bei Stufe 2.** 0→1→2 laufen von selbst, 3 bis 8 ausschließlich von Hand über `/sparte`. Der tägliche Lauf sieht nur Stufe 1. Auf „Anfrage raus" bis „Geliefert" wacht nichts – kein Wecker, keine Erinnerung. Für Phase 1 vertretbar, sollte aber eine Entscheidung sein und kein Versehen.
+
 ## Vor Phase 2
 - Mit den Händlern: Rechnung auf Sponsor oder Mannschaft möglich, Vorkasserechnung, Bestätigung per Link
 - Beleg-Tabelle mit Schatzmeister bzw. Steuerberater abstimmen (ich bin kein Steuerberater)

@@ -68,6 +68,8 @@ type VorgangRoh = {
   groessenarten: string[];
   groessen_frist: string | null;
   stufe_frist: string | null;
+  /** Migration 007: Wunschtermin der Lieferung. NICHT `stufe_frist`. */
+  wunschtermin?: string | null;
   liste_bestaetigt_am: string | null;
   lieferadresse: string | null;
   initialen_noetig: boolean;
@@ -213,6 +215,8 @@ export type VorgangSatz = {
   groessenarten: Groessenart[];
   groessenFrist?: string;
   stufeFrist?: string;
+  /** Wunschtermin der Lieferung (Migration 007). Leer heisst „nach Absprache“. */
+  wunschtermin?: string;
   listeBestaetigtAm?: string;
   lieferadresse?: string;
   initialenNoetig: boolean;
@@ -327,6 +331,7 @@ function ausVorgang(roh: VorgangRoh): VorgangSatz | undefined {
     groessenarten: (roh.groessenarten ?? []) as Groessenart[],
     groessenFrist: wert(roh.groessen_frist),
     stufeFrist: wert(roh.stufe_frist),
+    wunschtermin: wert(roh.wunschtermin ?? null),
     listeBestaetigtAm: wert(roh.liste_bestaetigt_am),
     lieferadresse: wert(roh.lieferadresse),
     initialenNoetig: roh.initialen_noetig,
@@ -495,6 +500,7 @@ export type NeuerVorgang = {
   personenGeschaetzt?: number;
   groessenarten?: Groessenart[];
   groessenFrist?: string;
+  wunschtermin?: string;
   lieferadresse?: string;
   initialenNoetig?: boolean;
   wappenMit?: boolean;
@@ -535,6 +541,7 @@ export async function legeVorgangAn(neu: NeuerVorgang): Promise<VorgangSatz | nu
     personen_geschaetzt: neu.personenGeschaetzt ?? null,
     groessenarten: neu.groessenarten ?? [],
     groessen_frist: neu.groessenFrist || null,
+    wunschtermin: neu.wunschtermin || null,
     lieferadresse: neu.lieferadresse ?? null,
     initialen_noetig: neu.initialenNoetig ?? false,
     wappen_mit: neu.wappenMit ?? false,
@@ -640,6 +647,13 @@ export async function offeneFreigaben(): Promise<VorgangSatz[] | null> {
   const zeilen = await lese<VorgangRoh>("vorgang", {
     select: MIT_KINDERN,
     freigabe_stand: "eq.offen",
+    // Und nur, solange der Vorgang auch wirklich dort steht. Ein Stufenwechsel
+    // von Hand auf /sparte laesst `freigabe_stand` unberuehrt; ohne diesen
+    // Filter bliebe die Karte an einem abgebrochenen Vorgang stehen, und ein
+    // Klick darauf schickte M4 an die Haendler und holte ihn auf Stufe 2
+    // zurueck. `gibFrei` prueft dasselbe noch einmal — die Karte auszublenden
+    // ist Bequemlichkeit, die Weigerung ist die Sicherung.
+    stufe: "eq.1",
     order: "angelegt_am.asc",
   });
   if (zeilen === null) return null;
@@ -668,6 +682,7 @@ export async function aendereVorgang(
   werte: Partial<{
     groessenFrist: string;
     stufeFrist: string;
+    wunschtermin: string;
     listeBestaetigtAm: string;
     lieferadresse: string;
     hinweisHaendler: string;
@@ -682,6 +697,7 @@ export async function aendereVorgang(
   const namen: Record<keyof typeof werte, string> = {
     groessenFrist: "groessen_frist",
     stufeFrist: "stufe_frist",
+    wunschtermin: "wunschtermin",
     listeBestaetigtAm: "liste_bestaetigt_am",
     lieferadresse: "lieferadresse",
     hinweisHaendler: "hinweis_haendler",

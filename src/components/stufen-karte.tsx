@@ -83,6 +83,29 @@ export function StufenKarte({ zeilen }: { zeilen: VorgangsZeile[] }) {
           sehen.
         </p>
       )}
+      {/* Keine Fehlermeldung, eine Rueckfrage: „bestellt wird erst, wenn das Geld
+          da ist“ (Kai). Der Knopf schickt dasselbe Formular noch einmal, diesmal
+          mit `trotzdem`. Wer bestaetigt, steht danach im Verlauf. */}
+      {stand.stand === "deckung" && (
+        <div className="mt-3 rounded-xl bg-amber-50 px-3.5 py-3">
+          <p className="text-sm text-ink-800">
+            Für {stand.nummer} ist <b>nicht nachgewiesen, dass das Geld da ist</b>. Bestellt wird
+            erst, wenn es das ist – eine Zusage allein reicht nicht.
+          </p>
+          <p className="mt-1.5 text-xs text-ink-600">
+            Die Finanzfelder lassen sich in kitflow noch nirgends pflegen, deshalb nur diese
+            Rückfrage und keine Sperre. Setzt du trotzdem, steht das mit deinem Namen im Verlauf.
+          </p>
+          <button
+            type="submit"
+            name="trotzdem"
+            value="ja"
+            className="mt-2.5 rounded-lg bg-ink-950 px-3 py-1.5 text-xs font-semibold text-white hover:bg-ink-800"
+          >
+            Trotzdem auf „{stand.titel}“ setzen
+          </button>
+        </div>
+      )}
       {stand.stand === "fehler" && (
         <p className="mt-3 flex items-start gap-2 text-sm text-ink-700">
           <span className="mt-0.5 flex-none text-ink-500">

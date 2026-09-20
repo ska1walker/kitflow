@@ -51,6 +51,10 @@ function wartetAuf(satz: VorgangSatz): string {
 
 /** Die Frist, die auf dieser Stufe zählt. Auf Stufe 1 ist es die Größenfrist. */
 function fristVon(satz: VorgangSatz): string | undefined {
+  // Auf Stufe 1 die Groessenfrist, sonst die Frist der Stufe selbst. Letztere
+  // schreibt heute niemand (docs/offen.md: Frist fuer die Sponsorensuche) —
+  // dann steht dort nichts, und das ist richtiger als der Wunschtermin, der
+  // hier bis Migration 007 versehentlich mitgelesen wurde.
   return satz.stufe === 1 ? satz.groessenFrist : satz.stufeFrist;
 }
 

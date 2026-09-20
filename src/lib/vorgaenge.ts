@@ -32,6 +32,7 @@ import {
   gefragteArten,
   haendler,
   istJugend,
+  istGedeckt,
   mannschaftsName,
   nurGroessen,
   pruefungen,
@@ -175,17 +176,11 @@ export async function ladeVorgang(
 
   // Was der Vorgang kostet, sagt das gewaehlte Angebot. Frueher stand dafuer
   // `amount` am Deal, das nie jemand gesetzt hat.
-  const betrag =
-    satz.lieferantGewaehlt === "11teamsports"
-      ? satz.angebote.elfteamsports.betrag
-      : satz.lieferantGewaehlt === "Intersport Uelzen"
-        ? satz.angebote.intersport.betrag
-        : undefined;
-  const gedeckt =
-    betrag !== undefined &&
-    betrag > 0 &&
-    ((satz.finanzen.eingangVerein ?? 0) + (satz.finanzen.spartenbudgetFreigegeben ?? 0) >= betrag ||
-      (satz.finanzen.vorkasseBestaetigt ?? 0) >= betrag);
+  // Eine Rechnung, ein Ort: `/sparte` haengt beim Stufenwechsel an derselben
+  // Funktion. Zwei Fassungen derselben Regel liefen frueher oder spaeter
+  // auseinander, und dann waere „gedeckt“ auf der Seite etwas anderes als vor
+  // dem Knopf „Bestellt“.
+  const gedeckt = istGedeckt(satz);
 
   const bestaetigt = kontakte
     .map((k) => text(k, "groesse_zuletzt_bestaetigt_am"))
@@ -679,6 +674,8 @@ export type FreigabeGrund =
   | "gestoert"
   | "unbekannt"
   | "nicht_offen"
+  /** Der Vorgang steht nicht mehr auf Stufe 1 — abgebrochen oder weitergerueckt. */
+  | "nicht_stufe1"
   | "ohne_haendler"
   /** Keine einzige Groesse — die Anfrage haette ein leeres Blatt geschickt. */
   | "ohne_zeilen"
@@ -706,6 +703,14 @@ async function offeneFreigabeZu(
   // als zwei Anfragen an die Haendler raus – und die zweite waere nicht zu
   // erklaeren.
   if (ergebnis.vorgang.freigabe.stand !== "offen") return { grund: "nicht_offen" };
+
+  // Und nur, solange der Vorgang auf Stufe 1 steht. Ein Stufenwechsel von Hand
+  // auf /sparte laesst `freigabe_stand` unberuehrt — ohne diese Zeile schickte
+  // ein Klick auf eine stehengebliebene Karte M4 an Bormann und Hillebrecht
+  // und holte einen abgebrochenen Vorgang auf „Anfrage raus" zurueck. Dieselbe
+  // Wache wie bei `nachtragbarePersonen` und `sendeGroessenMails`.
+  if (ergebnis.vorgang.stufe !== 1) return { grund: "nicht_stufe1" };
+
   return { satz: ergebnis.vorgang };
 }
 
@@ -875,7 +880,9 @@ async function verschickeAnfrage(satz: VorgangSatz): Promise<AnfrageVersand> {
       summen: summenText(anfrage),
       gesamtStueck: anfrage.gesamtStueck,
       beflockung: BEFLOCKUNG,
-      wunschtermin: satz.stufeFrist ?? "",
+      // Migration 007: die eigene Spalte, nicht mehr `stufe_frist`. Die trug
+      // vorher zwei Bedeutungen und war deshalb immer leer.
+      wunschtermin: satz.wunschtermin ?? "",
       lieferadresse: satz.lieferadresse ?? "",
       hinweisHaendler: satz.hinweisHaendler ?? "",
       trainerEmail: satz.trainerEmail ?? "",

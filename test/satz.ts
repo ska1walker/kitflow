@@ -93,6 +93,7 @@ export function alsZeile(v: VorgangSatz): Record<string, unknown> {
     groessenarten: v.groessenarten,
     groessen_frist: v.groessenFrist ?? null,
     stufe_frist: v.stufeFrist ?? null,
+    wunschtermin: v.wunschtermin ?? null,
     liste_bestaetigt_am: v.listeBestaetigtAm ?? null,
     lieferadresse: v.lieferadresse ?? null,
     initialen_noetig: v.initialenNoetig,

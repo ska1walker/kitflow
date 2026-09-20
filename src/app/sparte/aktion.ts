@@ -18,8 +18,15 @@
 import { redirect } from "next/navigation";
 import { authClient, spartenLeitung } from "@/lib/anmeldung";
 import { dbAktiv } from "@/lib/db";
-import { aendereVorgang, setzeStufe, vermerke, vorgangPerNummer } from "@/lib/vorgaenge-db";
+import {
+  aendereVorgang,
+  setzeFreigabe,
+  setzeStufe,
+  vermerke,
+  vorgangPerNummer,
+} from "@/lib/vorgaenge-db";
 import { gibFrei, lehneAb, type FreigabeGrund } from "@/lib/vorgaenge";
+import { istGedeckt } from "@/lib/ansicht";
 import { spiegele } from "@/lib/spiegel";
 import { stufe as stufeVon } from "@/lib/stufen";
 import type { StufeNr } from "@/lib/typen";
@@ -38,7 +45,29 @@ const NICHT_ERREICHBAR =
 export type StufenStand =
   | { stand: "leer" }
   | { stand: "fertig"; nummer: string; titel: string }
+  /**
+   * Der Sprung auf „Bestellt“ oder weiter, ohne dass das Geld da ist. Kein
+   * Fehler — eine Rückfrage. Bestätigt der Mensch, wird es gesetzt und steht
+   * mit seinem Namen im Verlauf.
+   */
+  | { stand: "deckung"; nummer: string; titel: string; ziel: StufeNr }
   | { stand: "fehler"; text: string };
+
+/**
+ * Ab hier ist bestellt, und bestellt heißt: es kostet Geld.
+ *
+ * Kais Regel lautet „bestellt wird erst, wenn das Geld da ist; eine Zusage
+ * allein macht nie bestellbar“. Sie stand bis zum 20.09.2026 nur in der Doku —
+ * `gedeckt` wurde berechnet und ausschließlich angezeigt.
+ *
+ * **Warum eine Rückfrage und keine Sperre.** Die Zahlen, aus denen sich die
+ * Deckung ergibt (Angebotsbeträge, gewählter Händler, Geldeingang), schreibt
+ * heute keine einzige Stelle der Anwendung — `istGedeckt` ist damit immer
+ * `false`. Eine harte Sperre machte „Bestellt“ für immer unerreichbar: eine
+ * Mauer vor einer Tür, die niemand öffnen kann. Sobald die Finanzfelder
+ * pflegbar sind, kann aus der Rückfrage eine Sperre werden.
+ */
+const BESTELLT: StufeNr = 6;
 
 /** Eine Zahl aus dem Formular, nur wenn sie wirklich eine Stufe benennt. */
 function alsStufe(wert: string): StufeNr | null {
@@ -78,6 +107,44 @@ export async function stufeSetzen(_bisher: StufenStand, formular: FormData): Pro
   // nicht wieder aufnehmen (dieselbe Regel wie beim Abbruch einer Voranfrage).
   const gesetzt = await setzeStufe(vorgang.id, ziel, ziel === 9 ? vorgang.stufe : undefined);
   if (!gesetzt) return { stand: "fehler", text: NICHT_GEKLAPPT };
+
+  // Stufe 9 ist der Abbruch, nicht der Fortschritt — der kostet nichts.
+  if (ziel >= BESTELLT && ziel !== 9 && !istGedeckt(vorgang)) {
+    if (formular.get("trotzdem") !== "ja") {
+      return { stand: "deckung", nummer, titel: stufeVon(ziel).intern, ziel };
+    }
+    await vermerke(vorgang.id, {
+      art: "stufe-gesetzt",
+      text: `Auf „${stufeVon(ziel).intern}“ gesetzt, OHNE dass die Deckung nachgewiesen ist`,
+      sub: wer,
+      intern: true,
+      abStufe: 0,
+    });
+  }
+
+  // Eine Freigabe, die auf Stufe 1 gewartet hat, ist mit dem Stufenwechsel
+  // gegenstandslos. Sie muss weg, sonst bliebe die Karte auf /sparte stehen und
+  // lüde zu einem Klick ein, der einen abgebrochenen Vorgang wiederbelebte.
+  //
+  // `keine` und nicht `abgelehnt`: abgelehnt heißt bei uns „die Spartenleitung
+  // hat gestoppt“ und schickt M4b mit Begründung an den Trainer. Ein
+  // Stufenwechsel ist keine Entscheidung über die Anfrage, und eine Mail, die
+  // niemand ausgelöst hat, wäre hier falsch. Was passiert ist, steht im Verlauf.
+  //
+  // Scheitert es, ist das kein Abbruch: `gibFrei` prüft die Stufe selbst und
+  // weist die Freigabe auch dann ab. Diese Zeile räumt auf, sie sichert nicht.
+  if (vorgang.stufe === 1 && ziel !== 1 && vorgang.freigabe.stand === "offen") {
+    const weg = await setzeFreigabe(vorgang.id, "keine", wer);
+    await vermerke(vorgang.id, {
+      art: "freigabe",
+      text: weg
+        ? `Die offene Freigabe ist mit dem Stufenwechsel hinfällig geworden`
+        : `Die offene Freigabe konnte nicht zurückgenommen werden – sie greift trotzdem nicht mehr`,
+      sub: wer,
+      intern: true,
+      abStufe: 1,
+    });
+  }
 
   // Wer es war, gehört in den Verlauf: der Sinn des Logins ist, dass das nicht
   // mehr anonym passiert. `intern`, weil es Spieler und Eltern nichts angeht.
@@ -217,6 +284,8 @@ function freigabeFehler(grund: FreigabeGrund, nummer: string): string {
       return `Vorgang ${nummer} gibt es nicht.`;
     case "nicht_offen":
       return `Für ${nummer} steht gerade keine Freigabe aus. Lade die Seite neu.`;
+    case "nicht_stufe1":
+      return `${nummer} sammelt keine Größen mehr – abgebrochen oder schon weiter. Es geht nichts an die Händler raus. Lade die Seite neu.`;
     case "ohne_haendler":
       return "Es ist kein Händler hinterlegt (HAENDLER). Die Anfrage kann nicht rausgehen.";
     case "ohne_zeilen":

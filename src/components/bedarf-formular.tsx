@@ -527,6 +527,18 @@ export function BedarfFormular() {
             >
               <input type="date" name="groessen_frist" required className={EINGABE} />
             </Feld>
+            {/* Der Wunschtermin geht wörtlich in die Anfrage an die Händler.
+                Freiwillig: die meisten Vorgänge haben keinen, und ein erfundenes
+                Datum in einer Mail an einen Geschäftspartner wäre schlimmer als
+                „nach Absprache“. */}
+            {!nurGroessen && (
+              <Feld label="Wunschtermin für die Lieferung (freiwillig)">
+                <input type="date" name="wunschtermin" className={EINGABE} />
+                <span className="mt-1 block text-xs text-ink-500">
+                  Steht so in der Anfrage an die Händler. Ohne Angabe: „nach Absprache“.
+                </span>
+              </Feld>
+            )}
             {!nurGroessen && (
               <Feld label="Lieferadresse">
                 <textarea name="lieferadresse" rows={3} required className={EINGABE} />

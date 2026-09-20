@@ -334,3 +334,35 @@ export function pruefungen(satz: VorgangSatz, zeilen: PruefZeile[]): Pruefung[] 
 export function veraltet(satz: VorgangSatz, kontakt: HsObjekt): boolean {
   return istVeraltet(text(kontakt, "groesse_zuletzt_bestaetigt_am"), istJugend(satz));
 }
+
+/* ------------------------------------------------------------------ *
+ * Deckung
+ * ------------------------------------------------------------------ */
+
+/** Der Betrag des gewählten Angebots, oder `undefined`, wenn keins gewählt ist. */
+export function gewaehlterBetrag(satz: VorgangSatz): number | undefined {
+  return satz.lieferantGewaehlt === "11teamsports"
+    ? satz.angebote.elfteamsports.betrag
+    : satz.lieferantGewaehlt === "Intersport Uelzen"
+      ? satz.angebote.intersport.betrag
+      : undefined;
+}
+
+/**
+ * Ist der Vorgang gedeckt?
+ *
+ * Kais Regel: **bestellt wird erst, wenn das Geld da ist. Eine Zusage allein
+ * macht nie bestellbar.** Deshalb zählt hier nur, was wirklich eingegangen oder
+ * verbindlich freigegeben ist — `zusageSponsor` steht mit Absicht nicht in der
+ * Rechnung.
+ *
+ * Stand bis zum 20.09.2026 nur in `ladeVorgang` und diente allein der Anzeige.
+ * Jetzt liest auch der Stufenwechsel auf /sparte hier nach.
+ */
+export function istGedeckt(satz: VorgangSatz): boolean {
+  const betrag = gewaehlterBetrag(satz);
+  if (betrag === undefined || betrag <= 0) return false;
+  const eingegangen =
+    (satz.finanzen.eingangVerein ?? 0) + (satz.finanzen.spartenbudgetFreigegeben ?? 0);
+  return eingegangen >= betrag || (satz.finanzen.vorkasseBestaetigt ?? 0) >= betrag;
+}

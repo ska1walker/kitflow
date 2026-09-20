@@ -286,6 +286,7 @@ function dbAntwort(
         trainerEmail: (zeile.trainer_email as string) ?? undefined,
         groessenarten: (zeile.groessenarten as VorgangSatz["groessenarten"]) ?? [],
         groessenFrist: (zeile.groessen_frist as string) ?? undefined,
+        wunschtermin: (zeile.wunschtermin as string) ?? undefined,
         lieferadresse: (zeile.lieferadresse as string) ?? undefined,
         initialenNoetig: Boolean(zeile.initialen_noetig),
         wappenMit: Boolean(zeile.wappen_mit),
