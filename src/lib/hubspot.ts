@@ -16,7 +16,22 @@ import "server-only";
  * src/lib/vorgaenge.ts. Der Schluessel darf weder ins Bundle noch in ein Log.
  */
 
-const BASIS = "https://api.hubapi.com";
+/**
+ * Die Adresse von HubSpot.
+ *
+ * `HUBSPOT_BASIS` ist **nur fuer Tests** da und hat in Produktion nichts zu
+ * suchen: der Browser-Lauf (`npm run test:ui`) stellt HubSpot lokal nach, damit
+ * eine Pruefung der Oberflaeche nicht am echten CRM des Vereins herumschreibt.
+ * Dieselbe Bauart wie `NEXT_PUBLIC_SUPABASE_URL` in `db.ts` — die Adresse steht
+ * in der Umgebung, nicht im Code.
+ *
+ * Ohne die Variable ist es HubSpot selbst. Ein Tippfehler faellt sofort auf:
+ * dann antwortet niemand, und `hubspot()` gibt `null` zurueck, was ueberall als
+ * „konnte nicht fragen" gelesen wird und nie als „gibt es nicht".
+ */
+function basis(): string {
+  return process.env.HUBSPOT_BASIS || "https://api.hubapi.com";
+}
 
 /** Anmeldung ueber den Proxy statt ueber einen eigenen Header. */
 function ueberProxy(): boolean {
@@ -114,7 +129,7 @@ export async function hubspot<T>({ pfad, koerper, methode }: Abfrage): Promise<T
     const letzter = versuch === hoechstens;
 
     try {
-      const antwort = await fetch(`${BASIS}${pfad}`, {
+      const antwort = await fetch(`${basis()}${pfad}`, {
         method: art,
         headers: kopf,
         body: koerper ? JSON.stringify(koerper) : undefined,

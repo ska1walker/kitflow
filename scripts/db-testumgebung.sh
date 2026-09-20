@@ -131,7 +131,62 @@ createServer((ein, aus) => {
 }).listen(3344);
 JS
 
+# HubSpot aus Pappe, aber ueber HTTP. Damit kann ein Browser-Lauf die Oberflaeche
+# pruefen, ohne im echten CRM des Vereins herumzuschreiben — eine Testmannschaft
+# dort anzulegen und wieder zu loeschen waere jedes Mal eine Gelegenheit, etwas
+# Echtes zu erwischen.
+cat > "$ARBEIT/kontakte.json" <<'JSON'
+{
+  "9001": { "firstname": "Anna", "lastname": "Zwiebel", "email": "anna.zz@example.invalid",
+            "team": "ZZ Testteam", "sparte": "Fußball", "trainingsanzug_oberteil": "M" },
+  "9002": { "firstname": "Bernd", "lastname": "Zwerg", "email": "bernd.zz@example.invalid",
+            "team": "ZZ Testteam", "sparte": "Fußball" },
+  "9003": { "firstname": "Clara", "lastname": "Zander", "email": "clara.zz@example.invalid",
+            "team": "ZZ Testteam", "sparte": "Fußball" }
+}
+JSON
+
+cat > "$ARBEIT/hubspot.mjs" <<'JS'
+import { createServer } from "node:http";
+import { readFileSync, writeFileSync, existsSync } from "node:fs";
+const DATEI = process.env.KONTAKTE ?? "/tmp/kitflow-db-test/kontakte.json";
+const laden = () => (existsSync(DATEI) ? JSON.parse(readFileSync(DATEI, "utf8")) : {});
+const alsObjekt = (id, p) => ({ id, properties: { hs_object_id: id, ...p } });
+createServer(async (ein, aus) => {
+  const st = []; for await (const s of ein) st.push(s);
+  const koerper = st.length ? JSON.parse(Buffer.concat(st).toString()) : undefined;
+  const pfad = ein.url.split("?")[0];
+  const kontakte = laden();
+  const json = (w) => { aus.writeHead(200, { "content-type": "application/json" }); aus.end(JSON.stringify(w)); };
+
+  if (pfad.endsWith("/contacts/batch/read")) {
+    const ids = (koerper?.inputs ?? []).map((i) => String(i.id));
+    return json({ results: ids.filter((i) => kontakte[i]).map((i) => alsObjekt(i, kontakte[i])) });
+  }
+  if (pfad.endsWith("/contacts/search")) {
+    const f = koerper?.filterGroups?.[0]?.filters?.[0];
+    const treffer = Object.entries(kontakte).filter(([, p]) => {
+      if (!f) return true;
+      const wert = String(p[f.propertyName] ?? "");
+      if (f.operator === "EQ") return wert.toLowerCase() === String(f.value).toLowerCase();
+      if (f.operator === "CONTAINS_TOKEN") return wert.includes(String(f.value));
+      return true;
+    });
+    return json({ total: treffer.length, results: treffer.map(([i, p]) => alsObjekt(i, p)) });
+  }
+  if (pfad.startsWith("/crm/v3/objects/contacts/") && ein.method === "PATCH") {
+    const id = decodeURIComponent(pfad.split("/").pop());
+    kontakte[id] = { ...(kontakte[id] ?? {}), ...(koerper?.properties ?? {}) };
+    writeFileSync(DATEI, JSON.stringify(kontakte, null, 2));
+    return json(alsObjekt(id, kontakte[id]));
+  }
+  // Der Spiegel im CRM ist nur Sicht und darf hier ins Leere laufen.
+  return json({ results: [] });
+}).listen(3346);
+JS
+
 nohup "$ARBEIT/postgrest" "$ARBEIT/pgrst.conf" > "$ARBEIT/pgrst.log" 2>&1 &
+nohup node "$ARBEIT/hubspot.mjs" > "$ARBEIT/hubspot.log" 2>&1 &
 nohup node "$ARBEIT/adapter.mjs" > "$ARBEIT/adapter.log" 2>&1 &
 
 ende=$(( $(date +%s) + 30 ))
@@ -147,9 +202,36 @@ DIENST=$(GEHEIM="$GEHEIM" node -e '
   console.log(kopf + "." + last + "." + sig);
 ')
 
+# Ein Vorgang fuer die Browser-Laeufe. AUS-2026-900 liegt weit weg von den
+# echten Nummern, damit niemand ihn verwechselt.
+su postgres -c "psql -q -d $DB" <<'SQL'
+insert into vorgang (nummer, mannschaften, ausstattungsart, stufe, trainer_email,
+                     lieferadresse, groessen_frist, initialen_noetig, sponsor)
+values ('AUS-2026-900', array['ZZ Testteam'], 'Weitere Ausstattung', 1,
+        'kai@example.invalid', 'Am Sportplatz 14', '2026-10-30', true, 'Beispiel GmbH')
+on conflict (nummer) do nothing;
+
+insert into vorgang_artikel (vorgang_id, bezeichnung, hersteller, groessenart, stueck)
+select id, 'Trainingsjacke', 'adidas', 'oberteil', 1 from vorgang
+where nummer = 'AUS-2026-900'
+  and not exists (select 1 from vorgang_artikel a where a.vorgang_id = vorgang.id);
+
+insert into vorgang_person (vorgang_id, hs_kontakt_id)
+select v.id, k from vorgang v, unnest(array['9001','9002','9003']) k
+where v.nummer = 'AUS-2026-900'
+on conflict do nothing;
+SQL
+
 echo
 echo "Bereit. Fuer die Pruefungen:"
 echo "  export DIENST='$DIENST'"
 echo "  npm run test:db"
+echo
+echo "Fuer die Browser-Laeufe zusaetzlich:"
+echo "  export NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:3344"
+echo "  export HUBSPOT_BASIS=http://127.0.0.1:3346"
+echo "  export LINK_SECRET=zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
+echo "  npm run build && npx next start -p 3100"
+echo "  npm run test:ui && npm run test:kette"
 echo
 echo "Logs: $ARBEIT/pgrst.log"

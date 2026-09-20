@@ -13,7 +13,8 @@
     "link": "node scripts/link.mjs",
     "test:db": "vitest run --config vitest.echt.mts",
     "test:browser": "playwright test",
-    "test:ui": "node test-ui/bilder.mjs"
+    "test:ui": "node test-ui/bilder.mjs",
+    "test:kette": "node test-ui/kette.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",
