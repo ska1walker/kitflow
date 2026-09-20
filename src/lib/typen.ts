@@ -72,6 +72,8 @@ export type ArtikelFuer = "alle" | "feldspieler" | "torwart";
 
 /** Artikel aus dem Produktstamm. Nie erfinden, nur echte Daten. */
 export type Artikel = {
+  /** Die Zeilen-ID in `vorgang_artikel`. Gebraucht, um ein Foto zuzuordnen. */
+  id?: string;
   name: string;
   /** hs_sku, die Herstellernummer. */
   herstellernummer: string;
@@ -82,6 +84,8 @@ export type Artikel = {
   /** Nur in der Voranfrage: der grobe Bereich statt einzelner Größen. */
   groesseVon?: string;
   groesseBis?: string;
+  /** Ob ein Produktfoto hinterlegt ist (Migration 006). Nie die Bytes. */
+  hatBild?: boolean;
 };
 
 export type Haendler = {
@@ -184,6 +188,8 @@ export type Vorgang = {
 
   haendler: Haendler[];
   artikel: Artikel[];
+  /** Ob ein Sponsorlogo hinterlegt ist (Migration 006). Nie die Bytes. */
+  sponsorLogo?: boolean;
   verlauf: Ereignis[];
 
   /** Die Ausstattung der Person, die den Link geoeffnet hat. */

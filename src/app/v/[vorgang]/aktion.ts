@@ -18,7 +18,14 @@ import { ladeVoranfrage } from "@/lib/ergaenzen";
 import { spiegele } from "@/lib/spiegel";
 import { sendeGroessenMails, trageNach } from "@/lib/vorgaenge";
 import { dbAktiv } from "@/lib/db";
-import { setzeStufe, vermerke, vorgangPerNummer } from "@/lib/vorgaenge-db";
+import {
+  aendereArtikel,
+  aendereVorgang,
+  setzeStufe,
+  vermerke,
+  vorgangPerNummer,
+} from "@/lib/vorgaenge-db";
+import { GRENZE_BYTES, entferne, lade, ladeFehlerText } from "@/lib/ablage";
 
 export type Ergebnis =
   | { stand: "leer" }
@@ -162,4 +169,110 @@ export async function groessenMailsSenden(
       "kitflow kann gerade keine Mails verschicken. Die persönlichen Links stehen in der Mail, mit der dieser Vorgang angelegt wurde – von dort lassen sie sich von Hand verteilen.",
   };
   return { stand: "fehler", text: texte[ergebnis.grund] };
+}
+
+/* ------------------------------------------------------------------ *
+ * Bilder: Sponsorlogo und Artikelfotos
+ * ------------------------------------------------------------------ */
+
+export type BildErgebnis =
+  | { stand: "leer" }
+  | { stand: "gespeichert" }
+  | { stand: "entfernt" }
+  | { stand: "fehler"; text: string };
+
+/**
+ * Ein Bild hochladen oder entfernen.
+ *
+ * **Der Trainer-Link ist die einzige Tür.** Es gibt bewusst keinen Weg über
+ * `/neu`: die Seite steht offen im Netz und legt seit Migration 002 nur
+ * Entwürfe an. Ein Hochladefeld dort hieße, Dateien von Unbekannten für
+ * Vorgänge zu speichern, die es noch gar nicht gibt.
+ *
+ * **Die Datei wird an ihren ersten Bytes gemessen, nicht an ihrem Namen**
+ * (`lade` in `lib/ablage.ts`). Ein Browser meldet als Typ, was die Endung
+ * nahelegt, und die ist frei wählbar.
+ *
+ * Scheitert das Entfernen in der Ablage, wird der Verweis trotzdem gelöscht:
+ * sonst zeigte die Seite weiter auf ein Bild, das der Trainer gerade
+ * weggenommen hat. Zurück bleibt eine verwaiste Datei — der billigere Fehler.
+ */
+export async function bildSetzen(
+  vorgang: string,
+  token: string,
+  _bisher: BildErgebnis,
+  formular: FormData,
+): Promise<BildErgebnis> {
+  if (!pruefe(token, "status", vorgang)) {
+    return { stand: "fehler", text: "Dieser Link funktioniert nicht mehr." };
+  }
+  if (!dbAktiv()) {
+    return { stand: "fehler", text: "Das hat gerade nicht geklappt. Bitte versuch es später." };
+  }
+
+  const art = String(formular.get("art") ?? "");
+  const artikelId = String(formular.get("artikel") ?? "");
+  if (art !== "sponsor" && art !== "artikel") {
+    return { stand: "fehler", text: "Das hat nicht geklappt." };
+  }
+
+  const geladen = await vorgangPerNummer(vorgang);
+  if (geladen.stand === "gestoert") {
+    return { stand: "fehler", text: "kitflow kommt gerade nicht an die Daten." };
+  }
+  if (geladen.stand !== "da") {
+    return { stand: "fehler", text: "Dieser Link funktioniert nicht mehr." };
+  }
+  const satz = geladen.vorgang;
+
+  // Eine fremde Artikel-ID darf nicht an einem fremden Vorgang landen.
+  const artikel = art === "artikel" ? satz.artikel.find((a) => a.id === artikelId) : undefined;
+  if (art === "artikel" && !artikel) {
+    return { stand: "fehler", text: "Diesen Artikel gibt es an diesem Vorgang nicht." };
+  }
+
+  const bisher = art === "sponsor" ? satz.sponsorLogo : artikel?.bild;
+
+  if (formular.get("entfernen") === "ja") {
+    if (bisher) await entferne(bisher);
+    const weg =
+      art === "sponsor"
+        ? await aendereVorgang(satz.id, { sponsorLogo: "" })
+        : await aendereArtikel(artikelId, { bild: "" });
+    if (!weg) return { stand: "fehler", text: "Das hat gerade nicht geklappt." };
+    return { stand: "entfernt" };
+  }
+
+  const datei = formular.get("bild");
+  if (!(datei instanceof File) || datei.size === 0) {
+    return { stand: "fehler", text: "Bitte ein Bild auswählen." };
+  }
+  if (datei.size > GRENZE_BYTES) {
+    return { stand: "fehler", text: ladeFehlerText("zu_gross") };
+  }
+
+  const bytes = new Uint8Array(await datei.arrayBuffer());
+  const ergebnis = await lade(
+    art === "sponsor" ? "sponsor" : "artikel",
+    art === "sponsor" ? satz.id : artikelId,
+    bytes,
+  );
+  if (!ergebnis.ok) return { stand: "fehler", text: ladeFehlerText(ergebnis.grund) };
+
+  const gemerkt =
+    art === "sponsor"
+      ? await aendereVorgang(satz.id, { sponsorLogo: ergebnis.pfad })
+      : await aendereArtikel(artikelId, { bild: ergebnis.pfad });
+
+  if (!gemerkt) {
+    // Die Datei liegt, der Verweis fehlt — ohne ihn findet sie niemand wieder.
+    await entferne(ergebnis.pfad);
+    return { stand: "fehler", text: "Das hat gerade nicht geklappt." };
+  }
+
+  // Der alte Pfad kann ein anderer sein, wenn sich das Dateiformat geaendert
+  // hat (etwa PNG nach JPEG). Dann liegt sonst eine Leiche im Eimer.
+  if (bisher && bisher !== ergebnis.pfad) await entferne(bisher);
+
+  return { stand: "gespeichert" };
 }

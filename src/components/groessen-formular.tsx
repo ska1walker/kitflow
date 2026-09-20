@@ -76,6 +76,28 @@ export function GroessenFormular({
         {abfrage.jugend ? " Prüf das kurz, Kinder wachsen schnell." : ""}
       </p>
 
+      {/* „Damit die Spieler auch gleich sehen, um was es geht" (Kai, 20.09.2026).
+          Die Bilder liegen in einem privaten Eimer; `/api/bild` verlangt denselben
+          persönlichen Token wie diese Seite — deshalb hängt er an der Adresse. */}
+      {abfrage.artikelBilder.length > 0 && (
+        <div className="mt-5 flex flex-wrap gap-4">
+          {abfrage.artikelBilder.map((b) => (
+            <figure key={b.id} className="w-36">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={`/api/bild?vorgang=${encodeURIComponent(abfrage.vorgang)}&art=artikel&id=${encodeURIComponent(b.id)}&person=${encodeURIComponent(abfrage.person)}&token=${encodeURIComponent(token)}`}
+                alt={b.bezeichnung}
+                width={144}
+                height={144}
+                loading="lazy"
+                className="h-36 w-36 rounded-xl border border-ink-200 bg-white object-contain"
+              />
+              <figcaption className="mt-1.5 text-xs text-ink-600">{b.bezeichnung}</figcaption>
+            </figure>
+          ))}
+        </div>
+      )}
+
       {/* Der Warnhinweis gilt der Bestellung. Wo nichts bestellt wird, wäre er
           eine Drohung ohne Anlass. */}
       {!abfrage.nurGroessen && (

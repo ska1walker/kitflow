@@ -49,6 +49,7 @@ export default async function TrainerStatus(props: PageProps<"/v/[vorgang]">) {
      
       ansicht="trainer"
       voranfrage={voranfrage}
+      bilder={{ token: t }}
       nachtrag={nachtrag ? { token: t, personen: nachtrag.personen } : undefined}
       verteiler={
         liste?.stand === "da"

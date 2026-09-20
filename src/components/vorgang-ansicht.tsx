@@ -9,6 +9,7 @@ import type { MailEmpfaenger } from "@/lib/vorgaenge";
 import { Schrittleiste } from "./schrittleiste";
 import { VoranfrageKarte } from "./voranfrage-karte";
 import { NachtragKarte } from "./nachtrag-karte";
+import { BilderKarte } from "./bilder-karte";
 import { MailKarte } from "./mail-karte";
 import {
   ArtikelKarte,
@@ -124,6 +125,7 @@ export function VorgangAnsicht({
   voranfrage,
   nachtrag,
   verteiler,
+  bilder,
 }: {
   vorgang: Vorgang;
   ansicht: Ansicht;
@@ -134,6 +136,8 @@ export function VorgangAnsicht({
   nachtrag?: { token: string; personen: { id: string; name: string }[] };
   /** Nur am Trainer-Link und nur auf Stufe 1: wer die Größen-Mail bekommen kann. */
   verteiler?: { token: string; frist: string; empfaenger: MailEmpfaenger[] };
+  /** Nur am Trainer-Link: Sponsorlogo und Produktfotos pflegen. */
+  bilder?: { token: string };
 }) {
   // Bei einem Abbruch stehen die Karten auf dem Stand, den der Vorgang erreicht
   // hatte. Kopf und naechster Schritt sprechen weiter vom Abbruch selbst.
@@ -190,6 +194,18 @@ export function VorgangAnsicht({
           token={verteiler.token}
           frist={verteiler.frist}
           empfaenger={verteiler.empfaenger}
+        />
+      )}
+
+      {/* Ein Groessencheck bestellt nichts und braucht kein Sponsorlogo; nach
+          Stufe 1 ist die Anfrage raus und ein neues Bild kaeme zu spaet. */}
+      {bilder && !vorgang.nurGroessen && vorgang.stufe <= 1 && (
+        <BilderKarte
+          vorgang={vorgang.nummer}
+          token={bilder.token}
+          artikel={vorgang.artikel}
+          sponsorLogo={Boolean(vorgang.sponsorLogo)}
+          sponsor={vorgang.sponsor}
         />
       )}
 

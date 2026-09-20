@@ -56,6 +56,7 @@ import {
 } from "./vorgaenge-db";
 import { spiegele, spiegelePersonen } from "./spiegel";
 import { anfrageHaendler, haendlerAktiv } from "./haendler-adressen";
+import { hole } from "./ablage";
 import { alsCsv, baueAnfrage, summenText } from "./anfrage";
 import { freigabeWeg, freigeberName, ruftZurFreigabe, type Freigeber } from "./freigabe";
 import { freigabeUmfang } from "./uebersicht";
@@ -215,6 +216,7 @@ export async function ladeVorgang(
     stand: standText(satz.aktualisiertAm),
 
     sponsor: satz.sponsor,
+    sponsorLogo: Boolean(satz.sponsorLogo),
     finanzierungZugesagt: (satz.finanzen.zusageSponsor ?? 0) > 0,
     geldEingangAm: gedeckt ? kurz(satz.finanzen.eingangAm) : undefined,
 
@@ -277,6 +279,12 @@ export type GroessenAbfrage = {
   anrede: string;
   mannschaft: string;
   gegenstand: string;
+  /**
+   * Die Artikel dieses Vorgangs, zu denen ein Foto hinterlegt ist. Nur
+   * Bezeichnung und ID — die Adresse baut das Formular, weil erst dort der
+   * persoenliche Token vorliegt (Migration 006).
+   */
+  artikelBilder: { id: string; bezeichnung: string }[];
   frist?: string;
   jugend: boolean;
   fragen: GroessenFrage[];
@@ -346,6 +354,9 @@ export async function ladeGroessenAbfrage(
     anrede: text(kontakt, "firstname") ?? "",
     mannschaft: satz.mannschaften.join(", ") || (satz.mannschaftscode ?? ""),
     gegenstand: satz.ausstattungsart,
+    artikelBilder: satz.artikel
+      .filter((a) => a.bild)
+      .map((a) => ({ id: a.id, bezeichnung: [a.hersteller, a.bezeichnung].filter(Boolean).join(" ") })),
     frist: kurz(satz.groessenFrist),
     jugend,
     fragen,
@@ -828,6 +839,28 @@ async function verschickeAnfrage(satz: VorgangSatz): Promise<AnfrageVersand> {
   const csv = alsCsv(anfrage, liste.trikotsatz, liste.initialenNoetig);
   const antwortAn = process.env.MAIL_ANTWORT || "kai.boehm@eintrachtmunster.de";
 
+  // Einmal holen, nicht je Haendler: dieselben Bytes gehen an beide, und ein
+  // zweiter Abruf waere nur ein weiterer Weg, an dem etwas ausfallen kann.
+  // Faellt er aus, geht die Anfrage OHNE Logo raus — ein fehlendes Bild haelt
+  // keine Angebotsanfrage auf, und der Haendler fragt zur Not nach.
+  const logo = satz.sponsorLogo ? await hole(satz.sponsorLogo) : null;
+  const sponsorLogo = logo
+    ? {
+        bytes: logo.bytes,
+        typ: logo.typ,
+        // Ein sprechender Name, keine interne Kennung: der Haendler sieht den
+        // Anhang in seinem Postfach und soll ihn zuordnen koennen.
+        dateiname: `${satz.nummer}_Sponsorlogo.${satz.sponsorLogo!.split(".").pop() ?? "png"}`,
+      }
+    : undefined;
+  if (satz.sponsorLogo && !logo) {
+    await vermerke(satz.id, {
+      art: "mail",
+      text: "Sponsorlogo nicht gefunden - die Anfrage ging ohne raus",
+      intern: true,
+    });
+  }
+
   // Nacheinander und nicht parallel: Resend laesst im Standard zwei Anfragen je
   // Sekunde durch. Mit zwei Haendlern plus M5 in derselben Anfrage liegt
   // paralleler Versand genau auf der Kante, und ein 429 hiesse hier, dass ein
@@ -851,6 +884,7 @@ async function verschickeAnfrage(satz: VorgangSatz): Promise<AnfrageVersand> {
       // Nur hier. M1, M2, M3 und M5 bleiben ohne Wappen — die gehen an Leute,
       // die den Verein kennen (Kais Schnitt vom 20.09.2026).
       wappen: satz.wappenMit,
+      sponsorLogo,
     });
     if (!ging) continue;
     verschickt += 1;

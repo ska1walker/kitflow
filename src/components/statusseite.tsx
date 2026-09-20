@@ -23,6 +23,7 @@ export function Statusseite({
   voranfrage,
   nachtrag,
   verteiler,
+  bilder,
 }: {
   vorgang: Vorgang;
   /** Wer schaut zu. Aus dem Zweck des Links. */
@@ -32,6 +33,8 @@ export function Statusseite({
   /** Nur am Trainer-Link und nur auf Stufe 1 (docs/formulare.md). */
   nachtrag?: { token: string; personen: { id: string; name: string }[] };
   verteiler?: { token: string; frist: string; empfaenger: MailEmpfaenger[] };
+  /** Nur am Trainer-Link: Sponsorlogo und Produktfotos pflegen. */
+  bilder?: { token: string };
 }) {
   const [hinweis, setHinweis] = useState("");
   const hinweisTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -62,6 +65,7 @@ export function Statusseite({
             voranfrage={voranfrage}
             nachtrag={nachtrag}
             verteiler={verteiler}
+            bilder={bilder}
           />
         </div>
       </main>

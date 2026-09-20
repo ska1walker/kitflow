@@ -81,12 +81,14 @@ export function trikotnummer(satz: VorgangSatz, kontaktId: string): string {
  */
 export function artikelVon(satz: VorgangSatz): Artikel[] {
   return satz.artikel.map((a) => ({
+    id: a.id,
     name: [a.hersteller, a.bezeichnung].filter(Boolean).join(" "),
     herstellernummer: a.herstellernummer ?? "",
     groessenart: a.groessenart,
     fuer: a.fuer,
     groesseVon: a.groesseVon,
     groesseBis: a.groesseBis,
+    hatBild: Boolean(a.bild),
   }));
 }
 

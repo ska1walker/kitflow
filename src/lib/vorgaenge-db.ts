@@ -36,6 +36,8 @@ type ArtikelRoh = {
   fuer: ArtikelFuer;
   stueck: number;
   beflockung: string | null;
+  /** Migration 006: Pfad in der Ablage. */
+  bild?: string | null;
   groesse_von: string | null;
   groesse_bis: string | null;
 };
@@ -71,6 +73,8 @@ type VorgangRoh = {
   initialen_noetig: boolean;
   /** Migration 005: Wappen an die Haendleranfrage. */
   wappen_mit?: boolean;
+  /** Migration 006: Pfad des Sponsorlogos in der Ablage. */
+  sponsor_logo?: string | null;
   sponsor: string | null;
   hinweis_haendler: string | null;
   hs_deal_id: string | null;
@@ -129,6 +133,8 @@ export type ArtikelSatz = {
   fuer: ArtikelFuer;
   stueck: number;
   beflockung?: string;
+  /** Pfad in der Ablage, nicht die Bytes. */
+  bild?: string;
   groesseVon?: string;
   groesseBis?: string;
 };
@@ -211,6 +217,7 @@ export type VorgangSatz = {
   lieferadresse?: string;
   initialenNoetig: boolean;
   wappenMit: boolean;
+  sponsorLogo?: string;
   sponsor?: string;
   hinweisHaendler?: string;
   hsDealId?: string;
@@ -280,6 +287,7 @@ function ausArtikel(roh: ArtikelRoh): ArtikelSatz {
     fuer: roh.fuer,
     stueck: roh.stueck,
     beflockung: wert(roh.beflockung),
+    bild: wert(roh.bild ?? null),
     groesseVon: wert(roh.groesse_von),
     groesseBis: wert(roh.groesse_bis),
   };
@@ -324,6 +332,7 @@ function ausVorgang(roh: VorgangRoh): VorgangSatz | undefined {
     initialenNoetig: roh.initialen_noetig,
     // Fehlt die Spalte (vor Migration 005), gilt „kein Wappen“ — nie umgekehrt.
     wappenMit: roh.wappen_mit ?? false,
+    sponsorLogo: wert(roh.sponsor_logo ?? null),
     sponsor: wert(roh.sponsor),
     hinweisHaendler: wert(roh.hinweis_haendler),
     hsDealId: wert(roh.hs_deal_id),
@@ -470,6 +479,7 @@ export type NeuerArtikel = {
   fuer?: ArtikelFuer;
   stueck: number;
   beflockung?: string;
+  bild?: string;
   groesseVon?: string;
   groesseBis?: string;
 };
@@ -566,6 +576,7 @@ function zuArtikelZeile(a: NeuerArtikel, vorgangId: string, index: number) {
     fuer: a.fuer ?? "alle",
     stueck: a.stueck,
     beflockung: a.beflockung ?? null,
+    bild: a.bild ?? null,
     groesse_von: a.groesseVon ?? null,
     groesse_bis: a.groesseBis ?? null,
   };
@@ -662,6 +673,7 @@ export async function aendereVorgang(
     hinweisHaendler: string;
     initialenNoetig: boolean;
     wappenMit: boolean;
+    sponsorLogo: string;
     sponsor: string;
     hsDealId: string;
   }>,
@@ -675,6 +687,7 @@ export async function aendereVorgang(
     hinweisHaendler: "hinweis_haendler",
     initialenNoetig: "initialen_noetig",
     wappenMit: "wappen_mit",
+    sponsorLogo: "sponsor_logo",
     sponsor: "sponsor",
     hsDealId: "hs_deal_id",
   };
@@ -697,6 +710,7 @@ export async function aendereArtikel(
     farbe: string;
     fuer: ArtikelFuer;
     beflockung: string;
+    bild: string;
   }>,
 ): Promise<boolean> {
   const zu: Record<string, unknown> = {};
@@ -704,6 +718,8 @@ export async function aendereArtikel(
   if (werte.farbe !== undefined) zu.farbe = werte.farbe || null;
   if (werte.fuer !== undefined) zu.fuer = werte.fuer;
   if (werte.beflockung !== undefined) zu.beflockung = werte.beflockung || null;
+  // Leerer String heisst hier ausdruecklich „Bild entfernen“.
+  if (werte.bild !== undefined) zu.bild = werte.bild || null;
   if (Object.keys(zu).length === 0) return true;
 
   const zeilen = await aendere("vorgang_artikel", { id: `eq.${artikelId}` }, zu);

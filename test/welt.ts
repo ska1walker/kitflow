@@ -25,6 +25,10 @@ export type Welt = {
   ereignisse?: Record<string, unknown>[];
   /** Die Datenbank antwortet nicht. */
   dbGestoert?: boolean;
+  /** Dateien in der Ablage, nach Pfad im Eimer. */
+  ablage?: Record<string, { bytes: Uint8Array; typ: string }>;
+  /** Die Ablage antwortet nicht. */
+  ablageGestoert?: boolean;
   /** HubSpot antwortet nicht. */
   hubspotGestoert?: boolean;
   /** Die nächste Vorgangsnummer, die die Datenbank vergibt. */
@@ -52,7 +56,7 @@ export type Welt = {
 };
 
 export type Aufruf = {
-  host: "db" | "hubspot" | "resend" | "telegram" | "todoist";
+  host: "db" | "hubspot" | "resend" | "telegram" | "todoist" | "ablage";
   methode: string;
   pfad: string;
   suche: Record<string, string>;
@@ -118,7 +122,16 @@ export function stelleWelt(welt: Welt) {
     const host = NACHBARN[adresse.host] ?? "db";
     const pfad = host === "hubspot" ? adresse.pathname : adresse.pathname.replace(/^\/rest\/v1\//, "");
     const methode = o?.method ?? (o?.body ? "POST" : "GET");
-    const koerper = o?.body ? JSON.parse(String(o.body)) : undefined;
+
+    // Die Ablage liegt auf demselben Gastgeber wie die Datenbank, spricht aber
+    // kein JSON: ein `JSON.parse` auf die Bytes eines PNG wirft. Deshalb wird
+    // sie vor allem anderen erkannt.
+    const ablagePfad = adresse.pathname.startsWith("/storage/v1/object/")
+      ? adresse.pathname.replace("/storage/v1/object/kitflow/", "")
+      : null;
+
+    const koerper =
+      o?.body && ablagePfad === null ? JSON.parse(String(o.body)) : undefined;
 
     aufrufe.push({
       host,
@@ -127,6 +140,31 @@ export function stelleWelt(welt: Welt) {
       suche: Object.fromEntries(adresse.searchParams),
       koerper,
     });
+
+    if (ablagePfad !== null) {
+      aufrufe.push({ host: "ablage", methode, pfad: ablagePfad, suche: {}, koerper: undefined });
+      if (welt.ablageGestoert) return new Response("kaputt", { status: 500 });
+
+      const ablage = (welt.ablage ??= {});
+      if (methode === "POST") {
+        const roh = o?.body as Uint8Array;
+        ablage[ablagePfad] = {
+          bytes: new Uint8Array(roh),
+          typ: (o?.headers as Record<string, string> | undefined)?.["Content-Type"] ?? "image/png",
+        };
+        return json({ Key: `kitflow/${ablagePfad}` });
+      }
+      if (methode === "DELETE") {
+        delete ablage[ablagePfad];
+        return json({});
+      }
+      const datei = ablage[ablagePfad];
+      if (!datei) return new Response("", { status: 404 });
+      return new Response(datei.bytes as BodyInit, {
+        status: 200,
+        headers: { "Content-Type": datei.typ },
+      });
+    }
 
     if (host === "resend") {
       if (welt.resendGestoert) return json({ message: "kaputt" }, 422);

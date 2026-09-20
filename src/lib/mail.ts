@@ -624,6 +624,11 @@ export type M4Daten = {
   csv: string;
   /** Vereinswappen in den Kopf (Migration 005, Haken in F1). */
   wappen?: boolean;
+  /**
+   * Das Sponsorlogo als Anhang. Kein Inline-Bild: der Haendler braucht die
+   * Datei zum Drucken, nicht als Zierde in der Mail.
+   */
+  sponsorLogo?: { bytes: Uint8Array; typ: string; dateiname: string };
 };
 
 /**
@@ -692,6 +697,18 @@ export async function sendeM4(an: string, d: M4Daten): Promise<string | null> {
         art: "hinweis",
         text: `Bitte schicken Sie das Angebot als PDF an ${d.antwortAn}${d.trainerEmail ? ` und in Kopie an ${d.trainerEmail}` : ""}. Dieselbe Anfrage geht an einen zweiten Händler.`,
       },
+      ...(d.sponsorLogo
+        ? ([
+            { art: "titel", text: "Sponsorlogo" },
+            {
+              art: "absatz",
+              // Bewusst ohne Druckangaben: Groesse und Platzierung des
+              // Sponsoraufdrucks sind mit den Haendlern nicht abgestimmt, und
+              // erfundene Masse in einer Anfrage sind teurer als eine Rueckfrage.
+              text: `Die Druckdatei „${d.sponsorLogo.dateiname}" liegt bei. Bitte geben Sie im Angebot an, ob das Format für Ihren Druck taugt und welche Maße Sie empfehlen.`,
+            },
+          ] as Rahmen["bloecke"])
+        : ([] as Rahmen["bloecke"])),
       {
         art: "absatz",
         text: "In der Tabelle stehen keine Namen. Wer welches Stück bekommt, ordnet der Verein bei der Ausgabe zu.",
@@ -708,6 +725,18 @@ export async function sendeM4(an: string, d: M4Daten): Promise<string | null> {
     anhaenge: [
       { art: "text", dateiname: `${d.vorgang}_Anfrage.csv`, inhalt: d.csv },
       ...(wappen ? [wappen] : []),
+      ...(d.sponsorLogo
+        ? ([
+            {
+              art: "binaer",
+              dateiname: d.sponsorLogo.dateiname,
+              bytes: d.sponsorLogo.bytes,
+              typ: d.sponsorLogo.typ,
+              // Kein `inlineId`: das Logo soll als Datei ankommen, nicht im
+              // Fliesstext verschwinden.
+            },
+          ] as Anhang[])
+        : []),
     ],
   });
 }
