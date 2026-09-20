@@ -33,6 +33,13 @@ Stand 18.09.2026
 - M7 offen: der Fall steht heute auf der Seite. Eine Mail wäre für den, der sie zu früh schließt.
 - Noch offen: der Anhang Merkblatt_Zahlwege.pdf.
 
+## Bilder – entschieden und gebaut (20.09.2026)
+- ~~Vereinswappen in den Mails~~ – gebaut: Haken je Vorgang, **nur in M4**, als Inline-Anhang. Datei gehört als `src/assets/wappen.png` ins Projekt und fehlt noch.
+- ~~Wohin mit der Sponsorgrafik~~ – gebaut: privater Eimer `kitflow` in Supabase Storage, hochgeladen auf der Statusseite, hängt als Druckdatei an M4. **Druckmaße stehen bewusst nicht in der Mail** – die sind mit Bormann und Hillebrecht nicht abgestimmt, und erfundene Maße kosten mehr als eine Rückfrage.
+- ~~Vorschaubilder der Artikel~~ – gebaut: Foto je Artikel, erscheint über den Größenfeldern in F2.
+- **Neu einzurichten**: Migrationen 005 und 006, dazu der Eimer `kitflow` mit *Public bucket: aus*. Details in docs/bilder.md.
+- **Offen geblieben**: Bilder werden **nicht verkleinert** (das bräuchte `sharp`, kitflow hat außer Next und React keine Abhängigkeit). Stattdessen eine harte Grenze bei 2 MB. Wenn Trainer regelmäßig daran scheitern, ist das der Moment, über `sharp` zu reden – nicht vorher.
+
 ## Vor Phase 2
 - Mit den Händlern: Rechnung auf Sponsor oder Mannschaft möglich, Vorkasserechnung, Bestätigung per Link
 - Beleg-Tabelle mit Schatzmeister bzw. Steuerberater abstimmen (ich bin kein Steuerberater)

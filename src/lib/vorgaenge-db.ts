@@ -698,6 +698,12 @@ export async function aendereVorgang(
   }
   if (Object.keys(zu).length === 0) return true;
 
+  // Ein leerer Pfad heisst „Bild entfernen“, und das gehoert als NULL in die
+  // Spalte, nicht als leerer String. Gelesen wird beides gleich (`wert`), aber
+  // eine Datenbank, in der „nichts“ zweierlei ist, laedt zu Abfragen ein, die
+  // nur einen der beiden Faelle treffen. Derselbe Griff wie bei `aendereArtikel`.
+  if (zu.sponsor_logo === "") zu.sponsor_logo = null;
+
   const zeilen = await aendere("vorgang", { id: `eq.${vorgangId}` }, zu);
   return zeilen !== null && zeilen.length > 0;
 }

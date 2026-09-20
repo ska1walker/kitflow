@@ -198,3 +198,84 @@ async function eineNummer(): Promise<string | undefined> {
   const zeilen = await lese<{ nummer: string }>("vorgang", { select: "nummer", id: `eq.${vorgangId}` });
   return zeilen?.[0]?.nummer;
 }
+
+/**
+ * Die Spalten aus Migration 005 und 006 gegen das echte Schema.
+ *
+ * Das Papp-Netz spiegelt hier nur meine eigenen Annahmen zurueck. Was es
+ * grundsaetzlich nicht finden kann: ob `not null default false` einen fehlenden
+ * Wert wirklich auffaengt, ob PostgREST das eingebettete `bild` am Kind
+ * mitliefert, und ob „entfernen" als NULL oder als leerer String ankommt.
+ * Genau in dieser Luecke sass beim letzten Mal `on_conflict`.
+ */
+describe("Wappen, Sponsorlogo und Artikelbild gegen echtes PostgREST", () => {
+  let id = "";
+
+  afterAll(async () => {
+    if (id) await loescheVorgang(id);
+  });
+
+  test("angelegt mit Wappen-Haken, Logo und Artikelbild", async () => {
+    const v = await legeVorgangAn({
+      mannschaften: ["Ü40 Team 3"],
+      ausstattungsart: "Weitere Ausstattung",
+      stufe: 1,
+      wappenMit: true,
+      artikel: [
+        {
+          bezeichnung: "Trainingsjacke",
+          groessenart: "oberteil",
+          stueck: 1,
+          bild: "artikel/a1.png",
+        },
+      ],
+    });
+    expect(v).not.toBeNull();
+    id = v!.id;
+
+    expect(v!.wappenMit).toBe(true);
+    // Das Kind kommt im selben Aufruf mit (`vorgang_artikel(*)`). Faellt `bild`
+    // aus der Einbettung, zeigt F2 nie ein Foto — ohne dass irgendwo ein Fehler
+    // entstuende.
+    expect(v!.artikel[0].bild).toBe("artikel/a1.png");
+  });
+
+  test("ohne Angabe ist der Haken aus, nicht null", async () => {
+    const v = await legeVorgangAn({
+      mannschaften: ["Ü40 Team 3"],
+      ausstattungsart: "Weitere Ausstattung",
+      stufe: 1,
+    });
+    expect(v).not.toBeNull();
+    expect(v!.wappenMit).toBe(false);
+    await loescheVorgang(v!.id);
+  });
+
+  test("das Logo laesst sich setzen und wieder lesen", async () => {
+    expect(await aendereVorgang(id, { sponsorLogo: "sponsor/v1.png" })).toBe(true);
+
+    const zeilen = await lese<{ sponsor_logo: string | null }>("vorgang", {
+      select: "sponsor_logo",
+      id: `eq.${id}`,
+    });
+    expect(zeilen?.[0]?.sponsor_logo).toBe("sponsor/v1.png");
+  });
+
+  test("entfernen schreibt NULL und keinen leeren String", async () => {
+    expect(await aendereVorgang(id, { sponsorLogo: "" })).toBe(true);
+
+    const zeilen = await lese<{ sponsor_logo: string | null }>("vorgang", {
+      select: "sponsor_logo",
+      id: `eq.${id}`,
+    });
+    // Der Unterschied faellt beim Lesen nicht auf (`wert` macht aus beidem
+    // undefined) — wohl aber jeder kuenftigen Abfrage mit `is.null`.
+    expect(zeilen?.[0]?.sponsor_logo).toBeNull();
+  });
+
+  test("die Datenbank weist einen fehlenden Haken ab", async () => {
+    // `not null` steht im Schema, nicht im Code. Faellt es weg, merkt es nur
+    // ein Lauf wie dieser.
+    expect(await aendere("vorgang", { id: `eq.${id}` }, { wappen_mit: null })).toBeNull();
+  });
+});

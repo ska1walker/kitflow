@@ -177,7 +177,14 @@ export async function groessenMailsSenden(
 
 export type BildErgebnis =
   | { stand: "leer" }
-  | { stand: "gespeichert" }
+  /**
+   * `stempel` haengt die Karte an die Bildadresse. Die bleibt beim Ersetzen
+   * dieselbe, das Bild dahinter nicht — ohne eine wechselnde Beigabe zeigte
+   * der Browser sein zwischengespeichertes. Der Wert entsteht hier und nicht
+   * beim Rendern: React 19 verbietet unreine Aufrufe in einer Komponente, und
+   * der Zeitpunkt des Speicherns ist ohnehin das, was gemeint ist.
+   */
+  | { stand: "gespeichert"; stempel: string }
   | { stand: "entfernt" }
   | { stand: "fehler"; text: string };
 
@@ -274,5 +281,5 @@ export async function bildSetzen(
   // hat (etwa PNG nach JPEG). Dann liegt sonst eine Leiche im Eimer.
   if (bisher && bisher !== ergebnis.pfad) await entferne(bisher);
 
-  return { stand: "gespeichert" };
+  return { stand: "gespeichert", stempel: String(Date.now()) };
 }

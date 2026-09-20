@@ -83,6 +83,27 @@ zweiter Lauf schadet nicht.
 | --- | --- | --- |
 | `supabase/migrations/002_entwurf.sql` | `vorgang_entwurf` | jede Bedarfsmeldung an `/neu` scheitert |
 | `supabase/migrations/20260918150000_freigabe.sql` | vier Spalten an `vorgang` | keine Freigabe möglich, die Anfrage bleibt liegen |
+| `supabase/migrations/20260920080000_wappen.sql` | `vorgang.wappen_mit` | der Haken in F1 lässt sich nicht speichern |
+| `supabase/migrations/20260920090000_bilder.sql` | `vorgang.sponsor_logo`, `vorgang_artikel.bild` | Sponsorlogo und Produktfotos lassen sich nicht hinterlegen |
+
+**Alle vier sind wiederholbar**, und alle vier sind gegen ein echtes PostgreSQL
+16 gelaufen, nicht nur geschrieben (`npm run test:db`).
+
+### 2.1b Ein Eimer für die Bilder
+
+Nur nötig, wenn du Sponsorlogo oder Produktfotos benutzen willst — ohne ihn
+läuft alles andere unverändert.
+
+Supabase → Storage → New bucket:
+
+- Name **`kitflow`**
+- **Public bucket: aus.** Das ist der ganze Punkt (docs/bilder.md).
+- Policies braucht es keine: der Dienst-Schlüssel geht an RLS vorbei, wie bei
+  den Tabellen.
+
+Das **Vereinswappen** braucht den Eimer nicht. Es gehört als
+`src/assets/wappen.png` ins Projekt und kommt per Bereitstellung mit; Maße
+stehen in `src/assets/README.md`.
 
 ### 2.2 Die Variablen in Vercel
 
@@ -208,7 +229,23 @@ konnte.
 Danach beide Wegwerf-Vorgänge auf `/sparte` **abbrechen** und das Nachlesen nicht
 vergessen.
 
-### 3.5 AUS-2026-001 aufräumen
+### 3.5 Die Bilder, falls du den Eimer angelegt hast
+
+Auf der Statusseite deines Wegwerf-Vorgangs steht jetzt eine Karte **Bilder**.
+
+1. Ein Produktfoto zu einem Artikel hochladen → die Vorschau daneben zeigt es
+   sofort.
+2. **Gegenprobe:** eine PDF-Datei in `.png` umbenennen und hochladen. Erwartet:
+   „Nur PNG, JPEG oder WebP." Gemessen wird der Inhalt, nicht der Name.
+3. Deinen eigenen Größen-Link öffnen → das Foto steht über den Größenfeldern.
+4. **Gegenprobe:** denselben Link ohne den `t=`-Teil aufrufen. Erwartet: nichts,
+   auch kein Bild.
+5. Ein Sponsorlogo hochladen, freigeben, und in der Händlermail nachsehen: der
+   Anhang heißt `AUS-…_Sponsorlogo.png`, und im Text steht die Bitte, das Format
+   zu bestätigen. **Druckmaße stehen bewusst nicht drin** — die sind mit Bormann
+   und Hillebrecht nicht abgestimmt.
+
+### 3.6 AUS-2026-001 aufräumen
 
 Der Probelauf mit einem Kontakt steht noch auf „Größen laufen" und taucht in
 jeder Übersicht auf. Auf `/sparte` auf **Abgebrochen** setzen — dann ist er aus
@@ -241,8 +278,8 @@ Nichts davon ist dringend, und nichts davon fange ich ohne dein Wort an.
 | **Freigabe automatisch** | die Naht steht (`freigabeWeg`), die Regel nicht. Die offenen Fragen — ab welchem Betrag? Jugend anders? was bei lückenhafter Liste? — stehen in docs/freigabe.md |
 | **`Anfrage_Vorlage.xlsx`** | ersetzt die CSV im Anhang durch die Vorlage, die die Händler kennen |
 | **M7 · keine Spieler gefunden** | steht heute auf der Seite; eine Mail wäre für den, der sie zu früh schließt |
-| **Vereinswappen in den Mails** | Platz ist vorbereitet; als Anhang mit Content-ID, nicht als externe Adresse |
-| **Foto-Upload** | Empfehlung: harte Größengrenze *und* serverseitig verkleinern, nur Trainer, erst nach dem echten Durchlauf |
+| **Vereinswappen in den Mails** | **gebaut** (Migration 005). Fehlt nur noch die Datei `src/assets/wappen.png` |
+| **Bilder** | **gebaut** (Migration 006, docs/bilder.md): Sponsorlogo an M4, Produktfotos in der Größenabfrage. Verkleinert wird nicht — dafür eine harte Grenze bei 2 MB |
 | **Frist für die Sponsorensuche** | Stufe 0 hat noch keinen Wecker |
 | **Zwei lose HubSpot-Kontakte** | `kai.boehm@eintrachtmunster.de` ohne Name und Funktion, zweiter „Kai Böhm" unter `fussball@eintrachtmunster.de` |
 
@@ -274,5 +311,7 @@ Damit niemand später denkt, es sei geprüft gewesen:
 | --- | --- |
 | **Resend** | der Mailversand ist nie wirklich gelaufen. Ob hubsport.club verifiziert ist, entscheidet sich beim ersten Absenden |
 | **Telegram und Todoist** | nie aufgerufen. Ob Token und Chat-ID stimmen, zeigt erst Schritt 3.4 |
+| **Supabase Storage** | nie aufgerufen. Ob der Eimer `kitflow` so heißt und der Dienst-Schlüssel darauf schreiben darf, zeigt Schritt 3.5 |
+| **Das Inline-Wappen** | ob Resend das Feld `content_id` so annimmt, ist nicht nachprüfbar. Deshalb steht das Wappen neben dem Vereinsnamen: fällt es aus, fehlt ein Bild und nicht der Absender |
 | **Supabase über HTTP** | nur gegen ein lokales Postgres und ein echtes PostgREST geprüft, nie gegen das echte Projekt |
 | **Outlook und Apple Mail** | die Mails sind in Chromium angesehen. VML-Knopf und Dunkelmodus sind nach Regeln gebaut, nicht in den echten Programmen gesehen |

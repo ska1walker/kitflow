@@ -45,16 +45,29 @@ function Feld({
     LEER,
   );
 
+  // Die Seite laedt sich nach einer Server Action nicht neu (so ist es im
+  // ganzen Projekt). Ohne das hier staende nach dem Hochladen „Gespeichert" und
+  // daneben weiter „kein Bild" — der Trainer laedt dann ein zweites Mal hoch.
+  //
+  // Abgeleitet beim Rendern statt in einem Effect: Zustand aus Zustand zu
+  // errechnen ist kein Nebeneffekt, und React 19 weist das zu Recht zurueck.
+  const daIst =
+    ergebnis.stand === "gespeichert" ? true : ergebnis.stand === "entfernt" ? false : vorhanden;
+
   return (
     <form action={absenden} className="flex flex-col gap-2 border-t border-ink-100 pt-4">
       <input type="hidden" name="art" value={art} />
       {artikelId && <input type="hidden" name="artikel" value={artikelId} />}
 
       <div className="flex items-start gap-3">
-        {vorhanden ? (
+        {daIst ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={bildAdresse}
+            src={
+              ergebnis.stand === "gespeichert"
+                ? `${bildAdresse}&stand=${ergebnis.stempel}`
+                : bildAdresse
+            }
             alt=""
             width={56}
             height={56}
@@ -79,9 +92,9 @@ function Feld({
           className="min-w-0 flex-1 text-xs text-ink-600 file:mr-3 file:rounded-lg file:border-0 file:bg-ink-100 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-ink-800"
         />
         <Button type="submit" disabled={laeuft}>
-          {laeuft ? "…" : vorhanden ? "Ersetzen" : "Hochladen"}
+          {laeuft ? "…" : daIst ? "Ersetzen" : "Hochladen"}
         </Button>
-        {vorhanden && (
+        {daIst && (
           <button
             type="submit"
             name="entfernen"
